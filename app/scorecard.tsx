@@ -34,7 +34,7 @@ export default function Scorecard() {
   const [showNewBatsmanSelection, setShowNewBatsmanSelection] = useState(false);
   const [showExtraRunsModal, setShowExtraRunsModal] = useState(false);
   const [showWicketModal, setShowWicketModal] = useState(false);
-  const [extraType, setExtraType] = useState<'wide' | 'no-ball'>('wide');
+  const [extraType, setExtraType] = useState<'wide' | 'no-ball' | 'lb' | 'bye'>('wide');
 
   const battingTeamObj = teams.find(team => team.name === battingTeam);
 
@@ -110,7 +110,7 @@ export default function Scorecard() {
     }
   };
 
-  const handleExtra = (type: 'wide' | 'no-ball') => {
+  const handleExtra = (type: 'wide' | 'no-ball' | 'lb' | 'bye') => {
     setExtraType(type);
     setShowExtraRunsModal(true);
   };
@@ -345,6 +345,12 @@ export default function Scorecard() {
           </TouchableOpacity>
           <TouchableOpacity style={[styles.runButton, styles.noBallButton]} onPress={() => handleExtra('no-ball')}>
             <Text style={styles.buttonText}>No Ball</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.runButton, styles.wideButton]} onPress={() => handleExtra('lb')}>
+            <Text style={styles.buttonText}>Leg Byes</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.runButton, styles.wideButton]} onPress={() => handleExtra('bye')}>
+            <Text style={styles.buttonText}>Byes</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.runButton, styles.wicketButton]} onPress={handleWicket}>
             <Text style={styles.buttonText}>Wicket</Text>

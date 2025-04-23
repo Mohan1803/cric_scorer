@@ -21,7 +21,7 @@ export interface BallRecord {
   runs: number;
   isExtra: boolean;
   isNoBall: boolean;
-  extraType?: 'wide' | 'no-ball';
+  extraType?: 'wide' | 'no-ball' | 'lb' | 'bye';
   batsmanName: string;
   bowlerName: string;
   isWicket: boolean;
@@ -260,7 +260,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     let shouldSwap = false;
 
-    if (record.isExtra && record.extraType === 'wide') {
+    if (record.isExtra && (record.extraType === 'wide' || record.extraType === 'lb' || record.extraType === 'bye')) {
       shouldSwap = record.runs % 2 === 1;
     } else if (!record.isWicket) {
       if (isLastLegalBall) {
