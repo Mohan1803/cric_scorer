@@ -12,6 +12,9 @@ const OversModal = ({ visible, onClose }: { visible: boolean; onClose: () => voi
     }
   }, [visible]);
 
+
+  const totalInnings = [1, 2]
+
   return (
     <Modal visible={visible} animationType="slide">
       <View style={{ flex: 1, padding: 20, backgroundColor: '#fff' }}>
@@ -20,7 +23,9 @@ const OversModal = ({ visible, onClose }: { visible: boolean; onClose: () => voi
         </Text>
 
         <ScrollView ref={scrollRef}>
-          {overs.map((over, i) => (
+          {totalInnings.map(a => (<View><Text style={{ fontWeight: 'bold', marginBottom: 10 }}>
+            Innings {a}
+          </Text>{overs.filter((e) => e.innings === a).map((over, i) => (
             <View key={i} style={{ marginBottom: 16 }}>
               <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>
                 Over {over.overNumber + 1}
@@ -30,18 +35,18 @@ const OversModal = ({ visible, onClose }: { visible: boolean; onClose: () => voi
                   const bgColor = ball.isWicket
                     ? '#ef5350'
                     : ball.isExtra
-                    ? '#bbdefb'
-                    : ball.runs === 4
-                    ? '#ffe082'
-                    : ball.runs === 6
-                    ? '#a5d6a7'
-                    : '#eeeeee';
+                      ? '#bbdefb'
+                      : ball.runs === 4
+                        ? '#ffe082'
+                        : ball.runs === 6
+                          ? '#a5d6a7'
+                          : '#eeeeee';
 
                   const displayText = ball.isExtra
                     ? `${ball.extraType}(+${ball.runs})`
                     : ball.isWicket
-                    ? 'W'
-                    : `${ball.runs}`;
+                      ? 'W'
+                      : `${ball.runs}`;
 
                   return (
                     <View
@@ -66,7 +71,7 @@ const OversModal = ({ visible, onClose }: { visible: boolean; onClose: () => voi
                 })}
               </View>
             </View>
-          ))}
+          ))}</View>))}
         </ScrollView>
 
         <TouchableOpacity

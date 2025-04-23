@@ -39,6 +39,7 @@ export interface Team {
 
 export interface OverData {
   overNumber: number;
+  innings: number;
   deliveries: BallRecord[];
 }
 
@@ -149,7 +150,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     // If it's a new over (or the first ball), create a new over entry
     if (!lastOver || lastOver.overNumber !== currentOverNumber) {
-      oversData.push({ overNumber: currentOverNumber, deliveries: [record] });
+      oversData.push({ overNumber: currentOverNumber, deliveries: [record], innings: state.currentInnings });
     } else {
       // If it's the same over, add to the current over's deliveries
       lastOver.deliveries.push(record);
@@ -223,7 +224,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
 
 
-    if (record.isExtra && (record.extraType === 'wide')) {
+    if (record.isExtra && (record.extraType === 'wide' || record.extraType === 'bye' || record.extraType === 'lb')) {
       shouldSwap = record.runs % 2 === 1;
     } else if (!record.isWicket) {
       if (isLastLegalBall) {

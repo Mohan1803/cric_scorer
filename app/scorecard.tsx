@@ -28,6 +28,7 @@ export default function Scorecard() {
     setAwaitingSecondInningsStart,
 
     batsmanToReplace,
+    oversData
   } = useGameStore();
 
   const [showNewBowlerSelection, setShowNewBowlerSelection] = useState(false);
@@ -41,7 +42,6 @@ export default function Scorecard() {
 
   const bowlingTeamObj = teams.find(team => team.name === bowlingTeam);
 
-  console.log("ballHistory    ", ballHistory)
 
   const legalDeliveries = ballHistory.filter(ball =>
     !ball.isExtra || (ball.isExtra && (ball.extraType === 'bye' || ball.extraType === 'lb'))
@@ -70,17 +70,20 @@ export default function Scorecard() {
 
   const getCurrentOverBalls = () => {
     const allBalls = [...ballHistory].reverse();
-    const currentOverBalls = [];
+    let currentOverBalls = oversData.find((e) => e.overNumber === totalCompletedOvers && e.innings === currentInnings)?.deliveries ?? [];
 
-    for (const ball of allBalls) {
-      if (currentOverBalls.length < 6 || ball.isExtra) {
-        currentOverBalls.push(ball);
-      } else {
-        break;
-      }
-    }
 
-    return currentOverBalls.reverse();
+
+    // for (const ball of allBalls) {
+
+    //   if (currentOverBalls.length < 6 || (ball.isExtra && (ball.extraType === 'wide' || ball.extraType === 'no-ball'))) {
+    //     currentOverBalls.push(ball);
+    //   } else {
+    //     break;
+    //   }
+    // }
+
+    return currentOverBalls
   };
 
   useEffect(() => {
