@@ -28,6 +28,7 @@
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="myapp"/>
         <data android:scheme="com.boltexpo.cricket"/>
+        <data android:scheme="com.ededin.cricket"/>
       </intent-filter>
     </activity>
   </application>

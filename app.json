@@ -9,7 +9,7 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "android": {
-      "package": "com.boltexpo.cricket",
+      "package": "com.ededin.cricket",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/cric.png",
         "backgroundColor": "#ffffff"
@@ -17,7 +17,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.boltexpo.cricket"
+      "bundleIdentifier": "com.ededin.cricket"
     },
     "web": {
       "bundler": "metro",
