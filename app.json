@@ -4,14 +4,14 @@
     "slug": "bolt-expo-nativewind",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/CricketImg.png",
+    "icon": "./assets/images/cric.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "android": {
       "package": "com.boltexpo.cricket",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/CricketImg.png",
+        "foregroundImage": "./assets/images/cric.png",
         "backgroundColor": "#ffffff"
       }
     },
@@ -21,7 +21,7 @@
     "web": {
       "bundler": "metro",
       "output": "single",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/cric.png"
     },
     "plugins": [
       "expo-router"
