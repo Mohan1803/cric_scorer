@@ -136,8 +136,9 @@ export const useGameStore = create<GameState>((set, get) => ({
   updateScore: (record) => {
     const state = get();
     const newBallHistory = [...state.ballHistory, record];
-    const legalDeliveries = state.ballHistory.filter((b) => !b.isExtra).length;
-
+    const legalDeliveries = state.ballHistory.filter((b) =>
+      !b.isExtra || (b.extraType === 'bye' || b.extraType === 'lb')
+    ).length;
     // Calculate the current over number based on legal deliveries
     const currentOverNumber = Math.floor(legalDeliveries / 6);
     const currentBallInOver = legalDeliveries % 6;
@@ -154,55 +155,13 @@ export const useGameStore = create<GameState>((set, get) => ({
       lastOver.deliveries.push(record);
     }
 
-    const totalRuns = record.runs + (record.isExtra ? 1 : 0);  // Total runs considering extra type
+
+
+    const totalRuns = record.runs + (record.isExtra && (record.extraType === 'wide' || record.extraType === 'no-ball') ? 1 : 0);  // Total runs considering extra type
     const isFour = record.isFour ?? record.runs === 4;
     const isSix = record.isSix ?? record.runs === 6;
 
-    // const updatedTeams = state.teams.map((team) => ({
-    //   ...team,
-    //   players: team.players.map((player) => {
-    //     // Check for no-ball runs (runs scored off a no-ball)
-    //     if (record.isNoBall) {
-    //       // If it's a no-ball, we add the runs to the batsman's score
-    //       if (player.name === record.batsmanName) {
-    //         return {
-    //           ...player,
-    //           runs: player.runs + record.runs, // Add no-ball runs to batsman's total
-    //           balls: player.balls + (record.isExtra ? 0 : 1),
-    //           fours: player.fours + (isFour ? 1 : 0),
-    //           sixes: player.sixes + (isSix ? 1 : 0),
-    //           // status: record.isWicket ? 'out' : player.status,
-    //           status: record.isWicket ? 'out' : 'active',
 
-    //         };
-    //       }
-    //     }
-    //     // Handle regular delivery case (not a no-ball)
-    //     if (player.name === record.batsmanName) {
-    //       return {
-    //         ...player,
-    //         runs: player.runs + (record.isExtra ? 0 : record.runs),
-    //         balls: player.balls + (record.isExtra ? 0 : 1),
-    //         fours: player.fours + (isFour ? 1 : 0),
-    //         sixes: player.sixes + (isSix ? 1 : 0),
-    //         // status: record.isWicket ? 'out' : player.status,
-    //         status: record.isWicket ? 'out' : 'active',
-
-    //       };
-    //     }
-    //     if (player.name === record.bowlerName) {
-    //       return {
-    //         ...player,
-    //         ballsBowled: player.ballsBowled + (record.isExtra ? 0 : 1),
-    //         runsGiven: player.runsGiven + totalRuns,
-    //         wickets: player.wickets + (record.isWicket && record.wicketType !== 'run-out' ? 1 : 0),
-    //       };
-    //     }
-    //     return player;
-    //   }),
-    // }));
-
-    // Strike rotation logic: Ensure correct swapping logic at the end of the over
 
 
     const updatedTeams = state.teams.map((team) => ({
@@ -217,7 +176,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         if (isBowler) {
           return {
             ...player,
-            ballsBowled: player.ballsBowled + (record.isExtra ? 0 : 1),
+            ballsBowled: player.ballsBowled + (record.isExtra && (record.extraType === 'wide' || record.extraType === 'no-ball') ? 0 : 1),
             runsGiven: player.runsGiven + totalRuns,
             wickets: player.wickets + (record.isWicket && record.wicketType !== 'run-out' ? 1 : 0),
           };
@@ -237,7 +196,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         // Handle batsman stats (includes both striker and non-striker)
         if (isStriker) {
           const addRuns = record.isNoBall ? record.runs : (record.isExtra ? 0 : record.runs);
-          const addBall = record.isExtra ? 0 : 1;
+          const addBall = record.isExtra && (record.extraType === 'no-ball' || record.extraType === 'wide') ? 0 : 1;
 
           return {
             ...player,
@@ -254,13 +213,17 @@ export const useGameStore = create<GameState>((set, get) => ({
     }));
 
 
-    const isLegalDelivery = !record.isExtra;
+    const isLegalDelivery = !record.isExtra || (record.extraType === 'bye' || record.extraType === 'lb');;
     const newLegalBalls = legalDeliveries + (isLegalDelivery ? 1 : 0);
     const isLastLegalBall = isLegalDelivery && (newLegalBalls % 6 === 0);
 
     let shouldSwap = false;
 
-    if (record.isExtra && (record.extraType === 'wide' || record.extraType === 'lb' || record.extraType === 'bye')) {
+
+
+
+
+    if (record.isExtra && (record.extraType === 'wide')) {
       shouldSwap = record.runs % 2 === 1;
     } else if (!record.isWicket) {
       if (isLastLegalBall) {
@@ -336,7 +299,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     // Score and wickets tracking
     const score = newBallHistory.reduce(
-      (sum, b) => sum + b.runs + (b.isExtra ? 1 : 0),
+      (sum, b) => sum + b.runs + (b.isExtra && (b.extraType === 'wide' || b.extraType === 'no-ball') ? 1 : 0),
       0
     );
     const wickets = newBallHistory.filter((b) => b.isWicket).length;
@@ -386,10 +349,10 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     const lastBall = state.ballHistory[state.ballHistory.length - 1];
     const newBallHistory = state.ballHistory.slice(0, -1);
-    const wasLegal = !lastBall.isExtra;
+    const wasLegal = !lastBall.isExtra || (lastBall.extraType === 'bye' || lastBall.extraType === 'lb');
 
-    const legalBalls = newBallHistory.filter(b => !b.isExtra).length;
-    const totalRuns = lastBall.runs + (lastBall.isExtra ? 1 : 0);
+    const legalBalls = newBallHistory.filter(b => !b.isExtra || (b.extraType === 'bye' || b.extraType === 'lb')).length;
+    const totalRuns = lastBall.runs + (lastBall.isExtra && (lastBall.extraType === 'wide' || lastBall.extraType === 'no-ball') ? 1 : 0);
     const isFour = lastBall.isFour ?? lastBall.runs === 4;
     const isSix = lastBall.isSix ?? lastBall.runs === 6;
 
@@ -409,7 +372,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         if (player.name === lastBall.bowlerName) {
           return {
             ...player,
-            ballsBowled: player.ballsBowled - (lastBall.isExtra ? 0 : 1),
+            ballsBowled: player.ballsBowled - (lastBall.isExtra && (lastBall.extraType === 'wide' || lastBall.extraType === 'no-ball') ? 0 : 1),
             runsGiven: player.runsGiven - totalRuns,
             wickets: player.wickets - (lastBall.isWicket ? 1 : 0),
           };
@@ -464,7 +427,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   startSecondInnings: () => {
     const state = get();
     const firstInningsScore = state.ballHistory.reduce(
-      (sum, b) => sum + b.runs + (b.isExtra ? 1 : 0), 0);
+      (sum, b) => sum + b.runs + (b.isExtra && (b.extraType === 'wide' || b.extraType === 'no-ball') ? 1 : 0), 0);
 
     set({
       currentInnings: 2,

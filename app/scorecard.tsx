@@ -41,14 +41,19 @@ export default function Scorecard() {
 
   const bowlingTeamObj = teams.find(team => team.name === bowlingTeam);
 
-  const currentOver = ballHistory.filter(ball => !ball.isExtra).length % 6;
-  const totalCompletedOvers = Math.floor(ballHistory.filter(ball => !ball.isExtra).length / 6);
+  console.log("ballHistory    ", ballHistory)
 
-  const totalScore = ballHistory.reduce((sum, ball) => sum + ball.runs + (ball.isExtra ? 1 : 0), 0);
+  const legalDeliveries = ballHistory.filter(ball =>
+    !ball.isExtra || (ball.isExtra && (ball.extraType === 'bye' || ball.extraType === 'lb'))
+  );
+
+  const totalCompletedOvers = Math.floor(legalDeliveries.length / 6);
+  const currentOver = legalDeliveries.length % 6;
+  const totalScore = ballHistory.reduce((sum, ball) => sum + ball.runs + (ball.isExtra && (ball.extraType === 'wide' || ball.extraType === 'no-ball') ? 1 : 0), 0);
   const totalWickets = ballHistory.filter(ball => ball.isWicket).length;
 
   const runsNeeded = target ? target - totalScore + 1 : null;
-  const ballsRemaining = totalOvers * 6 - ballHistory.filter(ball => !ball.isExtra).length;
+  const ballsRemaining = totalOvers * 6 - ballHistory.filter(ball => !ball.isExtra || (ball.isExtra && (ball.extraType !== 'bye' && ball.extraType !== 'lb'))).length;
 
 
   const [modalVisible, setModalVisible] = useState(false);
@@ -325,7 +330,11 @@ export default function Scorecard() {
               ball.isExtra && styles.extraBall
             ]}>
               <Text style={styles.ballText}>
-                {ball.isWicket ? 'W' : ball.isExtra ? (ball.extraType === 'wide' ? 'wd' : 'nb') + ball.runs : ball.runs}
+                {ball.isWicket ? 'W' + ball.runs :
+                  ball.isExtra ?
+                    (ball.extraType === 'wide' ? 'wd' + ball.runs :
+                      ball.extraType === 'no-ball' ? 'nb' + ball.runs : ball.extraType === 'lb' ? 'lb' + ball.runs :
+                        'b' + ball.runs) : + ball.runs}
               </Text>
             </View>
           ))}
