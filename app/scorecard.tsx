@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { useGameStore } from '../store/gameStore';
 import ExtraRunsModal from '../components/ExtraRunsModal';
 import WicketModal from '../components/WicketModal';
+import OversModal from '@/components/OversModal';
 
 export default function Scorecard() {
   const {
@@ -22,7 +23,11 @@ export default function Scorecard() {
     swapBatsmen,
     setStriker,
     setCurrentBowler,
-    startSecondInnings
+    startSecondInnings,
+    awaitingSecondInningsStart,
+    setAwaitingSecondInningsStart,
+
+    batsmanToReplace,
   } = useGameStore();
 
   const [showNewBowlerSelection, setShowNewBowlerSelection] = useState(false);
@@ -32,6 +37,8 @@ export default function Scorecard() {
   const [extraType, setExtraType] = useState<'wide' | 'no-ball'>('wide');
 
   const battingTeamObj = teams.find(team => team.name === battingTeam);
+
+
   const bowlingTeamObj = teams.find(team => team.name === bowlingTeam);
 
   const currentOver = ballHistory.filter(ball => !ball.isExtra).length % 6;
@@ -42,6 +49,19 @@ export default function Scorecard() {
 
   const runsNeeded = target ? target - totalScore + 1 : null;
   const ballsRemaining = totalOvers * 6 - ballHistory.filter(ball => !ball.isExtra).length;
+
+
+  const [modalVisible, setModalVisible] = useState(false);
+
+  // Get available batsmen (not out and not currently batting)
+  const getAvailableBatsmen = () => {
+    return battingTeamObj?.players.filter(player =>
+      player.status !== 'out' &&
+      player.status === "" &&
+      player.name !== striker?.name &&
+      player.name !== nonStriker?.name
+    ) || [];
+  };
 
   const getCurrentOverBalls = () => {
     const allBalls = [...ballHistory].reverse();
@@ -58,12 +78,28 @@ export default function Scorecard() {
     return currentOverBalls.reverse();
   };
 
+  useEffect(() => {
+    const battingTeamPlayers = battingTeamObj?.players || [];
+    const maxWickets = battingTeamPlayers.length - 1;
+
+    const inningsShouldEnd =
+      totalCompletedOvers >= totalOvers ||
+      totalWickets >= maxWickets;
+
+    if (currentInnings === 1 && inningsShouldEnd && !awaitingSecondInningsStart) {
+      setAwaitingSecondInningsStart(true);
+      Alert.alert('Innings Over', 'First innings has ended. Ready to start second innings.');
+      startNewInnings();
+    }
+  }, [ballHistory]);
+
   const handleRun = (runs: number) => {
     if (!striker || !currentBowler) return;
 
     updateScore({
       runs,
       isExtra: false,
+      isNoBall: false, // ✅ Add this
       batsmanName: striker.name,
       bowlerName: currentBowler.name,
       isWicket: false
@@ -85,6 +121,7 @@ export default function Scorecard() {
     updateScore({
       runs,
       isExtra: true,
+      isNoBall: extraType === 'no-ball', // ✅ Set based on type
       extraType,
       batsmanName: striker.name,
       bowlerName: currentBowler.name,
@@ -95,6 +132,14 @@ export default function Scorecard() {
   };
 
   const handleWicket = () => {
+    // Check if there are any available batsmen before showing wicket modal
+    const availableBatsmen = getAvailableBatsmen();
+
+    if (availableBatsmen.length === 0) {
+      Alert.alert('Innings Over', 'No more batsmen available');
+      startNewInnings()
+      return;
+    }
     setShowWicketModal(true);
   };
 
@@ -104,6 +149,7 @@ export default function Scorecard() {
     updateScore({
       runs: runOutRuns || 0,
       isExtra: false,
+      isNoBall: false, // ✅ Add this
       batsmanName: runOutBatsman || striker.name,
       bowlerName: currentBowler.name,
       isWicket: true,
@@ -122,16 +168,25 @@ export default function Scorecard() {
       return;
     }
     if (player) setCurrentBowler(player);
-
     setShowNewBowlerSelection(false);
   };
 
   const selectNewBatsman = (player: typeof striker) => {
-    if (player?.name === nonStriker?.name) {
+    if (!player) return;
+
+    // Check if player is already batting
+    if (player.name === nonStriker?.name) {
       Alert.alert('Error', 'This batsman is already at non-striker end');
       return;
     }
-    if (player) setStriker(player);
+
+    // Check if player is out
+    if (player.status === 'out' || player.isOut) {
+      Alert.alert('Error', 'This batsman is already out');
+      return;
+    }
+
+    setStriker(player);
     setShowNewBatsmanSelection(false);
   };
 
@@ -144,10 +199,8 @@ export default function Scorecard() {
     router.push('/select-players');
   };
 
-
   return (
     <ScrollView style={styles.container}>
-      {/* Score Summary */}
       <View style={styles.scoreHeader}>
         <Text style={styles.scoreText}>
           {battingTeam} {totalScore}/{totalWickets}
@@ -160,66 +213,103 @@ export default function Scorecard() {
             <Text style={styles.targetText}>
               Need {runsNeeded} runs from {ballsRemaining} balls
             </Text>
-            <Text style={styles.targetText}>
-              Target: {target + 1}
-            </Text>
+            <Text style={styles.targetText}>Target: {target + 1}</Text>
           </View>
         )}
-        <TouchableOpacity
-          style={styles.fullScorecardButton}
-          onPress={viewFullScorecard}
-        >
+        <TouchableOpacity style={styles.fullScorecardButton} onPress={viewFullScorecard}>
           <Text style={styles.fullScorecardButtonText}>View Full Scorecard</Text>
         </TouchableOpacity>
+
+
+        <TouchableOpacity style={styles.fullScorecardButton} onPress={() => setModalVisible(true)}>
+          <Text style={styles.fullScorecardButtonText}>View Overs</Text>
+        </TouchableOpacity>
+
+        <OversModal visible={modalVisible} onClose={() => setModalVisible(false)} />
       </View>
 
-      {/* Batting Stats */}
+      {/* Batting Section */}
       <View style={styles.statsContainer}>
         <Text style={styles.sectionTitle}>Batting</Text>
-        <View style={styles.playerStats}>
-          <View style={styles.playerInfo}>
-            <Text style={[styles.playerName, striker?.name && styles.strikerHighlight]}>
-              {striker?.name} *
-            </Text>
-            <Text style={styles.statText}>
-              {striker?.runs} ({striker?.balls})
-            </Text>
-          </View>
-          <Text style={styles.strikeRate}>
-            SR: {striker?.balls > 0 ? ((striker.runs / striker.balls) * 100).toFixed(1) : '0.0'}
-          </Text>
-        </View>
-        <View style={styles.playerStats}>
-          <View style={styles.playerInfo}>
-            <Text style={styles.playerName}>{nonStriker?.name}</Text>
-            <Text style={styles.statText}>
-              {nonStriker?.runs} ({nonStriker?.balls})
-            </Text>
-          </View>
-          <Text style={styles.strikeRate}>
-            SR: {nonStriker?.balls > 0 ? ((nonStriker.runs / nonStriker.balls) * 100).toFixed(1) : '0.0'}
-          </Text>
-        </View>
+        {/* {battingTeamObj?.players.map((player, index) => (
+          player.balls > 0 || player.isOut || player.status === 'out' ? (
+            <View key={index} style={styles.playerStats}>
+              <View style={styles.playerInfo}>
+                <Text style={[
+                  styles.playerName,
+                  striker?.name === player.name && styles.strikerHighlight,
+                  (player.isOut || player.status === 'out') && styles.outBatsman
+                ]}>
+                  {player.name}
+                  {player.name === striker?.name ? ' *' : ''}
+                  {player.name === nonStriker?.name ? '' : ''}
+                  {(player.isOut || player.status === 'out') ? ' (out)' : ''}
+                </Text>
+                <Text style={styles.statText}>
+                  {player.runs} ({player.balls})
+                </Text>
+              </View>
+              <Text style={styles.strikeRate}>
+                SR: {player.balls ? ((player.runs / player.balls) * 100).toFixed(1) : '0.0'}
+              </Text>
+            </View>
+          ) : null
+        ))} */}
+
+
+        {battingTeamObj?.players
+          .filter(player =>
+            player.name === striker?.name || player.name === nonStriker?.name
+          )
+          .map((player, index) => (
+            <View key={index} style={styles.playerStats}>
+              <View style={styles.playerInfo}>
+                <Text style={[
+                  styles.playerName,
+                  striker?.name === player.name && styles.strikerHighlight
+                ]}>
+                  {player.name}
+                  {player.name === striker?.name ? ' *' : ''}
+                </Text>
+                <Text style={styles.statText}>
+                  {player.runs} ({player.balls})
+                </Text>
+              </View>
+              <Text style={styles.strikeRate}>
+                SR: {player.balls ? ((player.runs / player.balls) * 100).toFixed(1) : '0.0'}
+              </Text>
+            </View>
+          ))}
+
       </View>
 
-      {/* Bowling Stats */}
+      {/* Bowling Section */}
       <View style={styles.statsContainer}>
         <Text style={styles.sectionTitle}>Bowling</Text>
-        <View style={styles.playerStats}>
-          <View style={styles.playerInfo}>
-            <Text style={styles.playerName}>{currentBowler?.name}</Text>
-            <Text style={styles.statText}>
-              {currentBowler?.wickets}-{currentBowler?.runsGiven}
-              ({Math.floor(currentBowler?.ballsBowled || 0 / 6)}.{(currentBowler?.ballsBowled || 0) % 6})
-            </Text>
-          </View>
-          <Text style={styles.economy}>
-            Econ: {currentBowler?.ballsBowled ?
-              ((currentBowler.runsGiven / (currentBowler.ballsBowled / 6)) || 0).toFixed(1) :
-              '0.0'
-            }
-          </Text>
-        </View>
+        {bowlingTeamObj?.players.map((player, index) => (
+          player.ballsBowled > 0 ? (
+            <View key={index} style={styles.playerStats}>
+              <View style={styles.playerInfo}>
+                <Text style={[
+                  styles.playerName,
+                  currentBowler?.name === player.name && styles.currentBowlerHighlight
+                ]}>
+                  {player.name}
+                  {currentBowler?.name === player.name ? ' *' : ''}
+                </Text>
+                <Text style={styles.statText}>
+                  {player.wickets}-{player.runsGiven}
+                  ({Math.floor(player.ballsBowled / 6)}.{player.ballsBowled % 6})
+                </Text>
+              </View>
+              <Text style={styles.economy}>
+                Econ: {player.ballsBowled
+                  ? ((player.runsGiven / (player.ballsBowled / 6)) || 0).toFixed(1)
+                  : '0.0'}
+              </Text>
+            </View>
+          ) : null
+        ))}
       </View>
 
       {/* Current Over */}
@@ -227,71 +317,68 @@ export default function Scorecard() {
         <Text style={styles.sectionTitle}>This Over</Text>
         <View style={styles.ballsContainer}>
           {getCurrentOverBalls().map((ball, index) => (
-            <View key={index} style={styles.ball}>
+            <View key={index} style={[
+              styles.ball,
+              ball.isWicket && styles.wicketBall,
+              ball.runs === 4 && styles.fourBall,
+              ball.runs === 6 && styles.sixBall,
+              ball.isExtra && styles.extraBall
+            ]}>
               <Text style={styles.ballText}>
-                {ball.isWicket ? 'W' : ball.isExtra ? (ball.extraType === 'wide' ? 'wd' : 'nb') : ball.runs}
+                {ball.isWicket ? 'W' : ball.isExtra ? (ball.extraType === 'wide' ? 'wd' : 'nb') + ball.runs : ball.runs}
               </Text>
             </View>
           ))}
         </View>
       </View>
 
-      {/* Scoring Controls */}
+      {/* Controls */}
       {!showNewBowlerSelection && !showNewBatsmanSelection && (
         <View style={styles.controls}>
           {[0, 1, 2, 3, 4, 6].map(runs => (
-            <TouchableOpacity
-              key={runs}
-              style={styles.runButton}
-              onPress={() => handleRun(runs)}
-            >
+            <TouchableOpacity key={runs} style={styles.runButton} onPress={() => handleRun(runs)}>
               <Text style={styles.buttonText}>{runs}</Text>
             </TouchableOpacity>
           ))}
-          <TouchableOpacity
-            style={[styles.runButton, styles.wideButton]}
-            onPress={() => handleExtra('wide')}
-          >
+          <TouchableOpacity style={[styles.runButton, styles.wideButton]} onPress={() => handleExtra('wide')}>
             <Text style={styles.buttonText}>Wide</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.runButton, styles.noBallButton]}
-            onPress={() => handleExtra('no-ball')}
-          >
+          <TouchableOpacity style={[styles.runButton, styles.noBallButton]} onPress={() => handleExtra('no-ball')}>
             <Text style={styles.buttonText}>No Ball</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.runButton, styles.wicketButton]}
-            onPress={handleWicket}
-          >
+          <TouchableOpacity style={[styles.runButton, styles.wicketButton]} onPress={handleWicket}>
             <Text style={styles.buttonText}>Wicket</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.runButton, styles.undoButton]}
-            onPress={undoLastBall}
-          >
+          <TouchableOpacity style={[styles.runButton, styles.undoButton]} onPress={undoLastBall}>
             <Text style={styles.buttonText}>Undo</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.runButton, styles.swapButton]}
-            onPress={swapBatsmen}
-          >
+          <TouchableOpacity style={[styles.runButton, styles.swapButton]} onPress={swapBatsmen}>
             <Text style={styles.buttonText}>Swap</Text>
           </TouchableOpacity>
         </View>
       )}
 
       {/* New Bowler Selection */}
-      {showNewBowlerSelection && (
+      {showNewBowlerSelection && !awaitingSecondInningsStart && (
         <View style={styles.selectionContainer}>
           <Text style={styles.selectionTitle}>Select New Bowler</Text>
           {bowlingTeamObj?.players.map((player, index) => (
             <TouchableOpacity
               key={index}
-              style={styles.selectionButton}
+              style={[
+                styles.selectionButton,
+                player.name === currentBowler?.name && styles.disabledButton
+              ]}
               onPress={() => selectNewBowler(player)}
+              disabled={player.name === currentBowler?.name}
             >
-              <Text style={styles.selectionButtonText}>{player.name}</Text>
+              <Text style={[
+                styles.selectionButtonText,
+                player.name === currentBowler?.name && styles.disabledButtonText
+              ]}>
+                {player.name}
+                {player.name === currentBowler?.name ? ' (current)' : ''}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -299,29 +386,61 @@ export default function Scorecard() {
 
       {/* New Batsman Selection */}
       {showNewBatsmanSelection && (
+
+
+
         <View style={styles.selectionContainer}>
           <Text style={styles.selectionTitle}>Select New Batsman</Text>
-          {battingTeamObj?.players.map((player, index) => (
-            <TouchableOpacity
-              key={index}
-              style={styles.selectionButton}
-              onPress={() => selectNewBatsman(player)}
-              disabled={player.name === nonStriker?.name}
-            >
-              <Text style={styles.selectionButtonText}>{player.name}</Text>
-            </TouchableOpacity>
-          ))}
+          {battingTeamObj?.players.map((player, index) => {
+            // Don't allow picking the batsman still at the crease
+
+
+            const isOtherBatsman =
+              batsmanToReplace === 'striker'
+                ? player.name === nonStriker?.name
+                : player.name === striker?.name;
+
+            const isAvailable = player.status !== 'out' && !isOtherBatsman;
+
+            return (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.selectionButton,
+                  !isAvailable && styles.disabledButton
+                ]}
+                onPress={() => selectNewBatsman(player)}
+                disabled={!isAvailable}
+              >
+                <Text
+                  style={[
+                    styles.selectionButtonText,
+                    !isAvailable && styles.disabledButtonText
+                  ]}
+                >
+                  {player.name}
+                  {player.name === striker?.name && batsmanToReplace !== 'striker'
+                    ? ' (striker)'
+                    : ''}
+                  {player.name === nonStriker?.name && batsmanToReplace !== 'non-striker'
+                    ? ' (non-striker)'
+                    : ''}
+                  {player.status === 'out' ? ' (out)' : ''}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
+
       )}
 
-      {/* Extra Runs Modal */}
+      {/* Modals */}
       <ExtraRunsModal
         visible={showExtraRunsModal}
         onClose={() => setShowExtraRunsModal(false)}
         onSelectRuns={handleExtraRuns}
       />
 
-      {/* Wicket Modal */}
       {striker && nonStriker && (
         <WicketModal
           visible={showWicketModal}
@@ -329,16 +448,15 @@ export default function Scorecard() {
           onConfirm={handleWicketConfirm}
           strikerName={striker.name}
           nonStrikerName={nonStriker.name}
-          outBatsmen={battingTeamObj?.players.filter(p => p.isOut).map(p => p.name) || []}
+          outBatsmen={battingTeamObj?.players
+            .filter(p => p.isOut || p.status === 'out')
+            .map(p => p.name) || []}
         />
       )}
 
       {/* Start Second Innings Button */}
-      {currentInnings === 1 && totalCompletedOvers >= totalOvers && (
-        <TouchableOpacity
-          style={styles.startInningsButton}
-          onPress={startNewInnings}
-        >
+      {currentInnings === 1 && totalCompletedOvers >= totalOvers && awaitingSecondInningsStart && (
+        <TouchableOpacity style={styles.startInningsButton} onPress={startNewInnings}>
           <Text style={styles.startInningsButtonText}>Start Second Innings</Text>
         </TouchableOpacity>
       )}
@@ -414,6 +532,14 @@ const styles = StyleSheet.create({
     color: '#2196F3',
     fontWeight: 'bold',
   },
+  currentBowlerHighlight: {
+    color: '#FF9800',
+    fontWeight: 'bold',
+  },
+  outBatsman: {
+    color: '#F44336',
+    textDecorationLine: 'line-through',
+  },
   statText: {
     fontSize: 14,
     color: '#666',
@@ -443,9 +569,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  wicketBall: {
+    backgroundColor: '#F44336',
+  },
+  fourBall: {
+    backgroundColor: '#4CAF50',
+  },
+  sixBall: {
+    backgroundColor: '#2196F3',
+  },
+  extraBall: {
+    backgroundColor: '#FF9800',
+  },
   ballText: {
     fontSize: 14,
     color: '#333',
+    fontWeight: 'bold',
   },
   controls: {
     padding: 15,
@@ -496,9 +635,16 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 10,
   },
+  disabledButton: {
+    backgroundColor: '#e0e0e0',
+    opacity: 0.6,
+  },
   selectionButtonText: {
     fontSize: 16,
     color: '#333',
+  },
+  disabledButtonText: {
+    color: '#999',
   },
   startInningsButton: {
     backgroundColor: '#4CAF50',
@@ -513,3 +659,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
+
+
+
+

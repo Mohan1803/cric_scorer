@@ -11,17 +11,17 @@ export default function RootLayout() {
     <>
       <Stack screenOptions={{
         headerShown: true,
-        headerTitle: () => (
-          <Image
-            source={{ uri: 'https://images.unsplash.com/photo-1624526267942-ab0ff8a3e972?w=64&h=64&fit=crop' }}
-            style={{
-              width: 50,
-              height: 50,
-              borderRadius: 25, // Half of width/height
-            }}
-            resizeMode="contain"
-          />
-        ),
+        // headerTitle: () => (
+        //   <Image
+        //     source={{ uri: 'https://images.unsplash.com/photo-1624526267942-ab0ff8a3e972?w=64&h=64&fit=crop' }}
+        //     style={{
+        //       width: 50,
+        //       height: 50,
+        //       borderRadius: 25,
+        //     }}
+        //     resizeMode="contain"
+        //   />
+        // ),
       }}>
         <Stack.Screen
           name="index"

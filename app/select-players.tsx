@@ -27,7 +27,8 @@ export default function SelectPlayersScreen() {
     const striker = battingTeamObj!.players.find(p => p.name === selectedStriker);
     const nonStriker = battingTeamObj!.players.find(p => p.name === selectedNonStriker);
     const bowler = bowlingTeamObj!.players.find(p => p.name === selectedBowler);
-
+    console.log("STRIKER   ", striker)
+    console.log("NON-STRIKER     ", nonStriker)
     setStriker(striker!);
     setNonStriker(nonStriker!);
     setCurrentBowler(bowler!);

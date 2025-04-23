@@ -5,17 +5,33 @@
   "build": {
     "preview": {
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "image": "latest",
+        "env": {
+          "EXPO_NO_AUTOLINK": "1"
+        }
       }
     },
     "preview2": {
       "android": {
-        "gradleCommand": ":app:assembleRelease"
+        "gradleCommand": ":app:assembleRelease",
+        "image": "latest",
+        "env": {
+          "EXPO_NO_AUTOLINK": "1"
+        }
       }
     },
     "preview3": {
-      "developmentClient": true
+      "developmentClient": true,
+      "android": {
+        "image": "latest"
+      }
     },
-    "production": {}
+    "production": {
+      "android": {
+        "buildType": "app-bundle",
+        "image": "latest"
+      }
+    }
   }
 }

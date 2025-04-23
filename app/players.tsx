@@ -10,7 +10,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   TextInput as RNTextInput,
-  findNodeHandle,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useGameStore } from '../store/gameStore';
@@ -19,73 +18,49 @@ export default function PlayersEntry() {
   const teams = useGameStore((state) => state.teams);
   const setTeams = useGameStore((state) => state.setTeams);
 
-  const [team1Players, setTeam1Players] = useState(['']);
-  const [team2Players, setTeam2Players] = useState(['']);
+  const [team1Players, setTeam1Players] = useState(Array(2).fill(''));
+  const [team2Players, setTeam2Players] = useState(Array(2).fill(''));
 
-  const scrollRef = useRef<ScrollView>(null);
   const inputRefs = useRef<{ [key: number]: RNTextInput[] }>({ 0: [], 1: [] });
 
-  const addPlayer = (teamIndex: number) => {
-    if (teamIndex === 0 && team1Players.length < 11) {
-      setTeam1Players([...team1Players, '']);
-    } else if (teamIndex === 1 && team2Players.length < 11) {
-      setTeam2Players([...team2Players, '']);
-    }
+  const focusInput = (teamIndex: number, playerIndex: number) => {
+    const input = inputRefs.current[teamIndex]?.[playerIndex];
+    if (input) input.focus();
   };
 
-  const scrollToInput = (teamIndex: number, playerIndex: number) => {
-    const node = findNodeHandle(inputRefs.current[teamIndex][playerIndex]);
-    if (node && scrollRef.current) {
-      scrollRef.current.scrollTo({
-        y: playerIndex * 60 + teamIndex * 500, // crude vertical offset estimate
-        animated: true,
-      });
-    }
+  const isDuplicate = (name: string, list: string[], index: number) => {
+    const trimmed = name.trim().toLowerCase();
+    return (
+      trimmed &&
+      list.some((n, i) => i !== index && n.trim().toLowerCase() === trimmed)
+    );
   };
 
   const updatePlayerName = (teamIndex: number, playerIndex: number, name: string) => {
-    const trimmedName = name.trim();
-    const playerList = teamIndex === 0 ? team1Players : team2Players;
-
-    const isDuplicate = playerList.some((existingName, index) =>
-      index !== playerIndex &&
-      existingName.trim().toLowerCase() === trimmedName.toLowerCase()
-    );
-
-    if (trimmedName && isDuplicate) {
-      Alert.alert('Error', `Player name "${name}" already exists in this team.`);
+    const list = teamIndex === 0 ? team1Players : team2Players;
+    if (isDuplicate(name, list, playerIndex)) {
+      Alert.alert('Duplicate Name', `Player "${name}" already exists.`);
       return;
     }
 
-    if (teamIndex === 0) {
-      const newPlayers = [...team1Players];
-      newPlayers[playerIndex] = name;
-      setTeam1Players(newPlayers);
-    } else {
-      const newPlayers = [...team2Players];
-      newPlayers[playerIndex] = name;
-      setTeam2Players(newPlayers);
-    }
+    const updated = [...list];
+    updated[playerIndex] = name;
+    teamIndex === 0 ? setTeam1Players(updated) : setTeam2Players(updated);
   };
 
   const handleContinue = () => {
-    if (team1Players.length < 2 || team2Players.length < 2) {
-      Alert.alert('Error', 'Each team must have at least 2 players');
-      return;
-    }
+    const validTeam1 = team1Players.filter(name => name.trim());
+    const validTeam2 = team2Players.filter(name => name.trim());
 
-    const validTeam1Players = team1Players.filter(name => name.trim());
-    const validTeam2Players = team2Players.filter(name => name.trim());
-
-    if (validTeam1Players.length < 2 || validTeam2Players.length < 2) {
-      Alert.alert('Error', 'Each team must have at least 2 players with valid names');
+    if (validTeam1.length < 2 || validTeam2.length < 2) {
+      Alert.alert('Need More Players', 'Each team must have at least 2 named players.');
       return;
     }
 
     const updatedTeams = [
       {
         ...teams[0],
-        players: validTeam1Players.map(name => ({
+        players: validTeam1.map(name => ({
           name,
           runs: 0,
           balls: 0,
@@ -94,11 +69,13 @@ export default function PlayersEntry() {
           ballsBowled: 0,
           wickets: 0,
           runsGiven: 0,
+          role: '',
+          status: ''
         })),
       },
       {
         ...teams[1],
-        players: validTeam2Players.map(name => ({
+        players: validTeam2.map(name => ({
           name,
           runs: 0,
           balls: 0,
@@ -107,6 +84,8 @@ export default function PlayersEntry() {
           ballsBowled: 0,
           wickets: 0,
           runsGiven: 0,
+          role: '',
+          status: ''
         })),
       },
     ];
@@ -115,69 +94,84 @@ export default function PlayersEntry() {
     router.push('/toss');
   };
 
+  const renderTeamSection = (teamIndex: number, players: string[]) => {
+    const setPlayers = teamIndex === 0 ? setTeam1Players : setTeam2Players;
+
+    const handleDelete = (index: number) => {
+      const updated = [...players];
+      updated.splice(index, 1);
+      setPlayers(updated);
+    };
+
+    const handleReset = () => {
+      setPlayers(Array(2).fill(''));
+    };
+
+    const handleAdd = () => {
+      if (players.length < 11) {
+        setPlayers([...players, '']);
+        setTimeout(() => focusInput(teamIndex, players.length), 100);
+      }
+    };
+
+    return (
+      <View style={styles.teamWrapper}>
+        <Text style={styles.teamHeader}>{teams[teamIndex]?.name}</Text>
+        <View style={styles.teamCard}>
+          {players.map((name, index) => (
+            <View key={index} style={styles.inputRow}>
+              <TextInput
+                ref={(ref) => {
+                  if (!inputRefs.current[teamIndex]) inputRefs.current[teamIndex] = [];
+                  inputRefs.current[teamIndex][index] = ref!;
+                }}
+                style={[
+                  styles.input,
+                  isDuplicate(name, players, index) && { borderColor: 'red', borderWidth: 2 },
+                ]}
+                placeholder={`Player ${index + 1}`}
+                value={name}
+                onChangeText={(text) => updatePlayerName(teamIndex, index, text)}
+                returnKeyType="next"
+                onSubmitEditing={() => focusInput(teamIndex, index + 1)}
+              />
+              <TouchableOpacity
+                style={styles.deleteBtn}
+                onPress={() => handleDelete(index)}
+              >
+                <Text style={styles.deleteText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+
+          {players.length < 11 && (
+            <TouchableOpacity onPress={handleAdd} style={styles.addBtn}>
+              <Text style={styles.addText}>+ Add Player</Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity onPress={handleReset} style={styles.resetBtn}>
+            <Text style={styles.resetText}>Reset Team</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
-        style={styles.container}
         keyboardShouldPersistTaps="handled"
-        ref={scrollRef}
+        contentContainerStyle={styles.container}
       >
-        {teams.map((team, teamIndex) => {
-          const players = teamIndex === 0 ? team1Players : team2Players;
-          return (
-            <View key={teamIndex} style={styles.teamContainer}>
-              <Text style={styles.teamTitle}>{team.name}</Text>
+        {renderTeamSection(0, team1Players)}
+        {renderTeamSection(1, team2Players)}
 
-              {players.map((player, playerIndex) => (
-                <View key={playerIndex} style={styles.playerInput}>
-                  <TextInput
-                    ref={(ref) => {
-                      if (ref) {
-                        if (!inputRefs.current[teamIndex]) {
-                          inputRefs.current[teamIndex] = [];
-                        }
-                        inputRefs.current[teamIndex][playerIndex] = ref;
-                      }
-                    }}
-                    style={styles.input}
-                    value={player}
-                    onChangeText={(text) =>
-                      updatePlayerName(teamIndex, playerIndex, text)
-                    }
-                    placeholder={`Player ${playerIndex + 1}`}
-                    maxLength={30}
-                    returnKeyType={
-                      playerIndex === players.length - 1 ? 'done' : 'next'
-                    }
-                    onFocus={() => scrollToInput(teamIndex, playerIndex)}
-                    onSubmitEditing={() => {
-                      const nextInput =
-                        inputRefs.current[teamIndex][playerIndex + 1];
-                      if (nextInput) {
-                        nextInput.focus();
-                      }
-                    }}
-                  />
-                </View>
-              ))}
-
-              {players.length < 11 && (
-                <TouchableOpacity
-                  style={styles.addButton}
-                  onPress={() => addPlayer(teamIndex)}
-                >
-                  <Text style={styles.addButtonText}>Add Player</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          );
-        })}
-
-        <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
-          <Text style={styles.continueButtonText}>Continue</Text>
+        <TouchableOpacity style={styles.continueBtn} onPress={handleContinue}>
+          <Text style={styles.continueText}>Continue</Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -186,51 +180,90 @@ export default function PlayersEntry() {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     padding: 20,
-    backgroundColor: '#fff',
+    backgroundColor: '#F9FAFB',
   },
-  teamContainer: {
-    marginBottom: 30,
+  teamWrapper: {
+    marginBottom: 24,
   },
-  teamTitle: {
+  teamHeader: {
     fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    color: '#333',
+    fontWeight: '600',
+    textAlign: 'center',
+    color: '#1F2937',
+    marginBottom: 10,
   },
-  playerInput: {
+  teamCard: {
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 10,
   },
   input: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    borderColor: '#E5E7EB',
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
+  },
+  deleteBtn: {
+    marginLeft: 8,
+    backgroundColor: '#EF4444',
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  deleteText: {
+    color: '#fff',
     fontSize: 16,
   },
-  addButton: {
-    backgroundColor: '#4CAF50',
-    padding: 10,
+  addBtn: {
+    backgroundColor: '#10B981',
     borderRadius: 8,
+    paddingVertical: 10,
     alignItems: 'center',
     marginTop: 10,
   },
-  addButtonText: {
+  addText: {
     color: '#fff',
+    fontWeight: '600',
     fontSize: 16,
   },
-  continueButton: {
-    backgroundColor: '#2196F3',
-    padding: 15,
-    borderRadius: 8,
+  resetBtn: {
+    backgroundColor: '#F97316',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignSelf: 'flex-end',
+    marginTop: 10,
+  },
+  resetText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  continueBtn: {
+    backgroundColor: '#3B82F6',
+    paddingVertical: 16,
+    borderRadius: 12,
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 10,
     marginBottom: 30,
   },
-  continueButtonText: {
+  continueText: {
     color: '#fff',
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
 });
