@@ -1,48 +1,46 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, Image } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { View, StyleSheet, Dimensions } from 'react-native';
+import { Video, ResizeMode } from 'expo-av';
 import { router } from 'expo-router';
 
 
-const SplashScreen = () => {
-    const navigation = useNavigation();
-
+export default function SplashScreen() {
     useEffect(() => {
         const timer = setTimeout(() => {
             router.push('/entryPage');
-        }, 2000);
-
+        }, 7000);
         return () => clearTimeout(timer);
-    }, [navigation]);
+    }, []);
 
     return (
         <View style={styles.container}>
-            <Image
-                source={require('../assets/images/cric.png')}
-                // style={styles.logo}
-                resizeMode="cover"
+            <Video
+                source={require('../assets/videos/splash1.mp4')}
+                style={styles.video}
+                resizeMode={ResizeMode.COVER}
+                isMuted
+                shouldPlay
+                isLooping
+                onLoadStart={() => console.log('Video loading...')}
+                onLoad={() => console.log('Video loaded!')}
+                onError={(e) => console.log('Video error:', e)}
             />
         </View>
     );
-};
+}
 
-export default SplashScreen;
+const { width, height } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#002b5c',
-        justifyContent: 'center',
-        alignItems: 'center',
+        backgroundColor: 'black',
     },
-    logo: {
-        width: 150,
-        height: 150,
-        marginBottom: 20,
-    },
-    appName: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        color: '#fff',
+    video: {
+        width: width,
+        height: height,
+        position: 'relative', // Makes sure video fills the whole screen
+        top: 0,
+        left: 0,
     },
 });

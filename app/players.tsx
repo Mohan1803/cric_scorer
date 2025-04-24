@@ -170,9 +170,15 @@ export default function PlayersEntry() {
         {renderTeamSection(0, team1Players)}
         {renderTeamSection(1, team2Players)}
 
-        <TouchableOpacity style={styles.continueBtn} onPress={handleContinue}>
-          <Text style={styles.continueText}>Continue</Text>
-        </TouchableOpacity>
+
+        {team1Players.length === 11 &&
+          team2Players.length === 11 &&
+          team1Players.every(p => p.name.trim()) &&
+          team2Players.every(p => p.name.trim()) && (
+            <TouchableOpacity style={styles.continueBtn} onPress={handleContinue}>
+              <Text style={styles.continueText}>Continue</Text>
+            </TouchableOpacity>
+          )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
