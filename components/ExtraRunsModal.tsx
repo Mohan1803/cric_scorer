@@ -5,9 +5,13 @@ interface ExtraRunsModalProps {
   visible: boolean;
   onClose: () => void;
   onSelectRuns: (runs: number) => void;
+  extraType: string
 }
 
-export default function ExtraRunsModal({ visible, onClose, onSelectRuns }: ExtraRunsModalProps) {
+export default function ExtraRunsModal({ visible, onClose, onSelectRuns, extraType }: ExtraRunsModalProps) {
+
+
+  let runsArr: any[] = extraType === 'no-ball' ? [0, 1, 2, 3, 4, 5, 6] : [0, 1, 2, 3, 4]
   return (
     <Modal
       animationType="slide"
@@ -19,7 +23,7 @@ export default function ExtraRunsModal({ visible, onClose, onSelectRuns }: Extra
         <View style={styles.modalView}>
           <Text style={styles.modalTitle}>Select Runs</Text>
           <View style={styles.runsContainer}>
-            {[0, 1, 2, 3, 4, 5, 6].map((runs) => (
+            {runsArr.map((runs) => (
               <TouchableOpacity
                 key={runs}
                 style={styles.runButton}

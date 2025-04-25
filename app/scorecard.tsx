@@ -463,6 +463,7 @@ export default function Scorecard() {
           visible={showExtraRunsModal}
           onClose={() => setShowExtraRunsModal(false)}
           onSelectRuns={handleExtraRuns}
+          extraType={extraType}
         />
 
         {striker && nonStriker && (

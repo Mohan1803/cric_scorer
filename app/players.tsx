@@ -18,9 +18,13 @@ export default function PlayersEntry() {
   const teams = useGameStore((state) => state.teams);
   const setTeams = useGameStore((state) => state.setTeams);
 
+
+  const defaultPlayers = Array.from({ length: 11 }, () => ({ name: '', role: 'both' }));
+  const defaultPlayers1 = Array.from({ length: 11 }, () => ({ name: '', role: 'both' }));
+
   const [activeTab, setActiveTab] = useState(0);
-  const [team1Players, setTeam1Players] = useState([{ name: '', role: 'both' }]);
-  const [team2Players, setTeam2Players] = useState([{ name: '', role: 'both' }]);
+  const [team1Players, setTeam1Players] = useState(defaultPlayers);
+  const [team2Players, setTeam2Players] = useState(defaultPlayers1);
 
   const inputRefs = useRef<{ [key: number]: RNTextInput[] }>({ 0: [], 1: [] });
 
