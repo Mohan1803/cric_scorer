@@ -346,83 +346,6 @@ export const useGameStore = create<GameState>((set, get) => ({
 
 
 
-  // undoLastBall: () => {
-  //   const state = get();
-  //   if (state.ballHistory.length === 0) return;
-
-  //   const lastBall = state.ballHistory[state.ballHistory.length - 1];
-  //   const newBallHistory = state.ballHistory.slice(0, -1);
-  //   const wasLegal = !lastBall.isExtra || (lastBall.extraType === 'bye' || lastBall.extraType === 'lb');
-
-  //   const legalBalls = newBallHistory.filter(b => !b.isExtra || (b.extraType === 'bye' || b.extraType === 'lb')).length;
-  //   const totalRuns = lastBall.runs + (lastBall.isExtra && (lastBall.extraType === 'wide' || lastBall.extraType === 'no-ball') ? 1 : 0);
-  //   const isFour = lastBall.isFour ?? lastBall.runs === 4;
-  //   const isSix = lastBall.isSix ?? lastBall.runs === 6;
-
-  //   // Update player stats
-  //   const updatedTeams = state.teams.map(team => ({
-  //     ...team,
-  //     players: team.players.map(player => {
-  //       if (player.name === lastBall.batsmanName && wasLegal) {
-  //         return {
-  //           ...player,
-  //           runs: player.runs - lastBall.runs,
-  //           balls: player.balls - 1,
-  //           fours: player.fours - (isFour ? 1 : 0),
-  //           sixes: player.sixes - (isSix ? 1 : 0),
-  //         };
-  //       }
-  //       if (player.name === lastBall.bowlerName) {
-  //         return {
-  //           ...player,
-  //           ballsBowled: player.ballsBowled - (lastBall.isExtra && (lastBall.extraType === 'wide' || lastBall.extraType === 'no-ball') ? 0 : 1),
-  //           runsGiven: player.runsGiven - totalRuns,
-  //           wickets: player.wickets - (lastBall.isWicket ? 1 : 0),
-  //         };
-  //       }
-  //       return player;
-  //     }),
-  //   }));
-
-  //   // Reverse strike if needed
-  //   if (wasLegal) {
-  //     const isOverEnd = legalBalls % 6 === 0;
-  //     const strikeChanged =
-  //       (isOverEnd && lastBall.runs % 2 === 0) ||
-  //       (!isOverEnd && lastBall.runs % 2 === 1);
-
-  //     if (strikeChanged) {
-  //       set({ striker: state.nonStriker, nonStriker: state.striker });
-  //     }
-  //   }
-
-  //   // 🛠 Remove the last delivery from oversData
-  //   const updatedOversData = [...state.oversData];
-  //   const lastOverIndex = updatedOversData.length - 1;
-
-  //   if (lastOverIndex >= 0) {
-  //     const deliveries = [...updatedOversData[lastOverIndex].deliveries];
-  //     deliveries.pop(); // remove last delivery
-
-  //     if (deliveries.length === 0) {
-  //       updatedOversData.pop(); // remove over if it’s empty
-  //     } else {
-  //       updatedOversData[lastOverIndex] = {
-  //         ...updatedOversData[lastOverIndex],
-  //         deliveries,
-  //       };
-  //     }
-  //   }
-
-  //   set({
-  //     teams: updatedTeams,
-  //     ballHistory: newBallHistory,
-  //     oversData: updatedOversData, // 🧠 <- Don't forget this
-  //   });
-  // },
-
-
-
   undoLastBall: () => {
     const state = get();
     if (state.ballHistory.length === 0) return;
@@ -436,7 +359,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     const isFour = lastBall.isFour ?? lastBall.runs === 4;
     const isSix = lastBall.isSix ?? lastBall.runs === 6;
 
-    let updatedTeams = state.teams.map(team => ({
+    // Update player stats
+    const updatedTeams = state.teams.map(team => ({
       ...team,
       players: team.players.map(player => {
         if (player.name === lastBall.batsmanName && wasLegal) {
@@ -446,7 +370,6 @@ export const useGameStore = create<GameState>((set, get) => ({
             balls: player.balls - 1,
             fours: player.fours - (isFour ? 1 : 0),
             sixes: player.sixes - (isSix ? 1 : 0),
-            status: lastBall.isWicket ? '' : player.status, // ✅ Restore status
           };
         }
         if (player.name === lastBall.bowlerName) {
@@ -461,27 +384,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       }),
     }));
 
-    // ✅ If a new batsman was added after wicket, remove him
-    if (lastBall.isWicket && lastBall.replacedBatsmanName) {
-      updatedTeams = updatedTeams.map(team => ({
-        ...team,
-        players: team.players.filter(player => player.name !== lastBall.replacedBatsmanName),
-      }));
-
-      // ✅ Restore the original striker (the one who was out)
-      const oldStriker = state.teams
-        .flatMap(team => team.players)
-        .find(player => player.name === lastBall.batsmanName);
-
-      if (oldStriker) {
-        set({
-          striker: oldStriker,
-        });
-      }
-    }
-
-    // Reverse strike if needed (only for normal balls)
-    if (wasLegal && !lastBall.isWicket) {
+    // Reverse strike if needed
+    if (wasLegal) {
       const isOverEnd = legalBalls % 6 === 0;
       const strikeChanged =
         (isOverEnd && lastBall.runs % 2 === 0) ||
@@ -513,9 +417,10 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({
       teams: updatedTeams,
       ballHistory: newBallHistory,
-      oversData: updatedOversData,
+      oversData: updatedOversData, // 🧠 <- Don't forget this
     });
   },
+
 
   swapBatsmen: () => {
     const state = get();
