@@ -414,6 +414,14 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
     }
 
+    if (lastBall.isExtra && lastBall.runs % 2 === 1) {
+      // Reverse strike if the extra delivery resulted in an odd number of runs
+      set((prev) => ({
+        striker: prev.nonStriker,
+        nonStriker: prev.striker
+      }));
+    }
+
     set({
       teams: updatedTeams,
       ballHistory: newBallHistory,

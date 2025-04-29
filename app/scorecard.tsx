@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { useGameStore } from '../store/gameStore';
 import ExtraRunsModal from '../components/ExtraRunsModal';
 import WicketModal from '../components/WicketModal';
 import OversModal from '@/components/OversModal';
+import { Animated } from 'react-native';
 
 export default function Scorecard() {
   const {
@@ -89,7 +90,7 @@ export default function Scorecard() {
   useEffect(() => {
     const battingTeamPlayers = battingTeamObj?.players || [];
     const maxWickets = battingTeamPlayers.length - 1;
-
+    console.log("STRIKER ", striker)
     const inningsShouldEnd =
       totalCompletedOvers >= totalOvers ||
       totalWickets >= maxWickets;
@@ -207,6 +208,43 @@ export default function Scorecard() {
     router.push('/select-players');
   };
 
+  const currentRunRate = legalDeliveries.length > 0
+    ? (totalScore / (legalDeliveries.length / 6)).toFixed(2)
+    : '0.00';
+
+  const projectedScore = legalDeliveries.length > 0
+    ? Math.round((totalScore / (legalDeliveries.length / 6)) * totalOvers)
+    : 0;
+
+  const requiredRunRate = (currentInnings === 2 && ballsRemaining > 0)
+    ? ((runsNeeded! - 1) / (ballsRemaining / 6)).toFixed(2)
+    : null;
+
+
+  const blinkAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(blinkAnim, {
+          toValue: 0,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(blinkAnim, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, []);
+
+
+
+  const partnershipRuns = (striker?.runs || 0) + (nonStriker?.runs || 0);
+
+
   return (
     <>
       <View>
@@ -217,6 +255,26 @@ export default function Scorecard() {
           <Text style={styles.oversText}>
             Overs: {totalCompletedOvers}.{currentOver}
           </Text>
+
+          <Text style={styles.runRateText}>CRR: {currentRunRate}</Text>
+          {requiredRunRate !== null && (
+            parseFloat(requiredRunRate) > parseFloat(currentRunRate) ? (
+              <Animated.Text
+                style={[
+                  styles.runRateText,
+                  styles.rrrWarning,
+                  { opacity: blinkAnim }
+                ]}
+              >
+                RRR: {requiredRunRate}
+              </Animated.Text>
+            ) : (
+              <Text style={styles.runRateText}>RRR: {requiredRunRate}</Text>
+            )
+          )}
+          <Text style={styles.runRateText}>Projected Score: {projectedScore}</Text>
+
+
           {currentInnings === 2 && target && (
             <View style={styles.targetInfo}>
               <Text style={styles.targetText}>
@@ -300,8 +358,10 @@ export default function Scorecard() {
         {/* Bowling Section */}
         <View style={styles.statsContainer}>
           <Text style={styles.sectionTitle}>Bowling</Text>
-          {bowlingTeamObj?.players.map((player, index) => (
-            player.ballsBowled > 0 ? (
+          {bowlingTeamObj?.players
+            .filter(player => player.ballsBowled > 0)
+            .slice(0, 2)
+            .map((player, index) => (
               <View key={index} style={styles.playerStats}>
                 <View style={styles.playerInfo}>
                   <Text style={[
@@ -322,8 +382,8 @@ export default function Scorecard() {
                     : '0.0'}
                 </Text>
               </View>
-            ) : null
-          ))}
+            ))}
+
         </View>
 
         {/* Current Over */}
@@ -683,6 +743,35 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  runRateContainer: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: '#1976D2',
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  runRateText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  rrrWarning: {
+    color: '#FF5252', // bright red
+  },
+
+  partnershipContainer: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    backgroundColor: '#f4f4f4', // Add background for the partnership section
+    marginBottom: 15,
+    borderRadius: 5,
+    alignItems: 'center',
+  },
+  partnershipText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
   },
 });
 
