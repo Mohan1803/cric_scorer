@@ -27,9 +27,10 @@ export default function Scorecard() {
     startSecondInnings,
     awaitingSecondInningsStart,
     setAwaitingSecondInningsStart,
-
     batsmanToReplace,
-    oversData
+    oversData,
+    previousStriker,
+    setPreviousStriker
   } = useGameStore();
 
   const [showNewBowlerSelection, setShowNewBowlerSelection] = useState(false);
@@ -70,6 +71,14 @@ export default function Scorecard() {
   };
 
   const getCurrentOverBalls = () => {
+
+  const undoBatsmanSelection = () => {
+    if (!previousStriker) return;
+
+    // Revert to previous striker
+    setStriker(previousStriker);
+    setPreviousStriker(null);
+  };
     const allBalls = [...ballHistory].reverse();
     let currentOverBalls = oversData.find((e) => e.overNumber === totalCompletedOvers && e.innings === currentInnings)?.deliveries ?? [];
 
@@ -195,8 +204,18 @@ export default function Scorecard() {
       return;
     }
 
+    // Store previous striker before changing
+    setPreviousStriker(striker);
     setStriker(player);
     setShowNewBatsmanSelection(false);
+  };
+
+  const undoBatsmanSelection = () => {
+    if (!previousStriker) return;
+
+    // Revert to previous striker
+    setStriker(previousStriker);
+    setPreviousStriker(null);
   };
 
   const viewFullScorecard = () => {
@@ -409,8 +428,6 @@ export default function Scorecard() {
             ))}
           </View>
         </View>
-
-        {/* Controls */}
         {!showNewBowlerSelection && !showNewBatsmanSelection && (
           <View style={styles.controls}>
             {[0, 1, 2, 3, 4, 6].map(runs => (
@@ -418,6 +435,11 @@ export default function Scorecard() {
                 <Text style={styles.buttonText}>{runs}</Text>
               </TouchableOpacity>
             ))}
+            <TouchableOpacity style={[styles.runButton, styles.wicketButton]} onPress={handleWicket}>
+              <Text style={styles.buttonText}>Wicket</Text>
+            </TouchableOpacity>
+
+
             <TouchableOpacity style={[styles.runButton, styles.wideButton]} onPress={() => handleExtra('wide')}>
               <Text style={styles.buttonText}>Wide</Text>
             </TouchableOpacity>
@@ -433,7 +455,13 @@ export default function Scorecard() {
             <TouchableOpacity style={[styles.runButton, styles.wicketButton]} onPress={handleWicket}>
               <Text style={styles.buttonText}>Wicket</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.runButton, styles.undoButton]} onPress={undoLastBall}>
+            <TouchableOpacity style={[styles.runButton, styles.undoButton]} onPress={() => {
+              if (previousStriker) {
+                undoBatsmanSelection();
+              } else {
+                undoLastBall();
+              }
+            }}>
               <Text style={styles.buttonText}>Undo</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.runButton, styles.swapButton]} onPress={swapBatsmen}>

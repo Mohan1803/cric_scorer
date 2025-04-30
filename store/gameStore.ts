@@ -63,7 +63,7 @@ export interface GameState {
   matchCompleted: boolean;
   awaitingSecondInningsStart: boolean;
   oversData: OverData[];
-
+  previousStriker: Player | null;
 
   setTeams: (teams: Team[]) => void;
   setTossWinner: (team: string) => void;
@@ -81,7 +81,7 @@ export interface GameState {
   checkDuplicateName: (teamIndex: number, name: string) => boolean;
   setSecondInningsOver: (overs: number) => void;
   setAwaitingSecondInningsStart: (flag: boolean) => void;
-
+  setPreviousStriker: (player: Player | null) => void;
 
   batsmanToReplace: 'striker' | 'non-striker' | null;
   showBatsmanSelectModal: boolean;
@@ -109,6 +109,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   matchCompleted: false,
   awaitingSecondInningsStart: false,
   oversData: [],
+  previousStriker: null,
 
   setTeams: (teams) => set({ teams }),
   setTossWinner: (team) => set({ tossWinner: team }),
@@ -120,6 +121,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   setTotalOvers: (overs) => set({ totalOvers: overs }),
   setSecondInningsOver: (overs) => set({ secondInningsOver: overs }),
   setAwaitingSecondInningsStart: (flag) => set({ awaitingSecondInningsStart: flag }),
+  setPreviousStriker: (player) => set({ previousStriker: player }),
 
   batsmanToReplace: null,
   showBatsmanSelectModal: false,
@@ -199,7 +201,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         // Handle batsman stats (includes both striker and non-striker)
         if (isStriker) {
           const addRuns = record.isNoBall ? record.runs : (record.isExtra ? 0 : record.runs);
-          const addBall = record.isExtra && (record.extraType === 'no-ball' || record.extraType === 'wide') ? 0 : 1;
+          const addBall = record.isExtra && (record.extraType === 'wide') ? 0 : 1;
 
           return {
             ...player,
@@ -358,12 +360,14 @@ export const useGameStore = create<GameState>((set, get) => ({
     const totalRuns = lastBall.runs + (lastBall.isExtra && (lastBall.extraType === 'wide' || lastBall.extraType === 'no-ball') ? 1 : 0);
     const isFour = lastBall.isFour ?? lastBall.runs === 4;
     const isSix = lastBall.isSix ?? lastBall.runs === 6;
+    const isBatsmanScoringExtra = lastBall.isExtra && lastBall.extraType === 'no-ball';
+
 
     // Update player stats
     const updatedTeams = state.teams.map(team => ({
       ...team,
       players: team.players.map(player => {
-        if (player.name === lastBall.batsmanName && wasLegal) {
+        if (player.name === lastBall.batsmanName && (wasLegal || isBatsmanScoringExtra)) {
           return {
             ...player,
             runs: player.runs - lastBall.runs,
