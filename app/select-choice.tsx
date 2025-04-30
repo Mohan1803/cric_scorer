@@ -1,6 +1,8 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useGameStore } from '../store/gameStore';
+import { colors } from './theme';
 
 export default function SelectChoiceScreen() {
   const teams = useGameStore((state) => state.teams);
@@ -24,32 +26,36 @@ export default function SelectChoiceScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{tossWinner} won the toss</Text>
-      <Text style={styles.subtitle}>Choose to:</Text>
-      
-      <TouchableOpacity
-        style={styles.choiceButton}
-        onPress={() => handleChoice('bat')}
-      >
-        <Text style={styles.choiceButtonText}>Bat</Text>
-      </TouchableOpacity>
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <Text style={styles.title}>Choose to Bat or Bowl</Text>
+        <TouchableOpacity
+          style={styles.choiceButton}
+          onPress={() => handleChoice('bat')}
+        >
+          <Text style={styles.choiceButtonText}>Bat</Text>
+        </TouchableOpacity>
 
-      <TouchableOpacity
-        style={styles.choiceButton}
-        onPress={() => handleChoice('bowl')}
-      >
-        <Text style={styles.choiceButtonText}>Bowl</Text>
-      </TouchableOpacity>
-    </View>
+        <TouchableOpacity
+          style={styles.choiceButton}
+          onPress={() => handleChoice('bowl')}
+        >
+          <Text style={styles.choiceButtonText}>Bowl</Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: '#fff',
+    backgroundColor: colors.background,
     justifyContent: 'center',
   },
   title: {
@@ -62,17 +68,17 @@ const styles = StyleSheet.create({
     fontSize: 18,
     textAlign: 'center',
     marginBottom: 30,
-    color: '#666',
+    color: colors.accent,
   },
   choiceButton: {
-    backgroundColor: '#2196F3',
+    backgroundColor: colors.accent,
     padding: 20,
     borderRadius: 8,
     marginBottom: 20,
     alignItems: 'center',
   },
   choiceButtonText: {
-    color: '#fff',
+    color: colors.textDark,
     fontSize: 18,
     fontWeight: 'bold',
   },

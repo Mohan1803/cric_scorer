@@ -1,351 +1,228 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  ToastAndroid,
+  TouchableOpacity,
+  Modal,
+  Pressable,
+  ScrollView
+} from 'react-native';
 import { useGameStore } from '../store/gameStore';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { router } from 'expo-router';
+import { colors } from './theme';
 
 export default function FullScorecard() {
+  // ...existing code...
+  const handleDownloadScorecard = async () => {
+    const formatDate = (date: Date) => {
+      return date.toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+    };
+
+    const getTableRows = (players: any[], isBatting: boolean) =>
+      players.map((p: any) =>
+        `<tr>
+        <td>${p.name}${isBatting && p.isOut === false ? ' (not out)' : ''}</td>
+        ${isBatting
+          ? `<td>${p.runs}</td><td>${p.balls}</td><td>${p.fours}</td><td>${p.sixes}</td><td>${p.balls > 0 ? ((p.runs / p.balls) * 100).toFixed(1) : '0.0'}</td>`
+          : `<td>${Math.floor(p.ballsBowled / 6)}.${p.ballsBowled % 6}</td><td>${p.runsGiven}</td><td>${p.wickets}</td><td>${p.ballsBowled > 0 ? (p.runsGiven / (p.ballsBowled / 6)).toFixed(1) : '0.0'}</td>`}
+      </tr>`
+      ).join('');
+
+    const makeInningsHtml = (label: string, battingTeam: any, bowlingTeam: any, balls: any[]) => {
+      if (!battingTeam || !bowlingTeam || balls.length === 0) return '';
+      const totalScore = balls.reduce((sum, ball) => sum + ball.runs + (ball.isExtra ? 1 : 0), 0);
+      const totalWickets = balls.filter(ball => ball.isWicket).length;
+      const legalBalls = balls.filter(ball => !ball.isExtra).length;
+      const totalOvers = Math.floor(legalBalls / 6);
+      const currentBalls = legalBalls % 6;
+
+      let wides = 0, noBalls = 0, legByes = 0, byes = 0;
+      balls.forEach(ball => {
+        if (ball.extraType === 'wide') wides += ball.runs;
+        if (ball.extraType === 'no ball') noBalls += ball.runs;
+        if (ball.extraType === 'leg bye') legByes += ball.runs;
+        if (ball.extraType === 'bye') byes += ball.runs;
+      });
+      const extras = wides + noBalls + legByes + byes;
+
+      const battingTable = `
+        <table border="1" cellpadding="4" cellspacing="0">
+          <tr><th>Batter</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th></tr>
+          ${getTableRows(battingTeam.players, true)}
+        </table>
+      `;
+
+      const bowlingTable = `
+        <table border="1" cellpadding="4" cellspacing="0">
+          <tr><th>Bowler</th><th>O</th><th>R</th><th>W</th><th>Econ</th></tr>
+          ${getTableRows(bowlingTeam.players.filter((p: any) => p.ballsBowled > 0), false)}
+        </table>
+      `;
+
+      // Fall of Wickets (FOW)
+      type Wicket = { runs: number; number: number; batter: string; over: string };
+      const wickets: Wicket[] = balls.map((ball, i) => (ball.isWicket ? {
+        runs: balls.slice(0, i + 1).reduce((sum, b) => sum + b.runs + (b.isExtra ? 1 : 0), 0),
+        number: balls.filter((b, idx) => b.isWicket && idx <= i).length,
+        batter: ball.batter || '',
+        over: (() => {
+          const legalBalls = balls.slice(0, i + 1).filter(b => !b.isExtra).length;
+          return `${Math.floor((legalBalls - 1) / 6)}.${(legalBalls - 1) % 6}`;
+        })()
+      } : null))
+        .filter((w): w is Wicket => w !== null);
+      const fowSection = `<h3>Fall of Wickets</h3><p>${wickets.length > 0
+        ? wickets.map(w => `${w.runs}/${w.number} (${w.batter}, ${w.over})`).join('; ')
+        : 'None'}</p>`;
+
+      return `
+      <h2>${label}: ${battingTeam.name} ${totalScore}/${totalWickets} (${totalOvers}.${currentBalls} ov)</h2>
+      ${battingTable}
+      ${bowlingTable}
+      ${fowSection}
+      <h3>Extras</h3>
+      <p>Total: ${extras}${wides ? `, Wides: ${wides}` : ''}${noBalls ? `, No Balls: ${noBalls}` : ''}${legByes ? `, Leg Byes: ${legByes}` : ''}${byes ? `, Byes: ${byes}` : ''}</p>
+      <hr/>
+    `;
+    };
+
+    function getMatchMetaHtml() {
+      let html = `<h2>Match: ${teams?.map(t => t.name).join(' vs ')}</h2>`;
+      html += `<p>Date: ${formatDate(new Date())}</p>`;
+      return html;
+    }
+
+    const firstInningsBatting = teams[0];
+    const firstInningsBowling = teams[1];
+    const secondInningsBatting = teams[1];
+    const secondInningsBowling = teams[0];
+    // Always export both innings: firstInningsBallHistory for first, ballHistory for second (if available)
+    const firstInningsBalls = firstInningsBallHistory.length > 0 ? firstInningsBallHistory : ballHistory;
+    const secondInningsBalls = firstInningsBallHistory.length > 0 ? ballHistory : [];
+
+    const html = `
+    <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 20px; }
+          h1, h2, h3 { color: #1a237e; }
+          table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+          th, td { border: 1px solid #888; padding: 6px 10px; text-align: center; }
+          th { background: #e3e6fc; }
+          .section { margin-bottom: 28px; }
+          ul { margin-bottom: 18px; }
+          .empty-innings { color: #b71c1c; font-style: italic; margin-bottom: 20px; }
+        </style>
+      </head>
+      <body>
+        <h1>Full Scorecard</h1>
+        ${getMatchMetaHtml()}
+        <div class="section">
+          <h2>First Innings</h2>
+          ${makeInningsHtml('First Innings', firstInningsBatting, firstInningsBowling, firstInningsBalls) || '<div class="empty-innings">No data for this innings.</div>'}
+        </div>
+        <div class="section">
+          <h2>Second Innings</h2>
+          ${makeInningsHtml('Second Innings', secondInningsBatting, secondInningsBowling, secondInningsBalls) || '<div class="empty-innings">No data for this innings.</div>'}
+        </div>
+      </body>
+    </html>
+  `;
+
+    try {
+      const { uri } = await Print.printToFileAsync({ html });
+      await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
+    } catch (err) {
+      ToastAndroid.show('Failed to export scorecard', ToastAndroid.LONG);
+    }
+  };
+
+  // Debug: log histories
   const {
     teams,
     battingTeam,
     bowlingTeam,
     ballHistory,
     firstInningsBallHistory,
-    currentInnings,
-    matchCompleted,
-    target,
-    startNewMatch
+    startNewMatch,
   } = useGameStore();
+  console.log('[FullScorecard] ballHistory:', ballHistory);
+  console.log('[FullScorecard] firstInningsBallHistory:', firstInningsBallHistory);
+
+  // Always show both innings, regardless of currentInningsNumber
+  const firstInningsTeam = useMemo(
+    () => teams.find(team => team.name === battingTeam),
+    [teams, battingTeam]
+  );
+  const secondInningsTeam = useMemo(
+    () => teams.find(team => team.name === bowlingTeam),
+    [teams, bowlingTeam]
+  );
 
 
 
+  const showToast = (msg: string) => ToastAndroid.show(msg, ToastAndroid.SHORT);
 
-  // const generateHTML = () => {
-  //   const firstInningsTeam = teams.find(team => team.name === (currentInnings === 1 ? battingTeam : bowlingTeam));
-  //   const secondInningsTeam = teams.find(team => team.name === (currentInnings === 1 ? bowlingTeam : battingTeam));
-  //   const firstBowlingTeam = teams.find(team => team.name === (currentInnings === 1 ? bowlingTeam : battingTeam));
-  //   const secondBowlingTeam = teams.find(team => team.name === (currentInnings === 1 ? battingTeam : bowlingTeam));
-
-  //   const generateBattingTable = (team: any) => `
-  //     <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-family: Arial, sans-serif;">
-  //       <thead>
-  //         <tr style="background-color: #2196F3; color: white;">
-  //           <th style="padding: 10px; text-align: left;">Batsman</th>
-  //           <th style="padding: 10px; text-align: left;">Runs</th>
-  //           <th style="padding: 10px; text-align: left;">Balls</th>
-  //           <th style="padding: 10px; text-align: left;">4s</th>
-  //           <th style="padding: 10px; text-align: left;">6s</th>
-  //           <th style="padding: 10px; text-align: left;">SR</th>
-  //         </tr>
-  //       </thead>
-  //       <tbody>
-  //         ${team?.players.map((player: any) => `
-  //           <tr style="border: 1px solid #ddd; padding: 10px; background-color: ${player.isOut ? '#f2dede' : 'white'};">
-  //             <td style="padding: 10px;">${player.name}</td>
-  //             <td style="padding: 10px;">${player.runs}</td>
-  //             <td style="padding: 10px;">${player.balls}</td>
-  //             <td style="padding: 10px;">${player.fours}</td>
-  //             <td style="padding: 10px;">${player.sixes}</td>
-  //             <td style="padding: 10px;">${player.balls > 0 ? ((player.runs / player.balls) * 100).toFixed(1) : '0.0'}</td>
-  //           </tr>
-  //         `).join('')}
-  //       </tbody>
-  //     </table>
-  //   `;
-
-  //   const generateBowlingTable = (team: any) => `
-  //     <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-family: Arial, sans-serif;">
-  //       <thead>
-  //         <tr style="background-color: #2196F3; color: white;">
-  //           <th style="padding: 10px; text-align: left;">Bowler</th>
-  //           <th style="padding: 10px; text-align: left;">Overs</th>
-  //           <th style="padding: 10px; text-align: left;">Runs</th>
-  //           <th style="padding: 10px; text-align: left;">Wickets</th>
-  //           <th style="padding: 10px; text-align: left;">Econ</th>
-  //         </tr>
-  //       </thead>
-  //       <tbody>
-  //         ${team?.players
-  //           .filter((p: any) => p.ballsBowled > 0)
-  //           .map((player: any) => {
-  //             const overs = Math.floor(player.ballsBowled / 6);
-  //             const balls = player.ballsBowled % 6;
-  //             const econ = (player.ballsBowled > 0)
-  //               ? (player.runsGiven / (player.ballsBowled / 6)).toFixed(1)
-  //               : '0.0';
-
-  //             return `
-  //               <tr style="border: 1px solid #ddd; padding: 10px;">
-  //                 <td style="padding: 10px;">${player.name}</td>
-  //                 <td style="padding: 10px;">${overs}.${balls}</td>
-  //                 <td style="padding: 10px;">${player.runsGiven}</td>
-  //                 <td style="padding: 10px;">${player.wickets}</td>
-  //                 <td style="padding: 10px;">${econ}</td>
-  //               </tr>
-  //             `;
-  //           }).join('')}
-  //       </tbody>
-  //     </table>
-  //   `;
-
-  //   return `
-  //     <html>
-  //       <head>
-  //         <style>
-  //           body {
-  //             font-family: 'Arial', sans-serif;
-  //             padding: 20px;
-  //             background-color: #f4f4f4;
-  //             color: #333;
-  //           }
-  //           h1 {
-  //             text-align: center;
-  //             color: #2196F3;
-  //             font-size: 30px;
-  //             margin-bottom: 20px;
-  //           }
-  //           .innings-header {
-  //             font-size: 24px;
-  //             font-weight: bold;
-  //             color:rgb(14, 101, 223);
-  //             margin: 20px 0;
-  //           }
-  //           table {
-  //             width: 100%;
-  //             border-collapse: collapse;
-  //             margin: 20px 0;
-  //             border-radius: 5px;
-  //             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  //           }
-  //           th, td {
-  //             padding: 12px;
-  //             text-align: left;
-  //           }
-  //           th {
-  //             background-color: #2196F3;
-  //             color: white;
-  //           }
-  //           tr:nth-child(even) {
-  //             background-color: #f9f9f9;
-  //           }
-  //           tr:hover {
-  //             background-color: #e0f7fa;
-  //           }
-  //         </style>
-  //       </head>
-  //       <body>
-  //         <h1>Cricket Match Scorecard</h1>
-
-  //         <div class="innings-header">First Innings: ${firstInningsTeam?.name}</div>
-  //         <h3>Batting</h3>
-  //         ${generateBattingTable(firstInningsTeam)}
-  //         <h3>Bowling</h3>
-  //         ${generateBowlingTable(firstBowlingTeam)}
-
-  //         ${currentInnings === 2 || matchCompleted ? `
-  //           <div class="innings-header">Second Innings: ${secondInningsTeam?.name}</div>
-  //           <h3>Batting</h3>
-  //           ${generateBattingTable(secondInningsTeam)}
-  //           <h3>Bowling</h3>
-  //           ${generateBowlingTable(secondBowlingTeam)}
-  //         ` : ''}
-  //       </body>
-  //     </html>
-  //   `;
-  // };
-
-
-  const generateHTML = () => {
-    const firstInningsTeam = teams.find(team => team.name === (currentInnings === 1 ? battingTeam : bowlingTeam));
-    const secondInningsTeam = teams.find(team => team.name === (currentInnings === 1 ? bowlingTeam : battingTeam));
-    const firstBowlingTeam = teams.find(team => team.name === (currentInnings === 1 ? bowlingTeam : battingTeam));
-    const secondBowlingTeam = teams.find(team => team.name === (currentInnings === 1 ? battingTeam : bowlingTeam));
-
-    const getTopScorer = (players: any[]) =>
-      players.reduce((top, p) => (p.runs > (top?.runs || 0) ? p : top), null);
-
-    const getTopBowler = (players: any[]) =>
-      players.reduce((top, p) => (p.wickets > (top?.wickets || 0) ? p : top), null);
-
-    const generateBattingTable = (team: any) => {
-      const topScorer = getTopScorer(team?.players || []);
-      return `
-      <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-        <thead>
-          <tr style="background-color: #2196F3; color: white;">
-            <th style="padding: 10px;">Batsman</th>
-            <th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th><th>SR Bar</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${team?.players.map((p: any) => {
-        const sr = p.balls > 0 ? ((p.runs / p.balls) * 100).toFixed(1) : '0.0';
-        const barWidth = Math.min(Number(sr), 200);
-        const isTopScorer = p.name === topScorer?.name;
-        return `
-              <tr style="background-color: ${p.isOut ? '#f2dede' : 'white'}; ${isTopScorer ? 'font-weight: bold; background-color: #d0f0c0;' : ''}">
-                <td>${p.name}</td>
-                <td>${p.runs}</td>
-                <td>${p.balls}</td>
-                <td>${p.fours}</td>
-                <td>${p.sixes}</td>
-                <td>${sr}</td>
-                <td>
-                  <div style="height: 10px; width: 100px; background-color: #eee;">
-                    <div style="height: 100%; width: ${barWidth / 2}%; background-color: #4CAF50;"></div>
-                  </div>
-                </td>
-              </tr>
-            `;
-      }).join('')}
-        </tbody>
-      </table>`;
-    };
-
-    const generateBowlingTable = (team: any) => {
-      const topBowler = getTopBowler(team?.players || []);
-      const maxOvers = Math.max(...team?.players.map((p: any) => Math.floor(p.ballsBowled / 6) + (p.ballsBowled % 6) / 6) || []);
-
-      return `
-      <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-        <thead>
-          <tr style="background-color: #2196F3; color: white;">
-            <th>Bowler</th><th>O</th><th>R</th><th>W</th><th>Econ</th><th>Overs Bar</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${team?.players
-          .filter((p: any) => p.ballsBowled > 0)
-          .map((p: any) => {
-            const overs = Math.floor(p.ballsBowled / 6);
-            const balls = p.ballsBowled % 6;
-            const econ = p.ballsBowled > 0 ? (p.runsGiven / (p.ballsBowled / 6)).toFixed(1) : '0.0';
-            const oversDecimal = overs + balls / 6;
-            const barWidth = maxOvers ? (oversDecimal / maxOvers) * 100 : 0;
-            const isTopBowler = p.name === topBowler?.name;
-
-            return `
-                <tr style="${isTopBowler ? 'font-weight: bold; background-color: #fff8dc;' : ''}">
-                  <td>${p.name}</td>
-                  <td>${overs}.${balls}</td>
-                  <td>${p.runsGiven}</td>
-                  <td>${p.wickets}</td>
-                  <td>${econ}</td>
-                  <td>
-                    <div style="height: 10px; width: 100px; background-color: #eee;">
-                      <div style="height: 100%; width: ${barWidth}%; background-color: #2196F3;"></div>
-                    </div>
-                  </td>
-                </tr>
-              `;
-          }).join('')}
-        </tbody>
-      </table>`;
-    };
-
-    return `
-      <html>
-        <head>
-          <style>
-            body {
-              font-family: 'Arial', sans-serif;
-              padding: 20px;
-              background-color: #f4f4f4;
-              color: #333;
-            }
-            h1 {
-              text-align: center;
-              color: #2196F3;
-              font-size: 30px;
-              margin-bottom: 20px;
-            }
-            .innings-header {
-              font-size: 24px;
-              font-weight: bold;
-              color: rgb(14, 101, 223);
-              margin: 20px 0;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin: 20px 0;
-              border-radius: 5px;
-              box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            }
-            th, td {
-              padding: 12px;
-              text-align: center;
-            }
-            th {
-              background-color: #2196F3;
-              color: white;
-            }
-            tr:nth-child(even) {
-              background-color: #f9f9f9;
-            }
-            tr:hover {
-              background-color: #e0f7fa;
-            }
-          </style>
-        </head>
-        <body>
-          <h1>Cricket Match Scorecard</h1>
-          
-          <div class="innings-header">First Innings: ${firstInningsTeam?.name}</div>
-          <h3>Batting</h3>
-          ${generateBattingTable(firstInningsTeam)}
-          <h3>Bowling</h3>
-          ${generateBowlingTable(firstBowlingTeam)}
-  
-          ${currentInnings === 2 || matchCompleted ? `
-            <div class="innings-header">Second Innings: ${secondInningsTeam?.name}</div>
-            <h3>Batting</h3>
-            ${generateBattingTable(secondInningsTeam)}
-            <h3>Bowling</h3>
-            ${generateBowlingTable(secondBowlingTeam)}
-          ` : ''}
-        </body>
-      </html>
-    `;
-  };
-
-
-  const handleExport = async () => {
-    try {
-      const html = generateHTML();
-      const { uri } = await Print.printToFileAsync({ html });
-      await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
-    } catch (error) {
-      console.error('Error exporting scorecard:', error);
-    }
-  };
 
   const handleNewMatch = () => {
+    showToast('Starting new match');
     startNewMatch();
     router.replace('/');
   };
 
-  const renderInnings = (inningsBallHistory: typeof ballHistory, inningsBattingTeam: string, inningsBowlingTeam: string) => {
+  const renderInnings = (
+    inningsBallHistory: typeof ballHistory,
+    inningsBattingTeam: string,
+    inningsBowlingTeam: string,
+    inningsLabel: string
+  ) => {
+    // DEBUG LOGGING
+    console.log('[renderInnings]', {
+      inningsLabel,
+      inningsBattingTeam,
+      inningsBowlingTeam,
+      inningsBallHistoryLength: inningsBallHistory.length,
+      teams: teams.map(t => t.name)
+    });
     const battingTeamObj = teams.find(team => team.name === inningsBattingTeam);
     const bowlingTeamObj = teams.find(team => team.name === inningsBowlingTeam);
 
-    const totalScore = inningsBallHistory.reduce((sum, ball) => sum + ball.runs + (ball.isExtra ? 1 : 0), 0);
+    if (!battingTeamObj || !bowlingTeamObj || inningsBallHistory.length === 0) {
+      return (
+        <View style={styles.inningsContainer}>
+          <Text style={styles.emptyText}>No data for this innings.</Text>
+        </View>
+      );
+    }
+
+    const totalScore = inningsBallHistory.reduce(
+      (sum, ball) => sum + ball.runs + (ball.isExtra ? 1 : 0),
+      0
+    );
     const totalWickets = inningsBallHistory.filter(ball => ball.isWicket).length;
-    const totalOvers = Math.floor(inningsBallHistory.filter(ball => !ball.isExtra).length / 6);
-    const currentBalls = inningsBallHistory.filter(ball => !ball.isExtra).length % 6;
+    const legalBalls = inningsBallHistory.filter(ball => !ball.isExtra).length;
+    const totalOvers = Math.floor(legalBalls / 6);
+    const currentBalls = legalBalls % 6;
 
     return (
       <View style={styles.inningsContainer}>
-        <View style={styles.header}>
+        <View style={styles.headerSticky}>
           <Text style={styles.headerText}>
             {inningsBattingTeam} {totalScore}/{totalWickets}
           </Text>
-          <Text style={styles.oversText}>
-            ({totalOvers}.{currentBalls} Overs)
-          </Text>
+          <Text style={styles.oversText}>({totalOvers}.{currentBalls} Overs)</Text>
         </View>
 
-        {/* Batting Statistics */}
+        {/* Batting Table */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Batting</Text>
           <View style={styles.tableHeader}>
@@ -356,25 +233,27 @@ export default function FullScorecard() {
             <Text style={styles.cell}>6s</Text>
             <Text style={styles.cell}>SR</Text>
           </View>
-          {battingTeamObj?.players.map((player, index) => {
-            const strikeRate = player.balls > 0
-              ? ((player.runs / player.balls) * 100).toFixed(1)
-              : '0.0';
-
-            return (
-              <View key={index} style={styles.tableRow}>
-                <Text style={[styles.cell, styles.playerCell]}>{player.name}</Text>
-                <Text style={styles.cell}>{player.runs}</Text>
-                <Text style={styles.cell}>{player.balls}</Text>
-                <Text style={styles.cell}>{player.fours}</Text>
-                <Text style={styles.cell}>{player.sixes}</Text>
-                <Text style={styles.cell}>{strikeRate}</Text>
-              </View>
-            );
-          })}
+          <FlatList
+            data={battingTeamObj.players}
+            keyExtractor={(item) => item.name}
+            renderItem={({ item: player }) => {
+              const strikeRate = player.balls > 0 ? ((player.runs / player.balls) * 100).toFixed(1) : '0.0';
+              return (
+                <View style={styles.tableRow}>
+                  <Text style={[styles.cell, styles.playerCell]}>{player.name}</Text>
+                  <Text style={styles.cell}>{player.runs}</Text>
+                  <Text style={styles.cell}>{player.balls}</Text>
+                  <Text style={styles.cell}>{player.fours}</Text>
+                  <Text style={styles.cell}>{player.sixes}</Text>
+                  <Text style={styles.cell}>{strikeRate}</Text>
+                </View>
+              );
+            }}
+            ListEmptyComponent={<Text style={styles.emptyText}>No batting data.</Text>}
+          />
         </View>
 
-        {/* Bowling Statistics */}
+        {/* Bowling Table */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Bowling</Text>
           <View style={styles.tableHeader}>
@@ -384,98 +263,136 @@ export default function FullScorecard() {
             <Text style={styles.cell}>W</Text>
             <Text style={styles.cell}>Econ</Text>
           </View>
-          {bowlingTeamObj?.players.map((player, index) => {
-            const overs = Math.floor(player.ballsBowled / 6);
-            const balls = player.ballsBowled % 6;
-            const economy = player.ballsBowled > 0
-              ? ((player.runsGiven / (player.ballsBowled / 6)) || 0).toFixed(1)
-              : '0.0';
+          <FlatList
+            data={bowlingTeamObj.players.filter(p => p.ballsBowled > 0)}
+            keyExtractor={(item) => item.name}
+            renderItem={({ item: player }) => {
+              const overs = Math.floor(player.ballsBowled / 6);
+              const balls = player.ballsBowled % 6;
+              const economy = player.ballsBowled > 0
+                ? (player.runsGiven / (player.ballsBowled / 6)).toFixed(1)
+                : '0.0';
+              return (
+                <View style={styles.tableRow}>
+                  <Text style={[styles.cell, styles.playerCell]}>{player.name}</Text>
+                  <Text style={styles.cell}>{overs}.{balls}</Text>
+                  <Text style={styles.cell}>{player.runsGiven}</Text>
+                  <Text style={styles.cell}>{player.wickets}</Text>
+                  <Text style={styles.cell}>{economy}</Text>
+                </View>
+              );
+            }}
+            ListEmptyComponent={<Text style={styles.emptyText}>No bowling data.</Text>}
+          />
+        </View>
 
-            return (
-              <View key={index} style={styles.tableRow}>
-                <Text style={[styles.cell, styles.playerCell]}>{player.name}</Text>
-                <Text style={styles.cell}>{overs}.{balls}</Text>
-                <Text style={styles.cell}>{player.runsGiven}</Text>
-                <Text style={styles.cell}>{player.wickets}</Text>
-                <Text style={styles.cell}>{economy}</Text>
-              </View>
-            );
-          })}
+        {/* Fall of Wickets (FOW) */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Fall of Wickets</Text>
+          <Text style={styles.fowText}>{(() => {
+            const balls = inningsBallHistory;
+            const wickets = balls
+              .map((ball, i) => ball.isWicket ? ({
+                runs: balls.slice(0, i + 1).reduce((sum, b) => sum + b.runs + (b.isExtra ? 1 : 0), 0),
+                number: balls.filter((b, idx) => b.isWicket && idx <= i).length,
+                batter: ball.batsmanName || '',
+                over: (() => {
+                  const legalBalls = balls.slice(0, i + 1).filter(b => !b.isExtra).length;
+                  return `${Math.floor((legalBalls - 1) / 6)}.${(legalBalls - 1) % 6}`;
+                })()
+              }) : null)
+              .filter((w) => w !== null);
+            return wickets.length > 0
+              ? wickets.map(w => w ? `${w.runs}/${w.number} (${w.batter}, ${w.over})` : '').filter(Boolean).join('; ')
+              : 'None';
+          })()}</Text>
         </View>
       </View>
     );
   };
 
   return (
-    <ScrollView style={styles.container}>
-      {/* First Innings */}
-      {renderInnings(
-        currentInnings === 1 ? ballHistory : firstInningsBallHistory,
-        currentInnings === 1 ? battingTeam! : bowlingTeam!,
-        currentInnings === 1 ? bowlingTeam! : battingTeam!
+    <ScrollView contentContainerStyle={styles.container}>
+
+      {/* Robust innings rendering: */}
+      {/* First Innings: Always use teams[0] as batting team, teams[1] as bowling team */}
+      {teams.length >= 2 && renderInnings(
+        firstInningsBallHistory.length > 0 ? firstInningsBallHistory : ballHistory,
+        teams[0].name,
+        teams[1].name,
+        'First Innings'
       )}
 
-      {/* Second Innings */}
-      {(currentInnings === 2 || matchCompleted) && renderInnings(
-        ballHistory,
-        battingTeam!,
-        bowlingTeam!
-      )}
-
-      {/* Export and New Match Buttons */}
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity style={styles.exportButton} onPress={handleExport}>
-          <Text style={styles.buttonText}>Export Scorecard</Text>
-        </TouchableOpacity>
-
-        {matchCompleted && (
-          <TouchableOpacity style={styles.newMatchButton} onPress={handleNewMatch}>
-            <Text style={styles.buttonText}>Start New Match</Text>
-          </TouchableOpacity>
+      {/* Second Innings: Always use teams[1] as batting team, teams[0] as bowling team */}
+      {teams.length >= 2 && firstInningsBallHistory.length > 0 &&
+        renderInnings(
+          ballHistory,
+          teams[1].name,
+          teams[0].name,
+          'Second Innings'
         )}
+
+      <View style={styles.buttonContainer}>
+        <TouchableOpacity style={styles.exportButton} onPress={handleDownloadScorecard}>
+          <Text style={styles.buttonText}>Download Scorecard</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.exportButton} onPress={handleNewMatch}>
+          <Text style={styles.buttonText}>New Match</Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
 }
 
+// === Styles ===
 const styles = StyleSheet.create({
+  fowText: {
+    fontStyle: 'italic',
+    color: colors.textSecondary,
+    marginVertical: 4,
+  },
   container: {
-    flex: 1,
-    backgroundColor: '#fff',
+    padding: 20,
   },
   inningsContainer: {
     marginBottom: 20,
+    borderRadius: 10,
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
+    elevation: 2,
   },
-  header: {
+  headerSticky: {
     padding: 20,
-    backgroundColor: '#2196F3',
+    backgroundColor: colors.accent,
     alignItems: 'center',
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
   },
   headerText: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#fff',
+    color: colors.textPrimary,
   },
   oversText: {
     fontSize: 18,
-    color: '#fff',
+    color: colors.textSecondary,
     marginTop: 5,
   },
   section: {
     padding: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: colors.border,
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 15,
-    color: '#333',
+    color: colors.accentAlt,
   },
   tableHeader: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
+    borderBottomColor: colors.border,
     paddingBottom: 10,
     marginBottom: 10,
   },
@@ -483,35 +400,85 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: colors.border,
+    alignItems: 'center',
+  },
+  topScorerRow: {
+    backgroundColor: colors.accentAlt,
+  },
+  topBowlerRow: {
+    backgroundColor: colors.success,
   },
   cell: {
     flex: 1,
     textAlign: 'center',
+    color: colors.textPrimary,
   },
   playerCell: {
     flex: 2,
     textAlign: 'left',
+    color: colors.textPrimary,
+  },
+  topScorerBadge: {
+    color: colors.accent,
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  topBowlerBadge: {
+    color: colors.success,
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  notOutBadge: {
+    color: colors.success,
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+  outBadge: {
+    color: colors.error,
+    fontWeight: 'bold',
+    fontSize: 12,
   },
   buttonContainer: {
     padding: 15,
-    gap: 10,
-  },
-  exportButton: {
-    backgroundColor: '#4CAF50',
-    padding: 15,
-    borderRadius: 8,
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  newMatchButton: {
-    backgroundColor: '#2196F3',
+  exportButton: {
+    backgroundColor: colors.card,
     padding: 15,
-    borderRadius: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    minWidth: 170,
     alignItems: 'center',
   },
   buttonText: {
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  emptyText: {
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginVertical: 20,
+    fontSize: 16,
+  },
+  backButton: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    backgroundColor: colors.surface,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    elevation: 4,
+    zIndex: 20,
+  },
+  backButtonText: {
+    color: colors.accent,
+    fontWeight: 'bold',
+    fontSize: 18,
   },
 });

@@ -51,19 +51,24 @@ export default function WicketModal({
         <View style={styles.modalView}>
           <Text style={styles.modalTitle}>How Out?</Text>
 
-          <ModalSelector
-            data={wicketOptions}
-            initValue="Select Wicket Type"
-            onChange={(option) =>
-              setWicketType(option.label.toLowerCase().replace(' ', '-'))
-            }
-            selectStyle={styles.selector}
-            selectTextStyle={styles.selectorText}
-            optionContainerStyle={styles.optionContainer}
-            optionTextStyle={styles.optionText}
-            cancelStyle={styles.cancelButton}
-            cancelTextStyle={styles.cancelText}
-          />
+          <View style={styles.wicketTypeRow}>
+            {wicketOptions.map(option => {
+              const value = option.label.toLowerCase().replace(' ', '-');
+              const selected = wicketType === value;
+              return (
+                <TouchableOpacity
+                  key={option.key}
+                  style={[styles.wicketTypeButton, selected && styles.wicketTypeButtonSelected]}
+                  onPress={() => setWicketType(value)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.wicketTypeButtonText, selected && styles.wicketTypeButtonTextSelected]}>
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
 
           {wicketType === 'run-out' && (
             <>
@@ -126,6 +131,35 @@ export default function WicketModal({
 }
 
 const styles = StyleSheet.create({
+  wicketTypeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    marginBottom: 18,
+    gap: 10,
+  },
+  wicketTypeButton: {
+    backgroundColor: '#f0f0f0',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginHorizontal: 4,
+    marginBottom: 8,
+    borderWidth: 2,
+    borderColor: '#2196F3',
+  },
+  wicketTypeButtonSelected: {
+    backgroundColor: '#2196F3',
+    borderColor: '#2196F3',
+  },
+  wicketTypeButtonText: {
+    color: '#333',
+    fontWeight: 'bold',
+    fontSize: 15,
+  },
+  wicketTypeButtonTextSelected: {
+    color: '#fff',
+  },
   centeredView: {
     flex: 1,
     justifyContent: 'center',

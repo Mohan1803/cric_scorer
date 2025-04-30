@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Modal, StyleSheet } from 'react-native';
+import { colors } from '../app/theme';
 
 interface ExtraRunsModalProps {
   visible: boolean;
@@ -9,9 +10,14 @@ interface ExtraRunsModalProps {
 }
 
 export default function ExtraRunsModal({ visible, onClose, onSelectRuns, extraType }: ExtraRunsModalProps) {
+  const [selected, setSelected] = useState<number | null>(null);
+  let runsArr: number[] = extraType === 'no-ball' ? [0, 1, 2, 3, 4, 5, 6] : [0, 1, 2, 3, 4];
 
+  const handleSelect = (runs: number) => {
+    setSelected(runs);
+    setTimeout(() => onSelectRuns(runs), 120);
+  };
 
-  let runsArr: any[] = extraType === 'no-ball' ? [0, 1, 2, 3, 4, 5, 6] : [0, 1, 2, 3, 4]
   return (
     <Modal
       animationType="slide"
@@ -26,10 +32,11 @@ export default function ExtraRunsModal({ visible, onClose, onSelectRuns, extraTy
             {runsArr.map((runs) => (
               <TouchableOpacity
                 key={runs}
-                style={styles.runButton}
-                onPress={() => onSelectRuns(runs)}
+                style={[styles.runButton, selected === runs && styles.selectedButton]}
+                onPress={() => handleSelect(runs)}
+                activeOpacity={0.8}
               >
-                <Text style={styles.runButtonText}>{runs}</Text>
+                <Text style={[styles.runButtonText, selected === runs && styles.selectedButtonText]}>{runs}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -50,52 +57,74 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(10, 12, 20, 0.85)',
   },
   modalView: {
-    backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 20,
+    backgroundColor: colors.card,
+    borderRadius: 18,
+    padding: 26,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-    width: '80%',
+    shadowRadius: 8,
+    elevation: 8,
+    width: '85%',
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
-    marginBottom: 20,
+    marginBottom: 18,
+    color: colors.accent,
+    letterSpacing: 1.1,
   },
   runsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: 10,
+    gap: 12,
+    marginBottom: 12,
   },
   runButton: {
-    backgroundColor: '#2196F3',
-    padding: 15,
-    borderRadius: 10,
-    width: 60,
+    backgroundColor: colors.surface,
+    paddingVertical: 16,
+    paddingHorizontal: 0,
+    borderRadius: 12,
+    width: 58,
     alignItems: 'center',
+    margin: 6,
+    borderWidth: 2,
+    borderColor: colors.border,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  selectedButton: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+    shadowColor: colors.accent,
+    shadowOpacity: 0.22,
   },
   runButtonText: {
-    color: 'white',
-    fontSize: 18,
+    color: colors.textPrimary,
+    fontSize: 20,
     fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  selectedButtonText: {
+    color: colors.textDark,
   },
   closeButton: {
-    marginTop: 20,
+    marginTop: 18,
     padding: 10,
+    alignSelf: 'center',
   },
   closeButtonText: {
-    color: '#666',
+    color: colors.textSecondary,
     fontSize: 16,
+    fontWeight: 'bold',
+    letterSpacing: 0.8,
   },
 });

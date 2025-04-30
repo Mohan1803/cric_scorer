@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
 import { router } from 'expo-router';
-
+import { colors } from './theme';
 
 export default function SplashScreen() {
     useEffect(() => {
@@ -34,7 +34,7 @@ const { width, height } = Dimensions.get('window');
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: 'black',
+        backgroundColor: colors.background,
     },
     video: {
         width: width,

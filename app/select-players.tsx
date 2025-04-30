@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { useGameStore } from '../store/gameStore';
+import { colors } from './theme';
 
 export default function SelectPlayersScreen() {
   const teams = useGameStore((state) => state.teams);
@@ -44,7 +45,7 @@ export default function SelectPlayersScreen() {
             key={index}
             style={[
               styles.playerButton,
-              selectedStriker === player.name && styles.selectedButton,
+              selectedStriker === player.name && styles.selected,
               player.name === selectedNonStriker && styles.disabledButton,
             ]}
             onPress={() => setSelectedStriker(player.name)}
@@ -62,7 +63,7 @@ export default function SelectPlayersScreen() {
             key={index}
             style={[
               styles.playerButton,
-              selectedNonStriker === player.name && styles.selectedButton,
+              selectedNonStriker === player.name && styles.selected,
               player.name === selectedStriker && styles.disabledButton,
             ]}
             onPress={() => setSelectedNonStriker(player.name)}
@@ -80,7 +81,7 @@ export default function SelectPlayersScreen() {
             key={index}
             style={[
               styles.playerButton,
-              selectedBowler === player.name && styles.selectedButton,
+              selectedBowler === player.name && styles.selected,
             ]}
             onPress={() => setSelectedBowler(player.name)}
           >
@@ -102,8 +103,8 @@ export default function SelectPlayersScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
     padding: 20,
-    backgroundColor: '#fff',
   },
   section: {
     marginBottom: 30,
@@ -112,33 +113,34 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 15,
+    color: colors.textPrimary,
   },
   playerButton: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.surface,
     padding: 15,
     borderRadius: 8,
     marginBottom: 10,
   },
-  selectedButton: {
-    backgroundColor: '#2196F3',
+  selected: {
+    backgroundColor: colors.accent,
   },
   disabledButton: {
-    backgroundColor: '#ddd',
+    backgroundColor: colors.disabled,
     opacity: 0.5,
   },
   playerButtonText: {
     fontSize: 16,
+    color: colors.textSecondary,
   },
   continueButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: colors.accent,
     padding: 15,
-    borderRadius: 8,
+    borderRadius: 10,
     alignItems: 'center',
     marginTop: 20,
-    marginBottom: 30,
   },
   continueButtonText: {
-    color: '#fff',
+    color: colors.textSecondary,
     fontSize: 18,
     fontWeight: 'bold',
   },

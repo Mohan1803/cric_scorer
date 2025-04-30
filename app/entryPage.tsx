@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { colors } from './theme';
 import { router } from 'expo-router';
 import { useGameStore } from '../store/gameStore';
 
@@ -37,8 +38,9 @@ export default function TeamEntry() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Enter Match Details</Text>
+    <>
+      <View style={styles.container}>
+        <Text style={styles.title}>Enter Match Details</Text>
       
       <View style={styles.inputContainer}>
         <Text style={styles.label}>Team 1 Name</Text>
@@ -47,6 +49,7 @@ export default function TeamEntry() {
           value={team1Name}
           onChangeText={setTeam1Name}
           placeholder="Enter team 1 name"
+          placeholderTextColor={colors.textSecondary}
           maxLength={30}
         />
       </View>
@@ -58,6 +61,7 @@ export default function TeamEntry() {
           value={team2Name}
           onChangeText={setTeam2Name}
           placeholder="Enter team 2 name"
+          placeholderTextColor={colors.textSecondary}
           maxLength={30}
         />
       </View>
@@ -69,6 +73,7 @@ export default function TeamEntry() {
           value={overs}
           onChangeText={setOvers}
           placeholder="Enter number of overs"
+          placeholderTextColor={colors.textSecondary}
           keyboardType="numeric"
           maxLength={2}
         />
@@ -77,21 +82,24 @@ export default function TeamEntry() {
       <TouchableOpacity style={styles.button} onPress={handleContinue}>
         <Text style={styles.buttonText}>Continue</Text>
       </TouchableOpacity>
-    </View>
+      </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
+
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: '#fff',
+    backgroundColor: colors.background,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 30,
     textAlign: 'center',
+    color: colors.accent,
   },
   inputContainer: {
     marginBottom: 20,
@@ -99,24 +107,26 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 16,
     marginBottom: 8,
-    color: '#333',
+    color: colors.textDark,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: colors.border,
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
+    backgroundColor: colors.surface,
+    color: colors.textPrimary,
   },
   button: {
-    backgroundColor: '#2196F3',
+    backgroundColor: colors.accent,
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 20,
   },
   buttonText: {
-    color: '#fff',
+    color: colors.textDark,
     fontSize: 18,
     fontWeight: 'bold',
   },

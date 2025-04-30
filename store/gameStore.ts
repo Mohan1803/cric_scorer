@@ -45,7 +45,23 @@ export interface OverData {
   deliveries: BallRecord[];
 }
 
+export interface UndoOperation {
+  type: 'remove_wicket' | 'remove_batsman' | 'wicket_restore';
+  details: any; // You can type this more strictly if needed
+}
+
+export interface CurrentInnings {
+  wickets: number;
+  current_batsmen: any[];
+  last_wicket_details?: any;
+}
+
 export interface GameState {
+  initialStriker: Player | null;
+  initialNonStriker: Player | null;
+  currentInnings: CurrentInnings;
+  currentInningsNumber: 1 | 2;
+
   teams: Team[];
   tossWinner: string | null;
   battingTeam: string | null;
@@ -53,16 +69,17 @@ export interface GameState {
   striker: Player | null;
   nonStriker: Player | null;
   currentBowler: Player | null;
+  lastSelectedBowler: Player | null;
   ballHistory: BallRecord[];
   firstInningsBallHistory: BallRecord[];
   totalOvers: number;
   secondInningsOver: number;
-  currentInnings: 1 | 2;
   target: number | null;
   matchDate: Date;
   matchCompleted: boolean;
   awaitingSecondInningsStart: boolean;
   oversData: OverData[];
+  firstInningsOversData: OverData[];
   previousStriker: Player | null;
 
   setTeams: (teams: Team[]) => void;
@@ -87,11 +104,24 @@ export interface GameState {
   showBatsmanSelectModal: boolean;
   setBatsmanToReplace: (end: 'striker' | 'non-striker' | null) => void;
   setShowBatsmanSelectModal: (show: boolean) => void;
+
+  // Undo stack and operations
+  undoStack: UndoOperation[];
+  addUndoOperation: (op: UndoOperation) => void;
+  popUndoOperation: () => UndoOperation | undefined;
+  clearUndoStack: () => void;
+  applyUndoOperation: (op: UndoOperation) => void;
 }
 
-
-
 export const useGameStore = create<GameState>((set, get) => ({
+  initialStriker: null,
+  currentInnings: {
+    wickets: 0,
+    current_batsmen: [],
+    last_wicket_details: undefined,
+  },
+  currentInningsNumber: 1,
+  initialNonStriker: null,
   teams: [],
   tossWinner: null,
   battingTeam: null,
@@ -99,46 +129,154 @@ export const useGameStore = create<GameState>((set, get) => ({
   striker: null,
   nonStriker: null,
   currentBowler: null,
+  lastSelectedBowler: null,
   ballHistory: [],
   firstInningsBallHistory: [],
   totalOvers: 0,
   secondInningsOver: 0,
-  currentInnings: 1,
+  
   target: null,
   matchDate: new Date(),
   matchCompleted: false,
   awaitingSecondInningsStart: false,
   oversData: [],
+  firstInningsOversData: [], // <-- Store first innings overs
   previousStriker: null,
 
-  setTeams: (teams) => set({ teams }),
-  setTossWinner: (team) => set({ tossWinner: team }),
-  setBattingTeam: (team) => set({ battingTeam: team }),
-  setBowlingTeam: (team) => set({ bowlingTeam: team }),
-  setStriker: (player) => set({ striker: player }),
-  setNonStriker: (player) => set({ nonStriker: player }),
-  setCurrentBowler: (player) => set({ currentBowler: player }),
-  setTotalOvers: (overs) => set({ totalOvers: overs }),
-  setSecondInningsOver: (overs) => set({ secondInningsOver: overs }),
-  setAwaitingSecondInningsStart: (flag) => set({ awaitingSecondInningsStart: flag }),
-  setPreviousStriker: (player) => set({ previousStriker: player }),
+  setTeams: (teams: any) => set({ teams }),
+  setTossWinner: (team: any) => set({ tossWinner: team }),
+  setBattingTeam: (team: any) => set({ battingTeam: team }),
+  setBowlingTeam: (team: any) => set({ bowlingTeam: team }),
+  setStriker: (player: any) => set((state: any) => {
+    // If this is the first striker being set, also set initialStriker
+    if (!state.initialStriker) {
+      return { striker: player, initialStriker: player };
+    }
+    return { striker: player };
+  }),
+  setNonStriker: (player: any) => set((state: any) => {
+    // If this is the first non-striker being set, also set initialNonStriker
+    if (!state.initialNonStriker) {
+      return { nonStriker: player, initialNonStriker: player };
+    }
+    return { nonStriker: player };
+  }),
+  setCurrentBowler: (player: any) => set((state: any) => ({
+    currentBowler: player,
+    lastSelectedBowler: player || state.lastSelectedBowler
+  })),
+  setTotalOvers: (overs: any) => set({ totalOvers: overs }),
+  setSecondInningsOver: (overs: any) => set({ secondInningsOver: overs }),
+  setAwaitingSecondInningsStart: (flag: any) => set({ awaitingSecondInningsStart: flag }),
+  setPreviousStriker: (player: any) => set({ previousStriker: player }),
 
   batsmanToReplace: null,
   showBatsmanSelectModal: false,
 
-  setBatsmanToReplace: (end) => set({ batsmanToReplace: end }),
-  setShowBatsmanSelectModal: (show) => set({ showBatsmanSelectModal: show }),
+  setBatsmanToReplace: (end: any) => set({ batsmanToReplace: end }),
+  setShowBatsmanSelectModal: (show: any) => set({ showBatsmanSelectModal: show }),
 
-  checkDuplicateName: (teamIndex, name) => {
+  // Undo stack and operations
+  undoStack: [],
+  addUndoOperation: (op: any) => set((state: any) => ({ undoStack: [...state.undoStack, op] })),
+  popUndoOperation: () => {
+    const state: any = get();
+    if (state.undoStack.length === 0) return undefined;
+    const last = state.undoStack[state.undoStack.length - 1];
+    set({ undoStack: state.undoStack.slice(0, -1) });
+    return last;
+  },
+  clearUndoStack: () => set({ undoStack: [] }),
+  applyUndoOperation: (undoOperation: any) => {
+    // This function will update the state according to the undo operation type
+    set((state) => {
+      const updated = { ...state };
+      if (undoOperation.type === 'remove_wicket') {
+        // Undo wicket: decrement wickets and remove last_wicket_details
+        if (
+          updated.currentInningsNumber === 1 && typeof updated.currentInnings.wickets === 'number'
+        ) {
+          updated.currentInnings.wickets = Math.max(0, updated.currentInnings.wickets - 1);
+        }
+        if (updated.currentInnings && updated.currentInnings.last_wicket_details) {
+          delete updated.currentInnings.last_wicket_details;
+        }
+      } else if (undoOperation.type === 'remove_batsman') {
+        // Undo batsman: remove batsman from current_batsmen array
+        if (
+          updated.currentInningsNumber === 1 && Array.isArray(updated.currentInnings.current_batsmen)
+        ) {
+          updated.currentInnings.current_batsmen = updated.currentInnings.current_batsmen.filter(
+            (b: any) => b.id !== undoOperation.details.id
+          );
+        }
+      }
+      return updated;
+    });
+  },
+
+  swapBatsmen: () => {
     const state = get();
+    set({ striker: state.nonStriker, nonStriker: state.striker });
+  },
+
+  startSecondInnings: () => {
+    const state = get();
+    const firstInningsScore = state.ballHistory.reduce(
+      (sum, b) => sum + b.runs + (b.isExtra && (b.extraType === 'wide' || b.extraType === 'no-ball') ? 1 : 0), 0);
+    set({
+      target: firstInningsScore,
+      battingTeam: state.bowlingTeam,
+      bowlingTeam: state.battingTeam,
+      striker: null,
+      nonStriker: null,
+      currentBowler: null,
+      ballHistory: [],
+      firstInningsBallHistory: [...state.ballHistory],
+      firstInningsOversData: [...state.oversData], // <-- Save first innings overs
+      awaitingSecondInningsStart: false,
+      initialStriker: null,
+      initialNonStriker: null,
+      oversData: [], // <-- Reset oversData for second innings
+      currentInningsNumber: 2, // <-- Ensure second innings logic works
+    });
+  },
+
+  startNewMatch: () => {
+    set({
+      teams: [],
+      tossWinner: null,
+      battingTeam: null,
+      bowlingTeam: null,
+      striker: null,
+      nonStriker: null,
+      currentBowler: null,
+      ballHistory: [],
+      firstInningsBallHistory: [],
+      firstInningsOversData: [], // <-- Reset first innings overs
+      totalOvers: 0,
+      secondInningsOver: 0,
+      target: null,
+      matchDate: new Date(),
+      matchCompleted: false,
+      awaitingSecondInningsStart: false,
+      oversData: [],
+      initialStriker: null,
+      initialNonStriker: null,
+      previousStriker: null,
+    });
+  },
+  
+
+
+  checkDuplicateName: (teamIndex: any, name: any) => {
+    const state: any = get();
     return state.teams[teamIndex]?.players.some(
-      (player) => player.name.toLowerCase() === name.toLowerCase()
+      (p: any) => p.name.toLowerCase() === name.toLowerCase()
     ) || false;
   },
 
-
-
-  updateScore: (record) => {
+  updateScore: (record: any) => {
     const state = get();
     const newBallHistory = [...state.ballHistory, record];
     const legalDeliveries = state.ballHistory.filter((b) =>
@@ -154,20 +292,15 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     // If it's a new over (or the first ball), create a new over entry
     if (!lastOver || lastOver.overNumber !== currentOverNumber) {
-      oversData.push({ overNumber: currentOverNumber, deliveries: [record], innings: state.currentInnings });
+      oversData.push({ overNumber: currentOverNumber, deliveries: [record], innings: state.currentInningsNumber });
     } else {
       // If it's the same over, add to the current over's deliveries
       lastOver.deliveries.push(record);
     }
 
-
-
     const totalRuns = record.runs + (record.isExtra && (record.extraType === 'wide' || record.extraType === 'no-ball') ? 1 : 0);  // Total runs considering extra type
     const isFour = record.isFour ?? record.runs === 4;
     const isSix = record.isSix ?? record.runs === 6;
-
-
-
 
     const updatedTeams = state.teams.map((team) => ({
       ...team,
@@ -217,16 +350,11 @@ export const useGameStore = create<GameState>((set, get) => ({
       }),
     }));
 
-
     const isLegalDelivery = !record.isExtra || (record.extraType === 'bye' || record.extraType === 'lb');;
     const newLegalBalls = legalDeliveries + (isLegalDelivery ? 1 : 0);
     const isLastLegalBall = isLegalDelivery && (newLegalBalls % 6 === 0);
 
     let shouldSwap = false;
-
-
-
-
 
     if (record.isExtra && (record.extraType === 'wide' || record.extraType === 'bye' || record.extraType === 'lb')) {
       shouldSwap = record.runs % 2 === 1;
@@ -250,6 +378,24 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     // Handle wicket
     if (record.isWicket) {
+      // Save striker/nonStriker and their stats for undo
+      const prevStriker = state.striker ? { ...state.striker } : null;
+      const prevNonStriker = state.nonStriker ? { ...state.nonStriker } : null;
+      const prevTeams = JSON.parse(JSON.stringify(state.teams)); // Deep clone teams for stats
+      set((s: any) => ({
+        undoStack: [
+          ...s.undoStack,
+          {
+            type: 'wicket_restore',
+            details: {
+              striker: prevStriker,
+              nonStriker: prevNonStriker,
+              teams: prevTeams,
+            },
+          },
+        ],
+      }));
+
       const updatedState = get();
       const battingTeam = updatedState.teams.find((t) => t.name === updatedState.battingTeam);
       if (battingTeam) {
@@ -259,24 +405,6 @@ export const useGameStore = create<GameState>((set, get) => ({
             p.name !== updatedState.striker?.name &&
             p.name !== updatedState.nonStriker?.name
         );
-
-
-        // if (record.wicketType === 'run-out') {
-        //   if (record.runOutBatsman === 'striker') {
-        //     set({
-        //       striker: available[0] ?? null, // fallback
-        //       nonStriker: updatedState.nonStriker,
-        //     });
-        //   } else {
-        //     set({
-        //       nonStriker: available[0] ?? null,
-        //       striker: updatedState.striker,
-        //     });
-        //   }
-        // } else {
-        //   set({ striker: available[0] ?? null });
-        // }
-
 
         if (record.wicketType === 'run-out') {
           if (record.runOutBatsman === 'striker') {
@@ -299,9 +427,6 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
     }
 
-
-
-
     // Score and wickets tracking
     const score = newBallHistory.reduce(
       (sum, b) => sum + b.runs + (b.isExtra && (b.extraType === 'wide' || b.extraType === 'no-ball') ? 1 : 0),
@@ -311,7 +436,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     const isAllOut = wickets >= ((state.teams.find((t) => t.name === state.battingTeam)?.players.length ?? 11) - 1);
     const oversDone = Math.floor(newLegalBalls / 6) >= state.totalOvers;
 
-    if (state.currentInnings === 1 && (isAllOut || oversDone)) {
+    if (state.currentInningsNumber === 1 && (isAllOut || oversDone)) {
       set({
         target: score,
         firstInningsBallHistory: [...newBallHistory],
@@ -320,7 +445,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       alert(`First innings complete. Target: ${score + 1}`);
     }
 
-    if (state.currentInnings === 2 && state.target !== null) {
+    if (state.currentInningsNumber === 2 && state.target !== null) {
       const secondInningsOversDone = Math.floor(newLegalBalls / 6) >= state.totalOvers;
       const isTargetAchieved = score > state.target;
       const isTied = score === state.target;
@@ -344,10 +469,6 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({ teams: updatedTeams, ballHistory: newBallHistory, oversData });
   },
 
-
-
-
-
   undoLastBall: () => {
     const state = get();
     if (state.ballHistory.length === 0) return;
@@ -361,7 +482,6 @@ export const useGameStore = create<GameState>((set, get) => ({
     const isFour = lastBall.isFour ?? lastBall.runs === 4;
     const isSix = lastBall.isSix ?? lastBall.runs === 6;
     const isBatsmanScoringExtra = lastBall.isExtra && lastBall.extraType === 'no-ball';
-
 
     // Update player stats
     const updatedTeams = state.teams.map(team => ({
@@ -381,7 +501,7 @@ export const useGameStore = create<GameState>((set, get) => ({
             ...player,
             ballsBowled: player.ballsBowled - (lastBall.isExtra && (lastBall.extraType === 'wide' || lastBall.extraType === 'no-ball') ? 0 : 1),
             runsGiven: player.runsGiven - totalRuns,
-            wickets: player.wickets - (lastBall.isWicket ? 1 : 0),
+            wickets: player.wickets - (lastBall.isWicket && lastBall.wicketType !== 'run-out' ? 1 : 0),
           };
         }
         return player;
@@ -400,7 +520,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
     }
 
-    // 🛠 Remove the last delivery from oversData
+    // Remove the last delivery from oversData
     const updatedOversData = [...state.oversData];
     const lastOverIndex = updatedOversData.length - 1;
 
@@ -418,62 +538,84 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
     }
 
-    if (lastBall.isExtra && lastBall.runs % 2 === 1) {
-      // Reverse strike if the extra delivery resulted in an odd number of runs
-      set((prev) => ({
-        striker: prev.nonStriker,
-        nonStriker: prev.striker
-      }));
+    // Determine the correct currentBowler after undo
+    let newCurrentBowler = null;
+    const lastLegalBall = [...newBallHistory].reverse().find(b => !b.isExtra || (b.extraType === 'bye' || b.extraType === 'lb'));
+    if (lastLegalBall) {
+      newCurrentBowler = updatedTeams
+        .flatMap(team => team.players)
+        .find(player => player.name === lastLegalBall.bowlerName) || null;
+    } else {
+      newCurrentBowler = null;
     }
 
-    set({
-      teams: updatedTeams,
-      ballHistory: newBallHistory,
-      oversData: updatedOversData, // 🧠 <- Don't forget this
-    });
+    // Restore striker and non-striker based on the last two legal balls in the new ball history
+    let newStriker = state.striker;
+    let newNonStriker = state.nonStriker;
+    let restoredTeams = undefined;
+    // If the last ball was a wicket, try to restore from undoStack
+    if (lastBall.isWicket && state.undoStack.length > 0) {
+      const lastUndo = state.undoStack[state.undoStack.length - 1];
+      if (lastUndo.type === 'wicket_restore') {
+        newStriker = lastUndo.details.striker;
+        newNonStriker = lastUndo.details.nonStriker;
+        restoredTeams = lastUndo.details.teams;
+        set({ undoStack: state.undoStack.slice(0, -1) });
+      }
+    } else {
+      const legalBallsArr = [...newBallHistory].filter(b => !b.isExtra || (b.extraType === 'bye' || b.extraType === 'lb'));
+      if (legalBallsArr.length > 0) {
+        const lastLegal = legalBallsArr[legalBallsArr.length - 1];
+        newStriker = state.teams.flatMap(team => team.players).find(p => p.name === lastLegal.batsmanName) || null;
+        if (legalBallsArr.length > 1) {
+          const prevLegal = legalBallsArr[legalBallsArr.length - 2];
+          const prevBatsman = state.teams.flatMap(team => team.players).find(p => p.name === prevLegal.batsmanName);
+          if (prevBatsman && prevBatsman.name !== lastLegal.batsmanName) {
+            newNonStriker = prevBatsman;
+          }
+        }
+      } else {
+        newStriker = null;
+        newNonStriker = null;
+      }
+    }
+
+    if (newBallHistory.length === 0) {
+      set((prev) => ({
+        teams: updatedTeams,
+        ballHistory: newBallHistory,
+        oversData: updatedOversData,
+        currentBowler: prev.lastSelectedBowler,
+        striker: prev.initialStriker,
+        nonStriker: prev.initialNonStriker,
+      }));
+      set({
+        batsmanToReplace: 'non-striker',
+        showBatsmanSelectModal: true,
+      });
+    } else {
+      set({
+        teams: restoredTeams ? restoredTeams : updatedTeams,
+        ballHistory: newBallHistory,
+        oversData: updatedOversData,
+        currentBowler: newCurrentBowler,
+        striker: newStriker,
+        nonStriker: newNonStriker,
+      });
+    }
+
+    // Recalculate if innings should be over, and if not, reset awaitingSecondInningsStart
+    const battingTeamPlayers = state.teams.find(t => t.name === state.battingTeam)?.players || [];
+    const maxWickets = battingTeamPlayers.length - 1;
+    const totalWickets = newBallHistory.filter(b => b.isWicket).length;
+    const totalCompletedOvers = Math.floor(
+      newBallHistory.filter(b => !b.isExtra || (b.extraType === 'bye' || b.extraType === 'lb')).length / 6
+    );
+    const inningsShouldEnd = totalCompletedOvers >= state.totalOvers || totalWickets >= maxWickets;
+    if (!inningsShouldEnd && state.awaitingSecondInningsStart) {
+      set({ awaitingSecondInningsStart: false });
+    }
   },
 
-
-  swapBatsmen: () => {
-    const state = get();
-    set({ striker: state.nonStriker, nonStriker: state.striker });
-  },
-
-  startSecondInnings: () => {
-    const state = get();
-    const firstInningsScore = state.ballHistory.reduce(
-      (sum, b) => sum + b.runs + (b.isExtra && (b.extraType === 'wide' || b.extraType === 'no-ball') ? 1 : 0), 0);
-
-    set({
-      currentInnings: 2,
-      target: firstInningsScore,
-      battingTeam: state.bowlingTeam,
-      bowlingTeam: state.battingTeam,
-      striker: null,
-      nonStriker: null,
-      currentBowler: null,
-      ballHistory: [],
-      firstInningsBallHistory: [...state.ballHistory],
-      awaitingSecondInningsStart: false,
-    });
-  },
-
-  startNewMatch: () => {
-    set({
-      teams: [],
-      tossWinner: null,
-      battingTeam: null,
-      bowlingTeam: null,
-      striker: null,
-      nonStriker: null,
-      currentBowler: null,
-      ballHistory: [],
-      firstInningsBallHistory: [],
-      totalOvers: 0,
-      currentInnings: 1,
-      target: null,
-      matchDate: new Date(),
-      matchCompleted: false,
-    });
-  },
+  
 }));

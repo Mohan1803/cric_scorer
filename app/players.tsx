@@ -11,13 +11,14 @@ import {
   Platform,
   TextInput as RNTextInput,
 } from 'react-native';
+
 import { router } from 'expo-router';
 import { useGameStore } from '../store/gameStore';
+import { colors } from './theme';
 
 export default function PlayersEntry() {
   const teams = useGameStore((state) => state.teams);
   const setTeams = useGameStore((state) => state.setTeams);
-
 
   const defaultPlayers = Array.from({ length: 11 }, () => ({ name: '', role: 'both' }));
   const defaultPlayers1 = Array.from({ length: 11 }, () => ({ name: '', role: 'both' }));
@@ -125,7 +126,7 @@ export default function PlayersEntry() {
     const players = teamIndex === 0 ? team1Players : team2Players;
     const filledCount = players.filter(p => p.name.trim()).length;
     const percent = (filledCount / 11) * 100;
-    const barColor = teamIndex === 0 ? '#3B82F6' : '#10B981';
+    const barColor = teamIndex === 0 ? colors.accent : colors.success;
 
     return (
       <View style={styles.progressBarContainer}>
@@ -158,9 +159,10 @@ export default function PlayersEntry() {
                 onChangeText={(text) => updatePlayerName(teamIndex, i, text)}
                 returnKeyType="next"
                 onSubmitEditing={() => focusInput(teamIndex, i + 1)}
+                placeholderTextColor={colors.textSecondary}
               />
               <TouchableOpacity onPress={() => handleDelete(teamIndex, i)} style={styles.clearBtn}>
-                <Text style={{ fontSize: 14, color: '#EF4444' }}>✕</Text>
+                <Text style={{ fontSize: 14, color: colors.error }}>✕</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -176,52 +178,56 @@ export default function PlayersEntry() {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={styles.tabs}>
-        <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 0 && styles.activeTab]}
-          onPress={() => setActiveTab(0)}
-        >
-          <Text style={[styles.tabText, activeTab === 0 && styles.activeTabText]}>
-            {teams[0]?.name || 'Team A'}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 1 && styles.activeTab]}
-          onPress={() => setActiveTab(1)}
-        >
-          <Text style={[styles.tabText, activeTab === 1 && styles.activeTabText]}>
-            {teams[1]?.name || 'Team B'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+    <>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={styles.tabs}>
+          <TouchableOpacity
+            style={[styles.tabBtn, activeTab === 0 && styles.activeTab]}
+            onPress={() => setActiveTab(0)}
+          >
+            <Text style={[styles.tabText, activeTab === 0 && styles.activeTabText]}>
+              {teams[0]?.name || 'Team A'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabBtn, activeTab === 1 && styles.activeTab]}
+            onPress={() => setActiveTab(1)}
+          >
+            <Text style={[styles.tabText, activeTab === 1 && styles.activeTabText]}>
+              {teams[1]?.name || 'Team B'}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
-      <ScrollView contentContainerStyle={styles.container}>
-        {activeTab === 0 ? renderTeamForm(0, team1Players) : renderTeamForm(1, team2Players)}
+        <ScrollView contentContainerStyle={styles.container}>
+          {activeTab === 0 ? renderTeamForm(0, team1Players) : renderTeamForm(1, team2Players)}
 
-        {team1Players.length === 11 &&
-          team2Players.length === 11 &&
-          team1Players.every(p => p.name.trim()) &&
-          team2Players.every(p => p.name.trim()) && (
-            <TouchableOpacity style={styles.continueBtn} onPress={handleContinue}>
-              <Text style={styles.continueText}>Continue</Text>
-            </TouchableOpacity>
-          )}
-      </ScrollView>
-    </KeyboardAvoidingView>
+          {team1Players.length === 11 &&
+            team2Players.length === 11 &&
+            team1Players.every(p => p.name.trim()) &&
+            team2Players.every(p => p.name.trim()) && (
+              <TouchableOpacity style={styles.continueBtn} onPress={handleContinue}>
+                <Text style={styles.continueText}>Continue</Text>
+              </TouchableOpacity>
+            )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
+
   container: {
     padding: 20,
     paddingBottom: 40,
+    backgroundColor: colors.background,
   },
   tabs: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     paddingTop: 20,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.background,
   },
   tabBtn: {
     paddingVertical: 10,
@@ -229,15 +235,15 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   activeTab: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: colors.accent,
   },
   tabText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#6B7280',
+    color: colors.textPrimary,
   },
   activeTabText: {
-    color: '#fff',
+    color: colors.textSecondary,
   },
   inputRow: {
     marginBottom: 20,
@@ -249,13 +255,14 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
-    borderColor: '#D1D5DB',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
     borderWidth: 1,
     borderRadius: 10,
     paddingVertical: 12,
     paddingHorizontal: 16,
     fontSize: 16,
+    color: colors.textPrimary,
   },
   clearBtn: {
     position: 'absolute',
@@ -263,26 +270,26 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   addBtn: {
-    backgroundColor: '#10B981',
+    backgroundColor: colors.success,
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
     marginTop: 10,
   },
   addText: {
-    color: '#fff',
+    color: colors.textSecondary,
     fontSize: 16,
     fontWeight: '600',
   },
   continueBtn: {
     marginTop: 30,
-    backgroundColor: '#3B82F6',
+    backgroundColor: colors.accent,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
   },
   continueText: {
-    color: '#fff',
+    color: colors.textSecondary,
     fontSize: 18,
     fontWeight: '700',
   },
@@ -297,11 +304,11 @@ const styles = StyleSheet.create({
   progressLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#374151',
+    color: colors.textPrimary,
   },
   progressTrack: {
     height: 8,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: colors.border,
     borderRadius: 4,
     overflow: 'hidden',
   },
