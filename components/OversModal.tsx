@@ -7,6 +7,7 @@ import type { OverData, BallRecord } from '../store/gameStore';
 const OversModal = ({ visible, onClose }: { visible: boolean; onClose: () => void }) => {
   const overs = useGameStore(state => state.oversData);
   const firstInningsOvers = useGameStore(state => state.firstInningsOversData);
+  const currentInningsNumber = useGameStore(state => state.currentInningsNumber);
 
   // Types
 
@@ -32,112 +33,168 @@ const OversModal = ({ visible, onClose }: { visible: boolean; onClose: () => voi
             <Text style={{ fontWeight: 'bold', marginBottom: 10 }}>
               First Innings
             </Text>
-            {firstInningsOvers.length === 0 && (
-              <Text style={{ fontStyle: 'italic', color: colors.accentWarn, marginBottom: 8 }}>No overs data for first innings.</Text>
+            {currentInningsNumber === 1 ? (
+              overs.length === 0 ? (
+                <Text style={{ fontStyle: 'italic', color: colors.accentWarn, marginBottom: 8 }}>No overs data for first innings.</Text>
+              ) : (
+                overs.map((over: OverData, i: number) => (
+                  <View key={i} style={{ marginBottom: 16 }}>
+                    <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>
+                      Over {over.overNumber + 1}
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                      {over.deliveries.map((ball: BallRecord, idx: number) => {
+                        const bgColor = ball.isWicket
+                          ? colors.accentWarn
+                          : ball.isExtra
+                            ? colors.accentYellow
+                            : ball.runs === 4
+                              ? colors.accentOrange
+                              : ball.runs === 6
+                                ? colors.accentPurple
+                                : colors.cardAlt;
+                        const displayText = ball.isExtra
+                          ? `${ball.extraType}(+${ball.runs})`
+                          : ball.isWicket
+                            ? 'W'
+                            : `${ball.runs}`;
+                        return (
+                          <View
+                            key={idx}
+                            style={{
+                              backgroundColor: bgColor,
+                              borderRadius: 6,
+                              padding: 8,
+                              margin: 4,
+                              alignItems: 'center',
+                              minWidth: 40,
+                            }}
+                          >
+                            <Text style={{ fontWeight: 'bold', color: colors.text }}>{displayText}</Text>
+                            {ball.isWicket && ball.wicketType && (
+                              <Text style={{ fontSize: 10, color: colors.text }}>
+                                ({ball.wicketType})
+                              </Text>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ))
+              )
+            ) : (
+              firstInningsOvers.length === 0 ? (
+                <Text style={{ fontStyle: 'italic', color: colors.accentWarn, marginBottom: 8 }}>No overs data for first innings.</Text>
+              ) : (
+                firstInningsOvers.map((over: OverData, i: number) => (
+                  <View key={i} style={{ marginBottom: 16 }}>
+                    <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>
+                      Over {over.overNumber + 1}
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                      {over.deliveries.map((ball: BallRecord, idx: number) => {
+                        const bgColor = ball.isWicket
+                          ? colors.accentWarn
+                          : ball.isExtra
+                            ? colors.accentYellow
+                            : ball.runs === 4
+                              ? colors.accentOrange
+                              : ball.runs === 6
+                                ? colors.accentPurple
+                                : colors.cardAlt;
+                        const displayText = ball.isExtra
+                          ? `${ball.extraType}(+${ball.runs})`
+                          : ball.isWicket
+                            ? 'W'
+                            : `${ball.runs}`;
+                        return (
+                          <View
+                            key={idx}
+                            style={{
+                              backgroundColor: bgColor,
+                              borderRadius: 6,
+                              padding: 8,
+                              margin: 4,
+                              alignItems: 'center',
+                              minWidth: 40,
+                            }}
+                          >
+                            <Text style={{ fontWeight: 'bold', color: colors.text }}>{displayText}</Text>
+                            {ball.isWicket && ball.wicketType && (
+                              <Text style={{ fontSize: 10, color: colors.text }}>
+                                ({ball.wicketType})
+                              </Text>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ))
+              )
             )}
-            {firstInningsOvers.map((over: OverData, i: number) => (
-              <View key={i} style={{ marginBottom: 16 }}>
-                <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>
-                  Over {over.overNumber + 1}
-                </Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                  {over.deliveries.map((ball: BallRecord, idx: number) => {
-                    const bgColor = ball.isWicket
-                      ? colors.accentWarn
-                      : ball.isExtra
-                        ? colors.accentYellow
-                        : ball.runs === 4
-                          ? colors.accentOrange
-                          : ball.runs === 6
-                            ? colors.accentPurple
-                            : colors.cardAlt;
 
-                    const displayText = ball.isExtra
-                      ? `${ball.extraType}(+${ball.runs})`
-                      : ball.isWicket
-                        ? 'W'
-                        : `${ball.runs}`;
-
-                    return (
-                      <View
-                        key={idx}
-                        style={{
-                          backgroundColor: bgColor,
-                          borderRadius: 6,
-                          padding: 8,
-                          margin: 4,
-                          alignItems: 'center',
-                          minWidth: 40,
-                        }}
-                      >
-                        <Text style={{ fontWeight: 'bold', color: colors.text }}>{displayText}</Text>
-                        {ball.isWicket && ball.wicketType && (
-                          <Text style={{ fontSize: 10, color: colors.text }}>
-                            ({ball.wicketType})
-                          </Text>
-                        )}
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-            ))}
           </View>
 
           <View style={{ marginTop: 16 }}>
             <Text style={{ fontWeight: 'bold', marginBottom: 10 }}>
               Second Innings
             </Text>
-            {overs.length === 0 && (
+            {currentInningsNumber === 1 ? (
               <Text style={{ fontStyle: 'italic', color: colors.accentWarn, marginBottom: 8 }}>No overs data for second innings.</Text>
+            ) : (
+              overs.length === 0 ? (
+                <Text style={{ fontStyle: 'italic', color: colors.accentWarn, marginBottom: 8 }}>No overs data for second innings.</Text>
+              ) : (
+                overs.map((over: OverData, i: number) => (
+                  <View key={i} style={{ marginBottom: 16 }}>
+                    <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>
+                      Over {over.overNumber + 1}
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                      {over.deliveries.map((ball: BallRecord, idx: number) => {
+                        const bgColor = ball.isWicket
+                          ? colors.accentWarn
+                          : ball.isExtra
+                            ? colors.accentYellow
+                            : ball.runs === 4
+                              ? colors.accentOrange
+                              : ball.runs === 6
+                                ? colors.accentPurple
+                                : colors.cardAlt;
+                        const displayText = ball.isExtra
+                          ? `${ball.extraType}(+${ball.runs})`
+                          : ball.isWicket
+                            ? 'W'
+                            : `${ball.runs}`;
+                        return (
+                          <View
+                            key={idx}
+                            style={{
+                              backgroundColor: bgColor,
+                              borderRadius: 6,
+                              padding: 8,
+                              margin: 4,
+                              alignItems: 'center',
+                              minWidth: 40,
+                            }}
+                          >
+                            <Text style={{ fontWeight: 'bold', color: colors.text }}>{displayText}</Text>
+                            {ball.isWicket && ball.wicketType && (
+                              <Text style={{ fontSize: 10, color: colors.text }}>
+                                ({ball.wicketType})
+                              </Text>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ))
+              )
             )}
-            {overs.map((over: OverData, i: number) => (
-              <View key={i} style={{ marginBottom: 16 }}>
-                <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>
-                  Over {over.overNumber + 1}
-                </Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                  {over.deliveries.map((ball: BallRecord, idx: number) => {
-                    const bgColor = ball.isWicket
-                      ? colors.accentWarn
-                      : ball.isExtra
-                        ? colors.accentYellow
-                        : ball.runs === 4
-                          ? colors.accentOrange
-                          : ball.runs === 6
-                            ? colors.accentPurple
-                            : colors.cardAlt;
 
-                    const displayText = ball.isExtra
-                      ? `${ball.extraType}(+${ball.runs})`
-                      : ball.isWicket
-                        ? 'W'
-                        : `${ball.runs}`;
-
-                    return (
-                      <View
-                        key={idx}
-                        style={{
-                          backgroundColor: bgColor,
-                          borderRadius: 6,
-                          padding: 8,
-                          margin: 4,
-                          alignItems: 'center',
-                          minWidth: 40,
-                        }}
-                      >
-                        <Text style={{ fontWeight: 'bold', color: colors.text }}>{displayText}</Text>
-                        {ball.isWicket && ball.wicketType && (
-                          <Text style={{ fontSize: 10, color: colors.text }}>
-                            ({ball.wicketType})
-                          </Text>
-                        )}
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-            ))}
           </View>
         </ScrollView>
 

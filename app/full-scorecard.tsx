@@ -113,14 +113,60 @@ export default function FullScorecard() {
     <html>
       <head>
         <style>
-          body { font-family: Arial, sans-serif; margin: 20px; }
-          h1, h2, h3 { color: #1a237e; }
-          table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
-          th, td { border: 1px solid #888; padding: 6px 10px; text-align: center; }
-          th { background: #e3e6fc; }
-          .section { margin-bottom: 28px; }
-          ul { margin-bottom: 18px; }
-          .empty-innings { color: #b71c1c; font-style: italic; margin-bottom: 20px; }
+          body {
+            font-family: 'Segoe UI', 'Roboto Mono', 'Consolas', monospace, Arial, sans-serif;
+            margin: 12px;
+            background: #f6f8fa;
+            color: #222;
+          }
+          h1, h2, h3 {
+            color: #1847a3;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+          }
+          table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 18px;
+            background: #fff;
+            font-size: 14px;
+            box-shadow: 0 2px 8px #e0e6ef44;
+          }
+          th, td {
+            border: 1px solid #b0b6c4;
+            padding: 4px 8px;
+            text-align: center;
+            font-family: 'Roboto Mono', 'Consolas', monospace, Arial, sans-serif;
+          }
+          th {
+            background: #e8ebf7;
+            color: #0d1c33;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            border-bottom: 2px solid #1847a3;
+          }
+          tr:nth-child(even) {
+            background: #f2f4f8;
+          }
+          tr:nth-child(odd) {
+            background: #fff;
+          }
+          .stat {
+            font-weight: bold;
+            color: #1847a3;
+          }
+          .section {
+            margin-bottom: 28px;
+          }
+          ul {
+            margin-bottom: 18px;
+          }
+          .empty-innings {
+            color: #b71c1c;
+            font-style: italic;
+            margin-bottom: 20px;
+          }
         </style>
       </head>
       <body>
@@ -336,9 +382,9 @@ export default function FullScorecard() {
         <TouchableOpacity style={styles.exportButton} onPress={handleDownloadScorecard}>
           <Text style={styles.buttonText}>Download Scorecard</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.exportButton} onPress={handleNewMatch}>
+        {/* <TouchableOpacity style={styles.exportButton} onPress={handleNewMatch}>
           <Text style={styles.buttonText}>New Match</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
     </ScrollView>
   );
