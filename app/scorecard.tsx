@@ -368,7 +368,7 @@ export default function Scorecard() {
           <Text style={styles.sectionTitle}>Bowling</Text>
           {bowlingTeamObj?.players
             .filter(player => player.ballsBowled > 0)
-            .slice(0, 2)
+            .slice(0, 1)
             .map((player, index) => (
               <View key={index} style={styles.playerStats}>
                 <View style={styles.playerInfo}>

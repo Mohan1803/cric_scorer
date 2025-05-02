@@ -20,8 +20,8 @@ export default function PlayersEntry() {
   const teams = useGameStore((state) => state.teams);
   const setTeams = useGameStore((state) => state.setTeams);
 
-  const defaultPlayers = Array.from({ length: 11 }, () => ({ name: '', role: 'both' }));
-  const defaultPlayers1 = Array.from({ length: 11 }, () => ({ name: '', role: 'both' }));
+  const defaultPlayers = Array.from({ length: 15 }, () => ({ name: '', role: 'both' }));
+  const defaultPlayers1 = Array.from({ length: 15 }, () => ({ name: '', role: 'both' }));
 
   const [activeTab, setActiveTab] = useState(0);
   const [team1Players, setTeam1Players] = useState(defaultPlayers);
@@ -66,7 +66,7 @@ export default function PlayersEntry() {
     const validTeam2 = team2Players.filter(p => p.name.trim());
 
     if (validTeam1.length !== 11 || validTeam2.length !== 11) {
-      Alert.alert('Invalid Players', 'Each team must have exactly 11 players.');
+      Alert.alert('Invalid Players', 'Each team must have minimum 11 players.');
       return;
     }
 
