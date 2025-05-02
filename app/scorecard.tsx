@@ -556,9 +556,9 @@ export default function Scorecard() {
               <TouchableOpacity style={[styles.runButton, styles.wicketButton]} onPress={() => handleRetiredHurt('striker')}>
                 <Text style={styles.runButtonText}>Retired Hurt (S)</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.runButton, styles.wicketButton]} onPress={() => handleRetiredHurt('nonStriker')}>
+              {/* <TouchableOpacity style={[styles.runButton, styles.wicketButton]} onPress={() => handleRetiredHurt('nonStriker')}>
                 <Text style={styles.runButtonText}>Retired Hurt (NS)</Text>
-              </TouchableOpacity>
+              </TouchableOpacity> */}
               <TouchableOpacity style={[styles.runButton, styles.wideButton]} onPress={() => handleExtra('wide')}>
                 <Text style={styles.runButtonText}>Wide</Text>
               </TouchableOpacity>
