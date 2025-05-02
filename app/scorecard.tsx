@@ -16,10 +16,10 @@ export default function Scorecard() {
   const [showCelebration, setShowCelebration] = useState(false);
   // --- Player Replacement State and Handlers ---
   const [showReplaceModal, setShowReplaceModal] = useState(false);
-  const [replaceContext, setReplaceContext] = useState<{player: any, type: 'batting'|'bowling'}|null>(null);
+  const [replaceContext, setReplaceContext] = useState<{ player: any, type: 'batting' | 'bowling' } | null>(null);
   const [eligibleReplacements, setEligibleReplacements] = useState<any[]>([]);
 
-  const handlePlayerReplacePress = (player: any, type: 'batting'|'bowling') => {
+  const handlePlayerReplacePress = (player: any, type: 'batting' | 'bowling') => {
     Alert.alert(
       'Replace Player',
       `Replace ${player.name}?`,
@@ -144,7 +144,7 @@ export default function Scorecard() {
   const [modalVisible, setModalVisible] = useState(false);
 
   // --- Retired Hurt Handler ---
-  const handleRetiredHurt = (which: 'striker'|'nonStriker') => {
+  const handleRetiredHurt = (which: 'striker' | 'nonStriker') => {
     if (!battingTeamObj) return;
     let batsman = which === 'striker' ? striker : nonStriker;
     if (!batsman || batsman.status === 'out' || batsman.status === 'retiredHurt') return;
@@ -363,24 +363,24 @@ export default function Scorecard() {
 
   const partnershipRuns = (striker?.runs || 0) + (nonStriker?.runs || 0);
   return (
-  <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-    <BroadcastTicker />
-    <ScrollView
-      contentContainerStyle={styles.scrollContent}
-      keyboardShouldPersistTaps="handled"
-    >
-      <View style={styles.container}>
-        <View style={[styles.scoreHeader, { transform: [{ translateY: blinkAnim }] }]}>
-          <View style={{ alignItems: 'center' }}>
-            <Text style={styles.scoreText}>
-              {battingTeam} {totalScore}/{totalWickets}
-            </Text>
-            {striker && nonStriker && (
-              <Text style={{ fontSize: 15, color: colors.accent, fontWeight: '600', marginVertical: 2 }}>
-                Current Partnership: {partnership.runs} runs, {partnership.balls} balls
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <BroadcastTicker />
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.container}>
+          <View style={[styles.scoreHeader]}>
+            <View style={{ alignItems: 'center' }}>
+              <Text style={styles.scoreText}>
+                {battingTeam} {totalScore}/{totalWickets}
               </Text>
-            )}
-            {/* {(() => {
+              {striker && nonStriker && (
+                <Text style={{ fontSize: 15, color: colors.accent, fontWeight: '600', marginVertical: 2 }}>
+                  Current Partnership: {partnership.runs} runs, {partnership.balls} balls
+                </Text>
+              )}
+              {/* {(() => {
               const high = getHighestPartnership(ballHistory);
               return high && high.runs > 0 ? (
                 <Text style={{ fontSize: 15, color: colors.textSecondary, fontWeight: '600', marginBottom: 2 }}>
@@ -389,10 +389,10 @@ export default function Scorecard() {
                 </Text>
               ) : null;
             })()} */}
-            <Text style={styles.oversText}>
-              Overs: {totalCompletedOvers}.{currentOver}
-            </Text>
-          </View>
+              <Text style={styles.oversText}>
+                Overs: {totalCompletedOvers}.{currentOver}
+              </Text>
+            </View>
 
             <View style={{ flexDirection: 'row', justifyContent: 'space-around', width: '100%', marginTop: 16 }}>
               <View style={{ alignItems: 'center' }}>
@@ -441,7 +441,7 @@ export default function Scorecard() {
             <OversModal visible={modalVisible} onClose={() => setModalVisible(false)} />
           </View>
         </View>
-       
+
         <View style={styles.statsContainer}>
           <Text style={styles.elegantSectionTitle}>Batting</Text>
           {battingTeamObj?.players
