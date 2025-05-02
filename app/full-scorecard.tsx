@@ -16,6 +16,8 @@ import * as Sharing from 'expo-sharing';
 import { router } from 'expo-router';
 import { colors } from './theme';
 
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 export default function FullScorecard() {
   // ...existing code...
   const handleDownloadScorecard = async () => {

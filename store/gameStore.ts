@@ -86,9 +86,9 @@ export interface GameState {
   setTossWinner: (team: string) => void;
   setBattingTeam: (team: string) => void;
   setBowlingTeam: (team: string) => void;
-  setStriker: (player: Player) => void;
-  setNonStriker: (player: Player) => void;
-  setCurrentBowler: (player: Player) => void;
+  setStriker: (player: Player | null) => void;
+  setNonStriker: (player: Player | null) => void;
+  setCurrentBowler: (player: Player | null) => void;
   setTotalOvers: (overs: number) => void;
   updateScore: (record: BallRecord) => void;
   undoLastBall: () => void;

@@ -126,8 +126,11 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   buttonText: {
-    color: colors.textDark,
+    color: colors.textPrimary,
     fontSize: 18,
     fontWeight: 'bold',
+    textShadowColor: '#000000DD',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
 });
