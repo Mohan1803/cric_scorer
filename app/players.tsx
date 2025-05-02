@@ -202,10 +202,8 @@ export default function PlayersEntry() {
         <ScrollView contentContainerStyle={styles.container}>
           {activeTab === 0 ? renderTeamForm(0, team1Players) : renderTeamForm(1, team2Players)}
 
-          {team1Players.length === 11 &&
-            team2Players.length === 11 &&
-            team1Players.every(p => p.name.trim()) &&
-            team2Players.every(p => p.name.trim()) && (
+          {team1Players.filter(p => p.name.trim()).length >= 11 &&
+            team2Players.filter(p => p.name.trim()).length >= 11 && (
               <TouchableOpacity style={styles.continueBtn} onPress={handleContinue}>
                 <Text style={styles.continueText}>Continue</Text>
               </TouchableOpacity>
