@@ -27,6 +27,7 @@ export default function FullScorecard() {
   ballHistory,
   firstInningsBallHistory,
   startNewMatch,
+  matchCompleted,
 } = useGameStore();
   if (!teams || teams.length < 2 || !teams[0]?.players || !teams[1]?.players) {
     return (
@@ -389,14 +390,13 @@ export default function FullScorecard() {
           'Second Innings'
         )}
 
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity style={styles.exportButton} onPress={handleDownloadScorecard}>
-          <Text style={styles.buttonText}>Download Scorecard</Text>
-        </TouchableOpacity>
-        {/* <TouchableOpacity style={styles.exportButton} onPress={handleNewMatch}>
-          <Text style={styles.buttonText}>New Match</Text>
-        </TouchableOpacity> */}
-      </View>
+      {matchCompleted && (
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity style={styles.exportButton} onPress={handleDownloadScorecard}>
+            <Text style={styles.buttonText}>Download Scorecard</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </ScrollView>
   );
 }

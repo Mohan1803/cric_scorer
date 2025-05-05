@@ -569,7 +569,7 @@ export default function Scorecard() {
               <TouchableOpacity style={[styles.runButton, styles.wideButton]} onPress={() => handleExtra('wide')}>
                 <Text style={styles.runButtonText}>Wide</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.runButton, styles.noBallButton]} onPress={() => handleExtra('no-ball')}>
+              <TouchableOpacity style={[styles.runButton, styles.wideButton]} onPress={() => handleExtra('no-ball')}>
                 <Text style={styles.runButtonText}>No Ball</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.runButton, styles.wideButton]} onPress={() => handleExtra('lb')}>
