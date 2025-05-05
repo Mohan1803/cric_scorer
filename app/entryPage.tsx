@@ -129,8 +129,8 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: 18,
     fontWeight: 'bold',
-    textShadowColor: '#000000DD',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    
+    
+    
   },
 });

@@ -19,6 +19,22 @@ import { colors } from './theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function FullScorecard() {
+  // Defensive: fallback for missing teams or players
+  const {
+  teams,
+  battingTeam,
+  bowlingTeam,
+  ballHistory,
+  firstInningsBallHistory,
+  startNewMatch,
+} = useGameStore();
+  if (!teams || teams.length < 2 || !teams[0]?.players || !teams[1]?.players) {
+    return (
+      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+        <Text style={{ color: colors.accent, fontSize: 18 }}>Loading full scorecard...</Text>
+      </SafeAreaView>
+    );
+  }
   // ...existing code...
   const handleDownloadScorecard = async () => {
     const formatDate = (date: Date) => {
@@ -195,14 +211,7 @@ export default function FullScorecard() {
   };
 
   // Debug: log histories
-  const {
-    teams,
-    battingTeam,
-    bowlingTeam,
-    ballHistory,
-    firstInningsBallHistory,
-    startNewMatch,
-  } = useGameStore();
+  
   console.log('[FullScorecard] ballHistory:', ballHistory);
   console.log('[FullScorecard] firstInningsBallHistory:', firstInningsBallHistory);
 

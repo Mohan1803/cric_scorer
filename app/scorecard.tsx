@@ -13,6 +13,20 @@ import OversModal from '../components/OversModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function Scorecard() {
+  // Defensive: fallback for missing teams
+  const { teams, battingTeam, bowlingTeam } = useGameStore();
+  const battingTeamObj = teams.find(team => team.name === battingTeam);
+  const bowlingTeamObj = teams.find(team => team.name === bowlingTeam);
+  if (!battingTeamObj || !bowlingTeamObj) {
+    return (
+      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+        <Text style={{ color: colors.accent, fontSize: 18 }}>Loading teams...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  // Remove duplicate declarations below
+
   const [showCelebration, setShowCelebration] = useState(false);
   // --- Player Replacement State and Handlers ---
   const [showReplaceModal, setShowReplaceModal] = useState(false);
@@ -86,12 +100,9 @@ export default function Scorecard() {
   const router = useRouter();
   const pathname = usePathname();
   const {
-    teams,
     striker,
     nonStriker,
     currentBowler,
-    battingTeam,
-    bowlingTeam,
     ballHistory,
     currentInnings,
     currentInningsNumber,
@@ -121,10 +132,6 @@ export default function Scorecard() {
   const [showExtraRunsModal, setShowExtraRunsModal] = useState(false);
   const [showWicketModal, setShowWicketModal] = useState(false);
   const [extraType, setExtraType] = useState<'wide' | 'no-ball' | 'lb' | 'bye'>('wide');
-
-  const battingTeamObj = teams.find(team => team.name === battingTeam);
-
-  const bowlingTeamObj = teams.find(team => team.name === bowlingTeam);
 
   const legalDeliveries = ballHistory.filter(ball =>
     !ball.isExtra || (ball.isExtra && (ball.extraType === 'bye' || ball.extraType === 'lb'))
@@ -854,9 +861,9 @@ const styles = StyleSheet.create({
     color: colors.accent,
     letterSpacing: 1.5,
     marginBottom: 4,
-    textShadowColor: colors.shadow,
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 6,
+    
+    
+    
   },
   oversText: {
     fontSize: 18,
@@ -902,9 +909,9 @@ const styles = StyleSheet.create({
   fullScorecardButtonText: {
     color: colors.textPrimary,
     fontWeight: 'bold',
-    textShadowColor: '#000000DD',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    
+    
+    
     fontSize: 17,
     letterSpacing: 1.2,
     fontFamily: 'System',
@@ -1049,9 +1056,9 @@ const styles = StyleSheet.create({
   startInningsButtonText: {
     color: colors.textPrimary,
     fontWeight: 'bold',
-    textShadowColor: '#000000DD',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    
+    
+    
     fontSize: 20,
     textAlign: 'center',
     letterSpacing: 1,
@@ -1072,9 +1079,9 @@ const styles = StyleSheet.create({
   runButtonText: {
     color: colors.textPrimary,
     fontWeight: 'bold',
-    textShadowColor: '#000000DD',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    
+    
+    
     fontSize: 18,
     letterSpacing: 1.1,
     fontFamily: 'System',
@@ -1128,9 +1135,9 @@ const styles = StyleSheet.create({
   selectionButtonText: {
     color: colors.textPrimary,
     fontWeight: 'bold',
-    textShadowColor: '#000000DD',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    
+    
+    
     fontSize: 16,
     textAlign: 'center',
   },

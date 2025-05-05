@@ -249,9 +249,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: colors.textPrimary,
     fontWeight: 'bold',
-    textShadowColor: '#000000DD',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    
+    
+    
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
@@ -271,9 +271,9 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: 20,
     fontWeight: '900',
-    textShadowColor: '#000000DD',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    
+    
+    
     letterSpacing: 0.2,
     textTransform: 'uppercase',
   },
