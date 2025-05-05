@@ -1,4 +1,17 @@
 import { useEffect, useState, useRef } from 'react';
+
+// --- Type Definitions ---
+import type { Player } from '../store/gameStore';
+type Team = {
+  name: string;
+  players: Player[];
+};
+
+// --- Type Guard ---
+function isTeam(obj: any): obj is Team {
+  return obj && typeof obj === 'object' && 'name' in obj;
+}
+import { saveMatchData } from './firebaseService';
 import Celebration from './Celebration';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Animated, Easing } from 'react-native';
 import { colors } from './theme';
@@ -14,7 +27,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function Scorecard() {
   // Defensive: fallback for missing teams
-  const { teams, battingTeam, bowlingTeam } = useGameStore();
+  const { teams, battingTeam, bowlingTeam } = useGameStore() as {
+  teams: Team[];
+  battingTeam: string | Team;
+  bowlingTeam: string | Team;
+};
   const battingTeamObj = teams.find(team => team.name === battingTeam);
   const bowlingTeamObj = teams.find(team => team.name === bowlingTeam);
   if (!battingTeamObj || !bowlingTeamObj) {
@@ -104,6 +121,7 @@ export default function Scorecard() {
     nonStriker,
     currentBowler,
     ballHistory,
+    firstInningsBallHistory,
     currentInnings,
     currentInningsNumber,
     target,
@@ -149,6 +167,41 @@ export default function Scorecard() {
   const partnership = getCurrentPartnership(ballHistory, striker, nonStriker);
 
   const [modalVisible, setModalVisible] = useState(false);
+  const [savePromptShown, setSavePromptShown] = useState(false);
+
+  // Prompt to save match data after match completion
+  useEffect(() => {
+    if (matchCompleted && !savePromptShown) {
+      setSavePromptShown(true);
+      const matchName = `${teams[0]?.name || 'TeamA'}_${teams[1]?.name || 'TeamB'}_${new Date().toISOString().slice(0,10)}`;
+      Alert.alert(
+        'Save Match?',
+        `Do you want to save this match as "${matchName}"?`,
+        [
+          { text: 'No', style: 'cancel' },
+          {
+            text: 'Yes',
+            onPress: async () => {
+              try {
+                await saveMatchData(matchName, {
+                  teams,
+                  battingTeam,
+                  bowlingTeam,
+                  ballHistory,
+                  firstInningsBallHistory,
+                  totalOvers,
+                  matchDate: new Date().toISOString(),
+                });
+                Alert.alert('Success', 'Match data saved to Firestore!');
+              } catch (e) {
+                Alert.alert('Error', 'Failed to save match data.');
+              }
+            }
+          }
+        ]
+      );
+    }
+  }, [matchCompleted]);
 
   // --- Retired Hurt Handler ---
   const handleRetiredHurt = (which: 'striker' | 'nonStriker') => {
@@ -380,7 +433,12 @@ export default function Scorecard() {
           <View style={[styles.scoreHeader]}>
             <View style={{ alignItems: 'center' }}>
               <Text style={styles.scoreText}>
-                {battingTeam} {totalScore}/{totalWickets}
+                {/* Ensure battingTeam is a string, not an object */}
+                {typeof battingTeam === 'string'
+  ? battingTeam
+  : isTeam(battingTeam)
+    ? battingTeam.name
+    : JSON.stringify(battingTeam)} {totalScore}/{totalWickets}
               </Text>
               {striker && nonStriker && (
                 <Text style={{ fontSize: 15, color: colors.accent, fontWeight: '600', marginVertical: 2 }}>
