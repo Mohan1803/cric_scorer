@@ -26,7 +26,7 @@ export default function TossScreen() {
               style={styles.teamButton}
               onPress={() => handleTossWinner(team.name)}
             >
-              <Text style={styles.teamButtonText}>{team.name}</Text>
+              <Text style={styles.teamButtonText}>{typeof team.name === 'string' ? team.name : (team.name !== undefined && team.name !== null ? String(team.name) : '[No Name]')}</Text>
             </TouchableOpacity>
           ))}
         </View>

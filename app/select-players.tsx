@@ -1,41 +1,75 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { useGameStore } from '../store/gameStore';
 import { colors } from './theme';
 
 export default function SelectPlayersScreen() {
+  // Defensive: fallback for missing teams or players
+  const showError = (msg: string) => {
+    Alert.alert('Error', msg, [
+      { text: 'Go Home', onPress: () => router.replace('/entryPage') }
+    ]);
+  };
+
   const teams = useGameStore((state) => state.teams);
   const battingTeam = useGameStore((state) => state.battingTeam);
   const bowlingTeam = useGameStore((state) => state.bowlingTeam);
   const setStriker = useGameStore((state) => state.setStriker);
   const setNonStriker = useGameStore((state) => state.setNonStriker);
   const setCurrentBowler = useGameStore((state) => state.setCurrentBowler);
+  const currentInningsNumber = useGameStore((state) => state.currentInningsNumber);
 
   const battingTeamObj = teams.find(team => team.name === battingTeam);
   const bowlingTeamObj = teams.find(team => team.name === bowlingTeam);
+
+  // Defensive: if teams or players missing, show error and prevent blank page
+  if (!battingTeamObj || !bowlingTeamObj || !battingTeamObj.players || !bowlingTeamObj.players || battingTeamObj.players.length === 0 || bowlingTeamObj.players.length === 0) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+        <Text style={{ color: colors.accent, fontSize: 18, marginBottom: 16 }}>Team or player data missing. Please restart the match.</Text>
+        <TouchableOpacity style={{ backgroundColor: colors.accent, padding: 16, borderRadius: 12 }} onPress={() => router.replace('/entryPage')}>
+          <Text style={{ color: colors.textPrimary, fontWeight: 'bold', fontSize: 18 }}>Go to Home</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   const [selectedStriker, setSelectedStriker] = useState<string | null>(null);
   const [selectedNonStriker, setSelectedNonStriker] = useState<string | null>(null);
   const [selectedBowler, setSelectedBowler] = useState<string | null>(null);
   const [roleTab, setRoleTab] = useState<'striker' | 'nonStriker' | 'bowler'>('striker');
 
+  // Reset selections when the component loads (for both innings)
+  useEffect(() => {
+    setSelectedStriker(null);
+    setSelectedNonStriker(null);
+    setSelectedBowler(null);
+    setRoleTab('striker');
+  }, [currentInningsNumber, battingTeam, bowlingTeam]);
+
   const handleContinue = () => {
     if (!selectedStriker || !selectedNonStriker || !selectedBowler) {
       Alert.alert('Error', 'Please select all players');
       return;
     }
-
-    const striker = battingTeamObj!.players.find(p => p.name === selectedStriker);
-    const nonStriker = battingTeamObj!.players.find(p => p.name === selectedNonStriker);
-    const bowler = bowlingTeamObj!.players.find(p => p.name === selectedBowler);
-
-    setStriker(striker!);
-    setNonStriker(nonStriker!);
-    setCurrentBowler(bowler!);
-
+    if (!battingTeamObj || !bowlingTeamObj || !battingTeamObj.players || !bowlingTeamObj.players) {
+      showError('Team or player data missing. Please restart the match.');
+      return;
+    }
+    const striker = battingTeamObj.players.find(p => p.name === selectedStriker);
+    const nonStriker = battingTeamObj.players.find(p => p.name === selectedNonStriker);
+    const bowler = bowlingTeamObj.players.find(p => p.name === selectedBowler);
+    if (!striker || !nonStriker || !bowler) {
+      showError('Selected player not found in team list. Please re-select.');
+      return;
+    }
+    setStriker(striker);
+    setNonStriker(nonStriker);
+    setCurrentBowler(bowler);
     router.push('/scorecard');
   };
+
 
   return (
     <View style={{flex: 1, backgroundColor: colors.background}}>
@@ -115,7 +149,7 @@ export default function SelectPlayersScreen() {
                 onPress={() => setSelectedStriker(player.name)}
                 disabled={player.name === selectedNonStriker}
               >
-                <Text style={styles.playerButtonText}>{player.name}</Text>
+                <Text style={styles.playerButtonText}>{typeof player.name === 'string' ? player.name : (player.name !== undefined && player.name !== null ? String(player.name) : '[No Name]')}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -134,7 +168,7 @@ export default function SelectPlayersScreen() {
                 onPress={() => setSelectedNonStriker(player.name)}
                 disabled={player.name === selectedStriker}
               >
-                <Text style={styles.playerButtonText}>{player.name}</Text>
+                <Text style={styles.playerButtonText}>{typeof player.name === 'string' ? player.name : (player.name !== undefined && player.name !== null ? String(player.name) : '[No Name]')}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -151,7 +185,7 @@ export default function SelectPlayersScreen() {
                 ]}
                 onPress={() => setSelectedBowler(player.name)}
               >
-                <Text style={styles.playerButtonText}>{player.name}</Text>
+                <Text style={styles.playerButtonText}>{typeof player.name === 'string' ? player.name : (player.name !== undefined && player.name !== null ? String(player.name) : '[No Name]')}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -160,7 +194,9 @@ export default function SelectPlayersScreen() {
           style={styles.continueButton}
           onPress={handleContinue}
         >
-          <Text style={styles.continueButtonText}>Start Match</Text>
+          <Text style={styles.continueButtonText}>
+            {currentInningsNumber === 2 ? 'Start Second Innings' : 'Start Match'}
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
