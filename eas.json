@@ -1,0 +1,37 @@
+{
+  "cli": {
+    "version": ">= 5.9.1"
+  },
+  "build": {
+    "preview": {
+      "android": {
+        "buildType": "apk",
+        "image": "latest",
+        "env": {
+          "EXPO_NO_AUTOLINK": "1"
+        }
+      }
+    },
+    "preview2": {
+      "android": {
+        "gradleCommand": ":app:assembleRelease",
+        "image": "latest",
+        "env": {
+          "EXPO_NO_AUTOLINK": "1"
+        }
+      }
+    },
+    "preview3": {
+      "developmentClient": true,
+      "android": {
+        "image": "latest"
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "app-bundle",
+        "image": "latest"
+      }
+    }
+  }
+}
