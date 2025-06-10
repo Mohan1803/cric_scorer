@@ -1,24 +1,24 @@
-// Centralized dark theme variables for the app
+// High contrast theme optimized for sunlight visibility
 export const colors = {
-  // Blue Contrast Theme
-  background: '#0D1B2A',             // Deep blue background
-  surface: '#1B263B',                // Slightly lighter blue for surfaces/cards
-  card: '#1B263B',                   // Card (same as surface)
-  cardAlt: '#274472',                // Alternate card background
-  accent: '#1976D2',                 // Vibrant blue for highlights/buttons
-  accentAlt: '#1565C0',              // Darker blue accent
-  accentWarn: '#FF6F61',             // Soft coral for warnings/errors
-  accentYellow: '#E3EAFc',           // Very light blue (info)
-  accentGreen: '#43FFB6',            // Teal-green for success (optional)
-  accentPurple: '#B39DDB',           // Soft purple accent (optional)
-  accentOrange: '#FFA726',           // Orange accent (for contrast)
-  text: '#FFFFFF',                   // White for all main text
+  // High Contrast Theme for Sunlight
+  background: '#000000',             // Pure black for maximum contrast
+  surface: '#1A1A1A',                // Very dark gray for surfaces/cards
+  card: '#1E1E1E',                   // Slightly lighter than surface for depth
+  cardAlt: '#2A2A2A',                // Alternate card background
+  accent: '#00A8FF',                 // Bright blue for highlights/buttons (high visibility)
+  accentAlt: '#0091EA',              // Slightly darker blue for pressed states
+  accentWarn: '#FF5252',             // Bright red for warnings/errors
+  accentYellow: '#FFD740',           // Bright yellow for important info
+  accentGreen: '#00E676',            // Bright green for success
+  accentPurple: '#B388FF',           // Bright purple for accents
+  accentOrange: '#FF9100',           // Bright orange for important indicators
+  text: '#FFFFFF',                   // Pure white for maximum contrast
   textPrimary: '#FFFFFF',            // White for main and button text
-  textSecondary: '#90CAF9',          // Light blue for secondary text
-  textDark: '#0D1B2A',               // For text on light backgrounds (not primary)
-  border: '#1976D2',                 // Blue border for contrast
-  shadow: '#0D1B2A',                 // Deep blue-black shadow for depth
-  disabled: '#90A4AE',               // Muted blue-gray for disabled
-  success: '#43FFB6',                // Success (teal-green)
-  error: '#FF6F61',                  // Error (soft coral)
+  textSecondary: '#B0BEC5',          // Light gray for secondary text
+  textDark: '#000000',               // Black for text on light backgrounds
+  border: '#424242',                 // Dark gray border for contrast
+  shadow: '#000000',                 // Black shadow for maximum contrast
+  disabled: '#616161',               // Medium gray for disabled elements
+  success: '#00E676',                // Bright green for success
+  error: '#FF5252',                  // Bright red for errors
 };
