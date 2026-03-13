@@ -258,7 +258,7 @@ export default function Scorecard() {
 
   const startNewInnings = () => {
     startSecondInnings();
-    // The startSecondInnings function will update the state and the UI will update accordingly
+    router.push('/select-players');
   };
 
   return (

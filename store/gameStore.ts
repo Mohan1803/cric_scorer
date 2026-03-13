@@ -453,7 +453,6 @@ export const useGameStore = create<GameState>((set, get) => ({
         firstInningsBallHistory: [...newBallHistory],
         awaitingSecondInningsStart: true,
       });
-      alert(`First innings complete. Target: ${score + 1}`);
     }
 
     if (state.currentInningsNumber === 2 && state.target !== null) {
