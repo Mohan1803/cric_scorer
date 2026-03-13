@@ -6,19 +6,13 @@
     "preview": {
       "android": {
         "buildType": "apk",
-        "image": "latest",
-        "env": {
-          "EXPO_NO_AUTOLINK": "1"
-        }
+        "image": "latest"
       }
     },
     "preview2": {
       "android": {
         "gradleCommand": ":app:assembleRelease",
-        "image": "latest",
-        "env": {
-          "EXPO_NO_AUTOLINK": "1"
-        }
+        "image": "latest"
       }
     },
     "preview3": {
