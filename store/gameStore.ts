@@ -46,20 +46,13 @@ export interface OverData {
 }
 
 export interface UndoOperation {
-  type: 'remove_wicket' | 'remove_batsman' | 'wicket_restore';
-  details: any; // You can type this more strictly if needed
-}
-
-export interface CurrentInnings {
-  wickets: number;
-  current_batsmen: any[];
-  last_wicket_details?: any;
+  type: 'wicket_restore';
+  details: any;
 }
 
 export interface GameState {
   initialStriker: Player | null;
   initialNonStriker: Player | null;
-  currentInnings: CurrentInnings;
   currentInningsNumber: 1 | 2;
 
   teams: Team[];
@@ -105,21 +98,12 @@ export interface GameState {
   setBatsmanToReplace: (end: 'striker' | 'non-striker' | null) => void;
   setShowBatsmanSelectModal: (show: boolean) => void;
 
-  // Undo stack and operations
   undoStack: UndoOperation[];
-  addUndoOperation: (op: UndoOperation) => void;
-  popUndoOperation: () => UndoOperation | undefined;
   clearUndoStack: () => void;
-  applyUndoOperation: (op: UndoOperation) => void;
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
   initialStriker: null,
-  currentInnings: {
-    wickets: 0,
-    current_batsmen: [],
-    last_wicket_details: undefined,
-  },
   currentInningsNumber: 1,
   initialNonStriker: null,
   teams: [],
@@ -143,77 +127,42 @@ export const useGameStore = create<GameState>((set, get) => ({
   firstInningsOversData: [], // <-- Store first innings overs
   previousStriker: null,
 
-  setTeams: (teams: any) => set({ teams }),
-  setTossWinner: (team: any) => set({ tossWinner: team }),
-  setBattingTeam: (team: any) => set({ battingTeam: team }),
-  setBowlingTeam: (team: any) => set({ bowlingTeam: team }),
-  setStriker: (player: any) => set((state: any) => {
+  setTeams: (teams: Team[]) => set({ teams }),
+  setTossWinner: (team: string) => set({ tossWinner: team }),
+  setBattingTeam: (team: string) => set({ battingTeam: team }),
+  setBowlingTeam: (team: string) => set({ bowlingTeam: team }),
+  setStriker: (player: Player | null) => set((state) => {
     // If this is the first striker being set, also set initialStriker
     if (!state.initialStriker) {
       return { striker: player, initialStriker: player };
     }
     return { striker: player };
   }),
-  setNonStriker: (player: any) => set((state: any) => {
+  setNonStriker: (player: Player | null) => set((state) => {
     // If this is the first non-striker being set, also set initialNonStriker
     if (!state.initialNonStriker) {
       return { nonStriker: player, initialNonStriker: player };
     }
     return { nonStriker: player };
   }),
-  setCurrentBowler: (player: any) => set((state: any) => ({
+  setCurrentBowler: (player: Player | null) => set((state) => ({
     currentBowler: player,
     lastSelectedBowler: player || state.lastSelectedBowler
   })),
-  setTotalOvers: (overs: any) => set({ totalOvers: overs }),
-  setSecondInningsOver: (overs: any) => set({ secondInningsOver: overs }),
-  setAwaitingSecondInningsStart: (flag: any) => set({ awaitingSecondInningsStart: flag }),
-  setPreviousStriker: (player: any) => set({ previousStriker: player }),
+  setTotalOvers: (overs: number) => set({ totalOvers: overs }),
+  setSecondInningsOver: (overs: number) => set({ secondInningsOver: overs }),
+  setAwaitingSecondInningsStart: (flag: boolean) => set({ awaitingSecondInningsStart: flag }),
+  setPreviousStriker: (player: Player | null) => set({ previousStriker: player }),
 
   batsmanToReplace: null,
   showBatsmanSelectModal: false,
 
-  setBatsmanToReplace: (end: any) => set({ batsmanToReplace: end }),
-  setShowBatsmanSelectModal: (show: any) => set({ showBatsmanSelectModal: show }),
+  setBatsmanToReplace: (end: 'striker' | 'non-striker' | null) => set({ batsmanToReplace: end }),
+  setShowBatsmanSelectModal: (show: boolean) => set({ showBatsmanSelectModal: show }),
 
   // Undo stack and operations
   undoStack: [],
-  addUndoOperation: (op: any) => set((state: any) => ({ undoStack: [...state.undoStack, op] })),
-  popUndoOperation: () => {
-    const state: any = get();
-    if (state.undoStack.length === 0) return undefined;
-    const last = state.undoStack[state.undoStack.length - 1];
-    set({ undoStack: state.undoStack.slice(0, -1) });
-    return last;
-  },
   clearUndoStack: () => set({ undoStack: [] }),
-  applyUndoOperation: (undoOperation: any) => {
-    // This function will update the state according to the undo operation type
-    set((state) => {
-      const updated = { ...state };
-      if (undoOperation.type === 'remove_wicket') {
-        // Undo wicket: decrement wickets and remove last_wicket_details
-        if (
-          updated.currentInningsNumber === 1 && typeof updated.currentInnings.wickets === 'number'
-        ) {
-          updated.currentInnings.wickets = Math.max(0, updated.currentInnings.wickets - 1);
-        }
-        if (updated.currentInnings && updated.currentInnings.last_wicket_details) {
-          delete updated.currentInnings.last_wicket_details;
-        }
-      } else if (undoOperation.type === 'remove_batsman') {
-        // Undo batsman: remove batsman from current_batsmen array
-        if (
-          updated.currentInningsNumber === 1 && Array.isArray(updated.currentInnings.current_batsmen)
-        ) {
-          updated.currentInnings.current_batsmen = updated.currentInnings.current_batsmen.filter(
-            (b: any) => b.id !== undoOperation.details.id
-          );
-        }
-      }
-      return updated;
-    });
-  },
 
   swapBatsmen: () => {
     const state = get();
@@ -343,17 +292,17 @@ export const useGameStore = create<GameState>((set, get) => ({
         }
 
         // Handle batsman stats (includes both striker and non-striker)
-        if (isStriker) {
-          const addRuns = record.isNoBall ? record.runs : (record.isExtra ? 0 : record.runs);
-          const addBall = record.isExtra && (record.extraType === 'wide') ? 0 : 1;
+        if (isStriker || isNonStriker) {
+          const addRuns = isStriker ? (record.isNoBall ? record.runs : (record.isExtra ? 0 : record.runs)) : 0;
+          const addBall = isStriker ? (record.isExtra && (record.extraType === 'wide') ? 0 : 1) : 0;
 
           return {
             ...player,
             runs: player.runs + addRuns,
             balls: player.balls + addBall,
-            fours: player.fours + (record.extraType !== 'wide' && isFour ? 1 : 0),
-            sixes: player.sixes + (isSix ? 1 : 0),
-            status: isOut ? 'out' : 'active',
+            fours: player.fours + (isStriker && record.extraType !== 'wide' && isFour ? 1 : 0),
+            sixes: player.sixes + (isStriker && isSix ? 1 : 0),
+            status: isOut ? 'out' : player.status,
           };
         }
 

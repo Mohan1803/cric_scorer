@@ -20,7 +20,6 @@ export default function Scorecard() {
     battingTeam,
     bowlingTeam,
     ballHistory,
-    currentInnings,
     currentInningsNumber,
     target,
     totalOvers,
@@ -114,12 +113,6 @@ export default function Scorecard() {
   };
 
   const getCurrentOverBalls = () => {
-    const undoBatsmanSelection = () => {
-      if (!previousStriker) return;
-
-      setStriker(previousStriker);
-      setPreviousStriker(null);
-    };
     const allBalls = [...ballHistory].reverse();
     let currentOverBalls = oversData.find((e) => e.overNumber === totalCompletedOvers && e.innings === currentInningsNumber)?.deliveries ?? [];
 
