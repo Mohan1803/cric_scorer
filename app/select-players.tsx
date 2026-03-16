@@ -67,7 +67,7 @@ export default function SelectPlayersScreen() {
     setStriker(striker);
     setNonStriker(nonStriker);
     setCurrentBowler(bowler);
-    router.push('/scorecard');
+    router.replace('/scorecard');
   };
 
 
@@ -113,8 +113,6 @@ export default function SelectPlayersScreen() {
               alignItems: 'center',
               justifyContent: 'center',
               minWidth: 90,
-              transitionProperty: 'background-color',
-              transitionDuration: '200ms',
             }}
             onPress={() => setRoleTab(tab as 'striker' | 'nonStriker' | 'bowler')}
             accessibilityRole="button"

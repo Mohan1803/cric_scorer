@@ -84,7 +84,7 @@ export default function Scorecard() {
   const totalScore = ballHistory.reduce((sum, ball) => sum + ball.runs + (ball.isExtra && (ball.extraType === 'wide' || ball.extraType === 'no-ball') ? 1 : 0), 0);
   const totalWickets = ballHistory.filter(ball => ball.isWicket).length;
 
-  const runsNeeded = target ? target - totalScore + 1 : null;
+  const runsNeeded = target !== null ? target - totalScore + 1 : null;
   const ballsRemaining = totalOvers * 6 - ballHistory.filter(ball => !ball.isExtra || (ball.isExtra && (ball.extraType !== 'bye' && ball.extraType !== 'lb'))).length;
   
   // Calculate run rates and scores
@@ -251,7 +251,7 @@ export default function Scorecard() {
 
   const startNewInnings = () => {
     startSecondInnings();
-    router.push('/select-players');
+    router.replace('/select-players');
   };
 
   return (
@@ -310,7 +310,7 @@ export default function Scorecard() {
               </View>
             </View>
 
-            {currentInningsNumber === 2 && target && (
+            {currentInningsNumber === 2 && target !== null && (
               <View style={styles.targetInfo}>
                 <Text style={styles.targetText}>
                   Need {runsNeeded} runs from {ballsRemaining} balls
