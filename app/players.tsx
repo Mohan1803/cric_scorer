@@ -258,9 +258,9 @@ const styles = StyleSheet.create({
   },
   activeTabText: {
     color: colors.textPrimary,
-    textShadowColor: '#FFFFFFAA',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 1,
+    
+    
+    
   },
   inputRow: {
     marginBottom: 18,
@@ -288,9 +288,9 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontWeight: '900',
     letterSpacing: 0.15,
-    textShadowColor: '#000000DD',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    
+    
+    
   },
   clearBtn: {
     position: 'absolute',
@@ -315,9 +315,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '900',
     letterSpacing: 0.12,
-    textShadowColor: '#FFFFFFBB',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 1,
+    
+    
+    
     textTransform: 'uppercase',
   },
   continueBtn: {
@@ -338,9 +338,9 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 0.22,
     textTransform: 'uppercase',
-    textShadowColor: '#11111199',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    
+    
+    
   },
   progressBarContainer: {
     marginBottom: 18,
@@ -356,9 +356,9 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: colors.textSecondary,
     letterSpacing: 0.12,
-    textShadowColor: '#FFFFFFAA',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 1,
+    
+    
+    
   },
   progressTrack: {
     height: 10,

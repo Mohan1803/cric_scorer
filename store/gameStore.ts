@@ -222,6 +222,11 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   startSecondInnings: () => {
     const state = get();
+    console.log('BEFORE second innings:', {
+      teams: state.teams,
+      battingTeam: state.battingTeam,
+      bowlingTeam: state.bowlingTeam,
+    });
     const firstInningsScore = state.ballHistory.reduce(
       (sum, b) => sum + b.runs + (b.isExtra && (b.extraType === 'wide' || b.extraType === 'no-ball') ? 1 : 0), 0);
     set({
@@ -239,6 +244,12 @@ export const useGameStore = create<GameState>((set, get) => ({
       initialNonStriker: null,
       oversData: [], // <-- Reset oversData for second innings
       currentInningsNumber: 2, // <-- Ensure second innings logic works
+    });
+    const after = get();
+    console.log('AFTER second innings:', {
+      teams: after.teams,
+      battingTeam: after.battingTeam,
+      bowlingTeam: after.bowlingTeam,
     });
   },
 

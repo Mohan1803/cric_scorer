@@ -1,5 +1,4 @@
 import { useEffect, useState, useRef } from 'react';
-import Celebration from './Celebration';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Animated, Easing } from 'react-native';
 import { colors } from './theme';
 import BroadcastTicker from './BroadcastTicker';
@@ -10,79 +9,7 @@ import ExtraRunsModal from '../components/ExtraRunsModal';
 import WicketModal from '../components/WicketModal';
 import OversModal from '../components/OversModal';
 
-import { SafeAreaView } from 'react-native-safe-area-context';
-
 export default function Scorecard() {
-  const [showCelebration, setShowCelebration] = useState(false);
-  // --- Player Replacement State and Handlers ---
-  const [showReplaceModal, setShowReplaceModal] = useState(false);
-  const [replaceContext, setReplaceContext] = useState<{ player: any, type: 'batting' | 'bowling' } | null>(null);
-  const [eligibleReplacements, setEligibleReplacements] = useState<any[]>([]);
-
-  const handlePlayerReplacePress = (player: any, type: 'batting' | 'bowling') => {
-    Alert.alert(
-      'Replace Player',
-      `Replace ${player.name}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Replace',
-          style: 'destructive',
-          onPress: () => {
-            let eligible;
-            if (type === 'batting') {
-              if (!battingTeamObj) return;
-              eligible = battingTeamObj.players.filter(
-                p => p.name !== player.name &&
-                  p.name !== striker?.name &&
-                  p.name !== nonStriker?.name
-              );
-            } else {
-              eligible = bowlingTeamObj?.players.filter(
-                p => p.name !== player.name &&
-                  p.name !== currentBowler?.name &&
-                  p.name !== striker?.name &&
-                  p.name !== nonStriker?.name
-              ) || [];
-            }
-            setReplaceContext({ player, type });
-            setEligibleReplacements(eligible);
-            setShowReplaceModal(true);
-          },
-        },
-      ]
-    );
-  };
-
-  const handleConfirmReplace = (replacement: any) => {
-    if (!replaceContext) return;
-    // Replace logic (update player in store)
-    if (replaceContext.type === 'batting') {
-      if (!battingTeamObj) return; // Prevent undefined error
-      const idx = battingTeamObj.players.findIndex(p => p.name === replaceContext.player.name);
-      if (idx !== -1) {
-        const newPlayers = [...battingTeamObj.players];
-        newPlayers[idx] = replacement;
-        const newTeams = teams.map(team =>
-          team.name === battingTeamObj.name ? { ...team, players: newPlayers } : team
-        );
-        useGameStore.getState().setTeams(newTeams);
-      }
-    } else if (bowlingTeamObj) {
-      const idx = bowlingTeamObj.players.findIndex(p => p.name === replaceContext.player.name);
-      if (idx !== -1) {
-        const newPlayers = [...bowlingTeamObj.players];
-        newPlayers[idx] = replacement;
-        const newTeams = teams.map(team =>
-          team.name === bowlingTeamObj.name ? { ...team, players: newPlayers } : team
-        );
-        useGameStore.getState().setTeams(newTeams);
-      }
-    }
-    setShowReplaceModal(false);
-    setReplaceContext(null);
-  };
-
   const router = useRouter();
   const pathname = usePathname();
   const {
@@ -143,35 +70,13 @@ export default function Scorecard() {
 
   const [modalVisible, setModalVisible] = useState(false);
 
-  // --- Retired Hurt Handler ---
-  const handleRetiredHurt = (which: 'striker' | 'nonStriker') => {
-    if (!battingTeamObj) return;
-    let batsman = which === 'striker' ? striker : nonStriker;
-    if (!batsman || batsman.status === 'out' || batsman.status === 'retiredHurt') return;
-    // Update status in team store
-    const idx = battingTeamObj.players.findIndex(p => p.name === batsman.name);
-    if (idx === undefined || idx === -1) return;
-    const newPlayers = [...battingTeamObj.players];
-    newPlayers[idx] = { ...newPlayers[idx], status: 'retiredHurt' };
-    const newTeams = teams.map(team =>
-      team.name === battingTeamObj.name ? { ...team, players: newPlayers } : team
-    );
-    useGameStore.getState().setTeams(newTeams);
-    // Remove from striker/nonStriker and prompt for new batsman
-    setStriker(null);
-    setShowNewBatsmanSelection(true);
-    // Optionally, set batsmanToReplace to which (if used for UI)
-  };
-
-
   const getAvailableBatsmen = () => {
-    if (!battingTeamObj) return [];
-    // Allow selection of players who are not out, including retired hurt
-    return battingTeamObj.players.filter(player =>
+    return battingTeamObj?.players.filter(player =>
       player.status !== 'out' &&
+      player.status === "" &&
       player.name !== striker?.name &&
       player.name !== nonStriker?.name
-    );
+    ) || [];
   };
 
   const getCurrentOverBalls = () => {
@@ -221,12 +126,6 @@ export default function Scorecard() {
       isWicket: false
     });
 
-    // Trigger celebration for 4s and 6s
-    if (runs === 4 || runs === 6) {
-      setShowCelebration(true);
-      setTimeout(() => setShowCelebration(false), 2000);
-    }
-
     if (currentOver === 5 && !showNewBowlerSelection) {
       setShowNewBowlerSelection(true);
     }
@@ -254,10 +153,6 @@ export default function Scorecard() {
   };
 
   const handleWicket = () => {
-    // Trigger celebration for wicket
-    setShowCelebration(true);
-    setTimeout(() => setShowCelebration(false), 2000);
-
     const availableBatsmen = getAvailableBatsmen();
 
     if (availableBatsmen.length === 0) {
@@ -363,14 +258,14 @@ export default function Scorecard() {
 
   const partnershipRuns = (striker?.runs || 0) + (nonStriker?.runs || 0);
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <BroadcastTicker />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.container}>
-          <View style={[styles.scoreHeader]}>
+          <View style={[styles.scoreHeader, { transform: [{ translateY: blinkAnim }] }]}>
             <View style={{ alignItems: 'center' }}>
               <Text style={styles.scoreText}>
                 {battingTeam} {totalScore}/{totalWickets}
@@ -443,42 +338,26 @@ export default function Scorecard() {
         </View>
 
         <View style={styles.statsContainer}>
-          <Text style={styles.elegantSectionTitle}>Batting</Text>
+          <Text style={styles.sectionTitle}>Batting</Text>
           {battingTeamObj?.players
             .filter(player =>
               player.name === striker?.name || player.name === nonStriker?.name
             )
             .map((player, index) => (
-              <View key={index} style={styles.elegantPlayerCard}>
-                <View>
-                  <TouchableOpacity onPress={() => handlePlayerReplacePress(player, 'batting')}>
-                    <Text style={[
-                      styles.elegantPlayerName,
-                      striker?.name === player.name && styles.elegantHighlight
-                    ]}>
-                      {player.name}
-                      {player.status === 'retiredHurt' ? ' (retired hurt)' : ''}
-                      {player.name === striker?.name ? ' *' : ''}
-                    </Text>
-                  </TouchableOpacity>
-                  <Text style={styles.elegantStatText}>
+              <View key={index} style={styles.playerStats}>
+                <View style={styles.playerInfo}>
+                  <Text style={[
+                    styles.playerName,
+                    striker?.name === player.name && styles.strikerHighlight
+                  ]}>
+                    {player.name}
+                    {player.name === striker?.name ? ' *' : ''}
+                  </Text>
+                  <Text style={styles.statText}>
                     {player.runs} ({player.balls})
                   </Text>
-                  <Text style={styles.elegantStatText}>
-                    4s: {player.fours} | 6s: {player.sixes}
-                  </Text>
-                  <Text style={styles.elegantStatText}>
-                    {(() => {
-                      const balls = ballHistory.filter(ball => ball.batsmanName === player.name && !ball.isExtra && !ball.isWicket);
-                      const zeros = balls.filter(ball => ball.runs === 0).length;
-                      const ones = balls.filter(ball => ball.runs === 1).length;
-                      const twos = balls.filter(ball => ball.runs === 2).length;
-                      const threes = balls.filter(ball => ball.runs === 3).length;
-                      return `0s: ${zeros} | 1s: ${ones} | 2s: ${twos} | 3s: ${threes}`;
-                    })()}
-                  </Text>
                 </View>
-                <Text style={styles.elegantStrikeRate}>
+                <Text style={styles.strikeRate}>
                   SR: {player.balls ? ((player.runs / player.balls) * 100).toFixed(1) : '0.0'}
                 </Text>
               </View>
@@ -486,28 +365,26 @@ export default function Scorecard() {
         </View>
 
         <View style={styles.statsContainer}>
-          <Text style={styles.elegantSectionTitle}>Bowling</Text>
+          <Text style={styles.sectionTitle}>Bowling</Text>
           {bowlingTeamObj?.players
             .filter(player => player.ballsBowled > 0)
             .slice(0, 1)
             .map((player, index) => (
-              <View key={index} style={styles.elegantPlayerCard}>
-                <View>
-                  <TouchableOpacity onPress={() => handlePlayerReplacePress(player, 'bowling')}>
-                    <Text style={[
-                      styles.elegantPlayerName,
-                      currentBowler?.name === player.name && styles.elegantBowlerHighlight
-                    ]}>
-                      {player.name}
-                      {currentBowler?.name === player.name ? ' *' : ''}
-                    </Text>
-                  </TouchableOpacity>
-                  <Text style={styles.elegantStatText}>
+              <View key={index} style={styles.playerStats}>
+                <View style={styles.playerInfo}>
+                  <Text style={[
+                    styles.playerName,
+                    currentBowler?.name === player.name && styles.currentBowlerHighlight
+                  ]}>
+                    {player.name}
+                    {currentBowler?.name === player.name ? ' *' : ''}
+                  </Text>
+                  <Text style={styles.statText}>
                     {player.wickets}-{player.runsGiven}
                     ({Math.floor(player.ballsBowled / 6)}.{player.ballsBowled % 6})
                   </Text>
                 </View>
-                <Text style={styles.elegantStrikeRate}>
+                <Text style={styles.economy}>
                   Econ: {player.ballsBowled
                     ? ((player.runsGiven / (player.ballsBowled / 6)) || 0).toFixed(1)
                     : '0.0'}
@@ -540,25 +417,16 @@ export default function Scorecard() {
         </View>
 
         {!showNewBowlerSelection && !showNewBatsmanSelection && (
-          <View style={styles.runsSelectionCard}>
-            <Text style={styles.runsSelectionTitle}>Runs Selection</Text>
-            <View style={styles.runsButtonGrid}>
+          <View style={styles.controls}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10 }}>
               {[0, 1, 2, 3, 4, 6].map(runs => (
                 <TouchableOpacity key={runs} style={styles.runButton} onPress={() => handleRun(runs)}>
                   <Text style={styles.runButtonText}>{runs}</Text>
                 </TouchableOpacity>
               ))}
-            </View>
-            <View style={styles.extraButtonRow}>
               <TouchableOpacity style={[styles.runButton, styles.wicketButton]} onPress={handleWicket}>
                 <Text style={styles.runButtonText}>Wicket</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.runButton, styles.wicketButton]} onPress={() => handleRetiredHurt('striker')}>
-                <Text style={styles.runButtonText}>Retired Hurt (S)</Text>
-              </TouchableOpacity>
-              {/* <TouchableOpacity style={[styles.runButton, styles.wicketButton]} onPress={() => handleRetiredHurt('nonStriker')}>
-                <Text style={styles.runButtonText}>Retired Hurt (NS)</Text>
-              </TouchableOpacity> */}
               <TouchableOpacity style={[styles.runButton, styles.wideButton]} onPress={() => handleExtra('wide')}>
                 <Text style={styles.runButtonText}>Wide</Text>
               </TouchableOpacity>
@@ -646,7 +514,7 @@ export default function Scorecard() {
                     {player.name === nonStriker?.name && batsmanToReplace !== 'non-striker'
                       ? ' (non-striker)'
                       : ''}
-                    {player.status === 'out' ? ' (out)' : player.status === 'retiredHurt' ? ' (retired hurt)' : ''}
+                    {player.status === 'out' ? ' (out)' : ''}
                   </Text>
                 </TouchableOpacity>
               );
@@ -680,139 +548,11 @@ export default function Scorecard() {
           </TouchableOpacity>
         )}
       </ScrollView>
-      {/* Player Replacement Modal */}
-      {showReplaceModal && replaceContext && (
-        <View style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          top: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 9999
-        }}>
-          <View style={{ backgroundColor: '#fff', padding: 24, borderRadius: 14, width: '80%' }}>
-            <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 14, color: colors.accent }}>
-              Select Replacement for {replaceContext.player.name}
-            </Text>
-            {eligibleReplacements.length === 0 && (
-              <Text style={{ color: colors.error, marginBottom: 10 }}>No eligible replacements available.</Text>
-            )}
-            {eligibleReplacements.map((player, idx) => (
-              <TouchableOpacity
-                key={player.name}
-                style={{ paddingVertical: 12, borderBottomWidth: idx === eligibleReplacements.length - 1 ? 0 : 1, borderColor: '#eee' }}
-                onPress={() => handleConfirmReplace(player)}
-              >
-                <Text style={{ fontSize: 16 }}>{player.name}</Text>
-              </TouchableOpacity>
-            ))}
-            <TouchableOpacity onPress={() => setShowReplaceModal(false)} style={{ marginTop: 18, alignSelf: 'flex-end' }}>
-              <Text style={{ color: colors.accent, fontWeight: 'bold', fontSize: 16 }}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-    </SafeAreaView>
+    </View>
   )
 }
 
-
 const styles = StyleSheet.create({
-  runsSelectionCard: {
-    backgroundColor: colors.card,
-    borderRadius: 22,
-    marginHorizontal: 12,
-    marginTop: 18,
-    marginBottom: 18,
-    paddingVertical: 18,
-    paddingHorizontal: 16,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.16,
-    shadowRadius: 10,
-    elevation: 8,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.accent,
-  },
-  runsSelectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.accent,
-    marginBottom: 10,
-    letterSpacing: 1.1,
-    textTransform: 'uppercase',
-  },
-  runsButtonGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 12,
-    marginBottom: 12,
-  },
-  extraButtonRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 10,
-    marginTop: 2,
-  },
-
-  elegantPlayerCard: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    marginVertical: 10,
-    marginHorizontal: 14,
-    padding: 18,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.16,
-    shadowRadius: 10,
-    elevation: 4,
-    borderWidth: 1,
-    borderColor: colors.accent,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  elegantSectionTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.accent,
-    marginTop: 18,
-    marginBottom: 10,
-    textAlign: 'left',
-    letterSpacing: 1.2,
-  },
-  elegantPlayerName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.textPrimary,
-    marginBottom: 3,
-  },
-  elegantStatText: {
-    fontSize: 15,
-    color: colors.textSecondary,
-    marginRight: 12,
-    fontWeight: '500',
-  },
-  elegantStrikeRate: {
-    fontSize: 14,
-    color: colors.accent,
-    fontWeight: '600',
-    marginLeft: 10,
-  },
-  elegantHighlight: {
-    color: colors.accent,
-    fontWeight: 'bold',
-  },
-  elegantBowlerHighlight: {
-    color: colors.success,
-    fontWeight: 'bold',
-  },
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,
@@ -900,11 +640,8 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   fullScorecardButtonText: {
-    color: colors.textPrimary,
-    fontWeight: 'bold',
-    textShadowColor: '#000000DD',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    color: colors.textDark,
+    fontWeight: '700',
     fontSize: 17,
     letterSpacing: 1.2,
     fontFamily: 'System',
@@ -1047,12 +784,9 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   startInningsButtonText: {
-    color: colors.textPrimary,
-    fontWeight: 'bold',
-    textShadowColor: '#000000DD',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    color: colors.textDark,
     fontSize: 20,
+    fontWeight: 'bold',
     textAlign: 'center',
     letterSpacing: 1,
   },
@@ -1070,12 +804,9 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   runButtonText: {
-    color: colors.textPrimary,
-    fontWeight: 'bold',
-    textShadowColor: '#000000DD',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    color: colors.textDark,
     fontSize: 18,
+    fontWeight: '700',
     letterSpacing: 1.1,
     fontFamily: 'System',
   },
@@ -1126,13 +857,10 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   selectionButtonText: {
-    color: colors.textPrimary,
-    fontWeight: 'bold',
-    textShadowColor: '#000000DD',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    color: colors.textDark,
     fontSize: 16,
     textAlign: 'center',
+    fontWeight: '600',
   },
   disabledButton: {
     backgroundColor: colors.card,

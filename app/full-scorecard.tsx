@@ -19,6 +19,23 @@ import { colors } from './theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function FullScorecard() {
+  // Defensive: fallback for missing teams or players
+  const {
+  teams,
+  battingTeam,
+  bowlingTeam,
+  ballHistory,
+  firstInningsBallHistory,
+  startNewMatch,
+  matchCompleted,
+} = useGameStore();
+  if (!teams || teams.length < 2 || !teams[0]?.players || !teams[1]?.players) {
+    return (
+      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+        <Text style={{ color: colors.accent, fontSize: 18 }}>Loading full scorecard...</Text>
+      </SafeAreaView>
+    );
+  }
   // ...existing code...
   const handleDownloadScorecard = async () => {
     const formatDate = (date: Date) => {
@@ -195,14 +212,7 @@ export default function FullScorecard() {
   };
 
   // Debug: log histories
-  const {
-    teams,
-    battingTeam,
-    bowlingTeam,
-    ballHistory,
-    firstInningsBallHistory,
-    startNewMatch,
-  } = useGameStore();
+  
   console.log('[FullScorecard] ballHistory:', ballHistory);
   console.log('[FullScorecard] firstInningsBallHistory:', firstInningsBallHistory);
 
@@ -380,14 +390,13 @@ export default function FullScorecard() {
           'Second Innings'
         )}
 
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity style={styles.exportButton} onPress={handleDownloadScorecard}>
-          <Text style={styles.buttonText}>Download Scorecard</Text>
-        </TouchableOpacity>
-        {/* <TouchableOpacity style={styles.exportButton} onPress={handleNewMatch}>
-          <Text style={styles.buttonText}>New Match</Text>
-        </TouchableOpacity> */}
-      </View>
+      {matchCompleted && (
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity style={styles.exportButton} onPress={handleDownloadScorecard}>
+            <Text style={styles.buttonText}>Download Scorecard</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </ScrollView>
   );
 }
