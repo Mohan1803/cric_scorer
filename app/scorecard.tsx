@@ -137,7 +137,6 @@ export default function Scorecard() {
     if (currentInningsNumber === 1 && inningsShouldEnd && !awaitingSecondInningsStart) {
       setAwaitingSecondInningsStart(true);
       Alert.alert('Innings Over', 'First innings has ended. Ready to start second innings.');
-      startNewInnings();
     }
   }, [ballHistory]);
 
@@ -540,7 +539,7 @@ export default function Scorecard() {
           />
         )}
 
-        {currentInningsNumber === 1 && totalCompletedOvers >= totalOvers && awaitingSecondInningsStart && (
+        {currentInningsNumber === 1 && awaitingSecondInningsStart && (
           <TouchableOpacity style={styles.startInningsButton} onPress={startNewInnings}>
             <Text style={styles.startInningsButtonText}>Start Second Innings</Text>
           </TouchableOpacity>
