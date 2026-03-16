@@ -126,6 +126,17 @@ export default function Scorecard() {
     }
   }, [matchCompleted, pathname]);
 
+  // Reset local state when a new innings starts
+  useEffect(() => {
+    if (ballHistory.length === 0) {
+      setShowNewBowlerSelection(false);
+      setShowNewBatsmanSelection(false);
+      setShowExtraRunsModal(false);
+      setShowWicketModal(false);
+      setModalVisible(false);
+    }
+  }, [ballHistory.length, currentInningsNumber]);
+
   useEffect(() => {
     const battingTeamPlayers = battingTeamObj?.players || [];
     const maxWickets = battingTeamPlayers.length - 1;

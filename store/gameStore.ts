@@ -193,6 +193,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       initialNonStriker: null,
       oversData: [], // <-- Reset oversData for second innings
       currentInningsNumber: 2, // <-- Ensure second innings logic works
+      batsmanToReplace: null,
+      showBatsmanSelectModal: false,
     });
     const after = get();
     console.log('AFTER second innings:', {
