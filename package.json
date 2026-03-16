@@ -9,8 +9,8 @@
     "lint": "expo lint",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "build:apk": "eas build --platform android --profile preview",
-    "build:android": "eas build --platform android --profile production"
+    "apk": "cd android && gradlew.bat assembleRelease",
+    "apk:debug": "cd android && gradlew.bat assembleDebug"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.0.2",
