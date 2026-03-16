@@ -86,7 +86,7 @@ export default function Scorecard() {
 
   const runsNeeded = target !== null ? target - totalScore + 1 : null;
   const ballsRemaining = totalOvers * 6 - ballHistory.filter(ball => !ball.isExtra || (ball.isExtra && (ball.extraType !== 'bye' && ball.extraType !== 'lb'))).length;
-  
+
   // Calculate run rates and scores
   const currentRunRate = legalDeliveries.length > 0
     ? (totalScore / (legalDeliveries.length / 6)).toFixed(2)
@@ -337,7 +337,7 @@ export default function Scorecard() {
           <Text style={styles.sectionTitle}>Batting</Text>
           {battingTeamObj?.players
             .filter(player =>
-              (striker && player.name === striker.name) || 
+              (striker && player.name === striker.name) ||
               (nonStriker && player.name === nonStriker.name)
             )
             .map((player, index) => (
