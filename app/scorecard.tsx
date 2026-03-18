@@ -301,7 +301,7 @@ export default function Scorecard() {
                 <Text style={styles.runRateText}>CRR: {currentRunRate}</Text>
                 {requiredRunRate !== null && (
                   parseFloat(requiredRunRate) > parseFloat(currentRunRate) ? (
-                    <Text
+                    <Animated.Text
                       style={[
                         styles.runRateText,
                         styles.rrrWarning,
@@ -309,7 +309,7 @@ export default function Scorecard() {
                       ]}
                     >
                       RRR: {requiredRunRate}
-                    </Text>
+                    </Animated.Text>
                   ) : (
                     <Text style={styles.runRateText}>RRR: {requiredRunRate}</Text>
                   )
@@ -375,7 +375,7 @@ export default function Scorecard() {
         <View style={styles.statsContainer}>
           <Text style={styles.sectionTitle}>Bowling</Text>
           {bowlingTeamObj?.players
-            .filter(player => player.ballsBowled > 0)
+            .filter(player => currentBowler?.name === player.name || player.ballsBowled > 0)
             .slice(0, 1)
             .map((player, index) => (
               <View key={index} style={styles.playerStats}>
