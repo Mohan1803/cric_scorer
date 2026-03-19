@@ -426,38 +426,47 @@ export default function Scorecard() {
 
         {!showNewBowlerSelection && !showNewBatsmanSelection && (
           <View style={styles.controls}>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10 }}>
+            <Text style={styles.controlGroupTitle}>Runs</Text>
+            <View style={styles.controlRow}>
               {[0, 1, 2, 3, 4, 6].map(runs => (
                 <TouchableOpacity key={runs} style={styles.runButton} onPress={() => handleRun(runs)}>
                   <Text style={styles.runButtonText}>{runs}</Text>
                 </TouchableOpacity>
               ))}
-              <TouchableOpacity style={[styles.runButton, styles.wicketButton]} onPress={handleWicket}>
-                <Text style={styles.runButtonText}>Wicket</Text>
+            </View>
+            
+            <Text style={styles.controlGroupTitle}>Extras</Text>
+            <View style={styles.controlRow}>
+              <TouchableOpacity style={[styles.extraBtn, styles.wideButton]} onPress={() => handleExtra('wide')}>
+                <Text style={styles.extraBtnText}>Wide</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.runButton, styles.wideButton]} onPress={() => handleExtra('wide')}>
-                <Text style={styles.runButtonText}>Wide</Text>
+              <TouchableOpacity style={[styles.extraBtn, styles.noBallButton]} onPress={() => handleExtra('no-ball')}>
+                <Text style={styles.extraBtnText}>No Ball</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.runButton, styles.noBallButton]} onPress={() => handleExtra('no-ball')}>
-                <Text style={styles.runButtonText}>No Ball</Text>
+              <TouchableOpacity style={[styles.extraBtn, styles.wideButton]} onPress={() => handleExtra('lb')}>
+                <Text style={styles.extraBtnText}>Leg Byes</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.runButton, styles.wideButton]} onPress={() => handleExtra('lb')}>
-                <Text style={styles.runButtonText}>Leg Byes</Text>
+              <TouchableOpacity style={[styles.extraBtn, styles.wideButton]} onPress={() => handleExtra('bye')}>
+                <Text style={styles.extraBtnText}>Byes</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.runButton, styles.wideButton]} onPress={() => handleExtra('bye')}>
-                <Text style={styles.runButtonText}>Byes</Text>
+            </View>
+
+            <Text style={styles.controlGroupTitle}>Actions</Text>
+            <View style={styles.controlRow}>
+              <TouchableOpacity style={[styles.actionBtn, styles.wicketButton]} onPress={handleWicket}>
+                <Text style={styles.actionBtnText}>Wicket</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.runButton, styles.undoButton]} onPress={() => {
+              <TouchableOpacity style={[styles.actionBtn, styles.swapButton]} onPress={swapBatsmen}>
+                <Text style={styles.actionBtnText}>Swap</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.actionBtn, styles.undoButton]} onPress={() => {
                 if (previousStriker) {
                   undoBatsmanSelection();
                 } else {
                   undoLastBall();
                 }
               }}>
-                <Text style={styles.runButtonText}>Undo</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.runButton, styles.swapButton]} onPress={swapBatsmen}>
-                <Text style={styles.runButtonText}>Swap</Text>
+                <Text style={styles.actionBtnText}>Undo</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -889,4 +898,47 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     elevation: 12,
   },
+  controlGroupTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    marginTop: 8,
+    marginBottom: 6,
+    marginLeft: 4,
+  },
+  controlRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  extraBtn: {
+    backgroundColor: colors.cardAlt,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    flexGrow: 1,
+    alignItems: 'center',
+  },
+  extraBtnText: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  actionBtn: {
+    backgroundColor: colors.cardAlt,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    flexGrow: 1,
+    alignItems: 'center',
+  },
+  actionBtnText: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+  }
 });
