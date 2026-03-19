@@ -28,6 +28,7 @@ export default function FullScorecard() {
   firstInningsBallHistory,
   startNewMatch,
   matchCompleted,
+  currentInningsNumber,
 } = useGameStore();
   if (!teams || teams.length < 2 || !teams[0]?.players || !teams[1]?.players) {
     return (
@@ -120,10 +121,15 @@ export default function FullScorecard() {
       return html;
     }
 
-    const firstInningsBatting = teams[0];
-    const firstInningsBowling = teams[1];
-    const secondInningsBatting = teams[1];
-    const secondInningsBowling = teams[0];
+    const firstInningsBattingTeamName = currentInningsNumber === 1 ? battingTeam : bowlingTeam;
+    const firstInningsBowlingTeamName = currentInningsNumber === 1 ? bowlingTeam : battingTeam;
+    const secondInningsBattingTeamName = currentInningsNumber === 2 ? battingTeam : bowlingTeam;
+    const secondInningsBowlingTeamName = currentInningsNumber === 2 ? bowlingTeam : battingTeam;
+
+    const firstInningsBatting = teams.find(t => t.name === firstInningsBattingTeamName);
+    const firstInningsBowling = teams.find(t => t.name === firstInningsBowlingTeamName);
+    const secondInningsBatting = teams.find(t => t.name === secondInningsBattingTeamName);
+    const secondInningsBowling = teams.find(t => t.name === secondInningsBowlingTeamName);
     // Always export both innings: firstInningsBallHistory for first, ballHistory for second (if available)
     const firstInningsBalls = firstInningsBallHistory.length > 0 ? firstInningsBallHistory : ballHistory;
     const secondInningsBalls = firstInningsBallHistory.length > 0 ? ballHistory : [];
@@ -216,17 +222,10 @@ export default function FullScorecard() {
   console.log('[FullScorecard] ballHistory:', ballHistory);
   console.log('[FullScorecard] firstInningsBallHistory:', firstInningsBallHistory);
 
-  // Always show both innings, regardless of currentInningsNumber
-  const firstInningsTeam = useMemo(
-    () => teams.find(team => team.name === battingTeam),
-    [teams, battingTeam]
-  );
-  const secondInningsTeam = useMemo(
-    () => teams.find(team => team.name === bowlingTeam),
-    [teams, bowlingTeam]
-  );
-
-
+  const firstInningsBattingTeamName = currentInningsNumber === 1 ? battingTeam : bowlingTeam;
+  const firstInningsBowlingTeamName = currentInningsNumber === 1 ? bowlingTeam : battingTeam;
+  const secondInningsBattingTeamName = currentInningsNumber === 2 ? battingTeam : bowlingTeam;
+  const secondInningsBowlingTeamName = currentInningsNumber === 2 ? bowlingTeam : battingTeam;
 
   const showToast = (msg: string) => ToastAndroid.show(msg, ToastAndroid.SHORT);
 
@@ -373,20 +372,20 @@ export default function FullScorecard() {
     <ScrollView contentContainerStyle={styles.container}>
 
       {/* Robust innings rendering: */}
-      {/* First Innings: Always use teams[0] as batting team, teams[1] as bowling team */}
-      {teams.length >= 2 && renderInnings(
+      {/* First Innings */}
+      {teams.length >= 2 && firstInningsBattingTeamName && firstInningsBowlingTeamName && renderInnings(
         firstInningsBallHistory.length > 0 ? firstInningsBallHistory : ballHistory,
-        teams[0].name,
-        teams[1].name,
+        firstInningsBattingTeamName,
+        firstInningsBowlingTeamName,
         'First Innings'
       )}
 
-      {/* Second Innings: Always use teams[1] as batting team, teams[0] as bowling team */}
-      {teams.length >= 2 && firstInningsBallHistory.length > 0 &&
+      {/* Second Innings */}
+      {teams.length >= 2 && firstInningsBallHistory.length > 0 && secondInningsBattingTeamName && secondInningsBowlingTeamName &&
         renderInnings(
           ballHistory,
-          teams[1].name,
-          teams[0].name,
+          secondInningsBattingTeamName,
+          secondInningsBowlingTeamName,
           'Second Innings'
         )}
 

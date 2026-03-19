@@ -398,13 +398,16 @@ export const useGameStore = create<GameState>((set, get) => ({
     const isAllOut = wickets >= ((state.teams.find((t) => t.name === state.battingTeam)?.players.length ?? 11) - 1);
     const oversDone = Math.floor(newLegalBalls / 6) >= state.totalOvers;
 
+    let updates: Partial<GameState> = { teams: updatedTeams, ballHistory: newBallHistory, oversData };
+
     if (state.currentInningsNumber === 1 && (isAllOut || oversDone)) {
-      set({
-        target: score,
-        firstInningsBallHistory: [...newBallHistory],
-        awaitingSecondInningsStart: true,
-      });
+      updates.target = score;
+      updates.firstInningsBallHistory = [...newBallHistory];
+      updates.awaitingSecondInningsStart = true;
     }
+
+    let matchCompletedNow = false;
+    let alertMessage = '';
 
     if (state.currentInningsNumber === 2 && state.target !== null) {
       const secondInningsOversDone = Math.floor(newLegalBalls / 6) >= state.totalOvers;
@@ -413,21 +416,26 @@ export const useGameStore = create<GameState>((set, get) => ({
       const isInningsComplete = isTargetAchieved || isAllOut || secondInningsOversDone;
 
       if (isInningsComplete && !state.matchCompleted) {
-        set({ matchCompleted: true });
+        matchCompletedNow = true;
+        updates.matchCompleted = true;
 
         if (isTargetAchieved) {
-          alert(`${state.battingTeam} wins by ${10 - wickets} wicket(s)!`);
+          alertMessage = `${state.battingTeam} wins by ${10 - wickets} wicket(s)!`;
         } else if (isTied) {
-          alert(`The match is tied!`);
+          alertMessage = `The match is tied!`;
         } else {
           const runMargin = state.target - score;
-          alert(`${state.bowlingTeam} wins by ${runMargin} run(s)!`);
+          alertMessage = `${state.bowlingTeam} wins by ${runMargin} run(s)!`;
         }
-        router.push('/full-scorecard');
       }
     }
 
-    set({ teams: updatedTeams, ballHistory: newBallHistory, oversData });
+    set(updates);
+
+    if (matchCompletedNow) {
+      alert(alertMessage);
+      router.push('/full-scorecard');
+    }
   },
 
   undoLastBall: () => {
