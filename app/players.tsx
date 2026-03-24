@@ -66,7 +66,7 @@ export default function PlayersEntry() {
     const validTeam1 = team1Players.filter(p => p.name.trim());
     const validTeam2 = team2Players.filter(p => p.name.trim());
 
-    if (validTeam1.length !== 11 || validTeam2.length !== 11) {
+    if (validTeam1.length < 11 || validTeam2.length < 11) {
       Alert.alert('Invalid Players', 'Each team must have minimum 11 players.');
       return;
     }
@@ -258,9 +258,9 @@ const styles = StyleSheet.create({
   },
   activeTabText: {
     color: colors.textPrimary,
-    
-    
-    
+
+
+
   },
   inputRow: {
     marginBottom: 18,
@@ -288,9 +288,9 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontWeight: '900',
     letterSpacing: 0.15,
-    
-    
-    
+
+
+
   },
   clearBtn: {
     position: 'absolute',
@@ -315,9 +315,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '900',
     letterSpacing: 0.12,
-    
-    
-    
+
+
+
     textTransform: 'uppercase',
   },
   continueBtn: {
@@ -338,9 +338,9 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 0.22,
     textTransform: 'uppercase',
-    
-    
-    
+
+
+
   },
   progressBarContainer: {
     marginBottom: 18,
@@ -356,9 +356,9 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: colors.textSecondary,
     letterSpacing: 0.12,
-    
-    
-    
+
+
+
   },
   progressTrack: {
     height: 10,
