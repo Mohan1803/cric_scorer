@@ -427,11 +427,11 @@ const styles = StyleSheet.create({
   headerText: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: colors.textPrimary,
+    color: colors.textDark,
   },
   oversText: {
     fontSize: 18,
-    color: colors.textSecondary,
+    color: colors.textDark,
     marginTop: 5,
   },
   section: {

@@ -305,6 +305,7 @@ export const useGameStore = create<GameState>((set, get) => ({
             fours: player.fours + (isStriker && record.extraType !== 'wide' && isFour ? 1 : 0),
             sixes: player.sixes + (isStriker && isSix ? 1 : 0),
             status: isOut ? 'out' : player.status,
+            isOut: isOut ? true : player.isOut,
           };
         }
 
