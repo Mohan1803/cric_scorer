@@ -118,7 +118,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   firstInningsBallHistory: [],
   totalOvers: 0,
   secondInningsOver: 0,
-  
+
   target: null,
   matchDate: new Date(),
   matchCompleted: false,
@@ -228,7 +228,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       previousStriker: null,
     });
   },
-  
+
 
 
   checkDuplicateName: (teamIndex: any, name: any) => {
@@ -237,6 +237,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       (p: any) => p.name.toLowerCase() === name.toLowerCase()
     ) || false;
   },
+
+
+
 
   updateScore: (record: any) => {
     const state = get();
@@ -251,7 +254,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     // Calculate the current over number based on legal deliveries
     const currentOverNumber = Math.floor(legalDeliveries / 6);
-    
+
     // Track overs correctly
     let updatedOversData = [...state.oversData];
     let lastOver = updatedOversData[updatedOversData.length - 1];
@@ -339,9 +342,9 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
 
     // Final updates object
-    let finalUpdates: Partial<GameState> = { 
-      teams: updatedTeams, 
-      ballHistory: newBallHistory, 
+    let finalUpdates: Partial<GameState> = {
+      teams: updatedTeams,
+      ballHistory: newBallHistory,
       oversData: updatedOversData,
       striker: tempStriker,
       nonStriker: tempNonStriker
@@ -364,7 +367,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       const prevStriker = state.striker ? { ...state.striker } : null;
       const prevNonStriker = state.nonStriker ? { ...state.nonStriker } : null;
       const prevTeams = JSON.parse(JSON.stringify(state.teams));
-      
+
       finalUpdates.undoStack = [
         ...state.undoStack,
         {
@@ -524,5 +527,5 @@ export const useGameStore = create<GameState>((set, get) => ({
     set(finalUpdates);
   },
 
-  
+
 }));
