@@ -34,8 +34,8 @@ export default function Scorecard() {
         return true;
       };
 
-      BackHandler.addEventListener('hardwareBackPress', onBackPress);
-      return () => BackHandler.removeEventListener('hardwareBackPress', onBackPress);
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
     }, [router])
   );
   const {
@@ -73,10 +73,10 @@ export default function Scorecard() {
   const [extraType, setExtraType] = useState<'wide' | 'no-ball' | 'lb' | 'bye'>('wide');
   const [showConfetti, setShowConfetti] = useState(false);
   const [celebrationText, setCelebrationText] = useState<string | null>(null);
-  const [wicketAnimation, setWicketAnimation] = useState<{type: 'golden' | 'duck' | 'normal', score: number, name: string} | null>(null);
+  const [wicketAnimation, setWicketAnimation] = useState<{ type: 'golden' | 'duck' | 'normal', score: number, name: string } | null>(null);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const soundRef = useRef<Audio.Sound | null>(null);
-  
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(-width)).current;
   const scaleAnim = useRef(new Animated.Value(0)).current;
@@ -170,15 +170,15 @@ export default function Scorecard() {
         await soundRef.current.unloadAsync();
       }
 
-      const soundSource = runs === 4 
-        ? require('../assets/audio/FOUR.mp3') 
+      const soundSource = runs === 4
+        ? require('../assets/audio/FOUR.mp3')
         : require('../assets/audio/SIX.mp3');
 
       const { sound } = await Audio.Sound.createAsync(
         soundSource,
         { shouldPlay: true }
       );
-      
+
       soundRef.current = sound;
       setIsAudioPlaying(true);
 
@@ -217,12 +217,12 @@ export default function Scorecard() {
   const handleRun = (runs: number) => {
     if (!striker || !currentBowler) return;
     updateScore({ runs, isExtra: false, isNoBall: false, batsmanName: striker.name, bowlerName: currentBowler.name, isWicket: false });
-    
+
     if (runs === 4 || runs === 6) {
       setCelebrationText(runs === 6 ? 'MASSIVE SIX!' : 'FANTASTIC FOUR!');
       setShowConfetti(true);
       playCelebrationSound(runs);
-      
+
       Animated.sequence([
         Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 50, friction: 3 }),
         Animated.delay(2000),
@@ -258,14 +258,14 @@ export default function Scorecard() {
 
   const handleWicketConfirm = (wicketType: string, runOutBatsman?: string, runOutRuns?: number) => {
     if (!striker || !currentBowler) return;
-    const outBatsman = runOutBatsman ? 
-      (runOutBatsman === striker.name ? striker : nonStriker) : 
+    const outBatsman = runOutBatsman ?
+      (runOutBatsman === striker.name ? striker : nonStriker) :
       striker;
 
     if (outBatsman) {
       const isGolden = (outBatsman.balls === 0 && (wicketType !== 'run-out')) || (outBatsman.balls === 1 && outBatsman.runs === 0);
       const isDuck = outBatsman.runs === 0;
-      
+
       setWicketAnimation({
         type: isGolden ? 'golden' : (isDuck ? 'duck' : 'normal'),
         score: outBatsman.runs,
@@ -296,7 +296,7 @@ export default function Scorecard() {
 
   const selectNewBatsman = (player: typeof striker) => {
     if (!player) return;
-    
+
     // Determine which end to replace
     const isReplacingNonStriker = batsmanToReplace === 'non-striker';
     const otherPlayer = isReplacingNonStriker ? striker : nonStriker;
@@ -335,9 +335,9 @@ export default function Scorecard() {
       <>
         {showConfetti && (
           <View style={StyleSheet.absoluteFill} pointerEvents="none">
-            <ConfettiCannon 
-              count={200} 
-              origin={{x: width/2, y: -20}} 
+            <ConfettiCannon
+              count={200}
+              origin={{ x: width / 2, y: -20 }}
               fadeOut={true}
               fallSpeed={3000}
             />
@@ -346,15 +346,16 @@ export default function Scorecard() {
                 {isAudioPlaying ? (
                   <View style={styles.cheerleaderContainer}>
                     {[1, 2, 3].map((_, i) => (
-                      <Animated.Image 
-                        key={i} 
+                      <Animated.Image
+                        key={i}
                         source={require('../assets/images/cheerleader.png')}
                         style={[
                           styles.cheerImage,
-                          { 
+                          {
                             transform: [
                               { translateY: cheerBounceAnim },
-                              { rotate: cheerRotateAnim.interpolate({
+                              {
+                                rotate: cheerRotateAnim.interpolate({
                                   inputRange: [-1, 1],
                                   outputRange: ['-15deg', '15deg']
                                 })
@@ -396,8 +397,8 @@ export default function Scorecard() {
               </Text>
               <View style={styles.wicketInfoCard}>
                 <Text style={styles.wicketInfoTitle}>
-                  {wicketAnimation.type === 'golden' ? 'GOLDEN DUCK!' : 
-                   wicketAnimation.type === 'duck' ? 'OUT FOR DUCK!' : 'OUT!'}
+                  {wicketAnimation.type === 'golden' ? 'GOLDEN DUCK!' :
+                    wicketAnimation.type === 'duck' ? 'OUT FOR DUCK!' : 'OUT!'}
                 </Text>
                 <Text style={styles.wicketInfoName}>{wicketAnimation.name}</Text>
                 <Text style={styles.wicketInfoScore}>{wicketAnimation.score} Runs</Text>
@@ -412,8 +413,8 @@ export default function Scorecard() {
   return (
     <View style={styles.safeArea}>
       <BroadcastTicker />
-      
-      <ScrollView 
+
+      <ScrollView
         stickyHeaderIndices={[1]}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
@@ -451,17 +452,17 @@ export default function Scorecard() {
           )}
 
           <View style={styles.headerSecondary}>
-             <Text style={styles.partnershipText}>
-               Partnership: <Text style={{color: colors.accentSecondary}}>{partnership.runs} ({partnership.balls})</Text>
-             </Text>
-             <TouchableOpacity style={styles.miniBtn} onPress={() => setModalVisible(true)}>
-                <Text style={styles.miniBtnText}>Overs</Text>
-                <ChevronRight size={14} color={colors.accent} />
-             </TouchableOpacity>
+            <Text style={styles.partnershipText}>
+              Partnership: <Text style={{ color: colors.accentSecondary }}>{partnership.runs} ({partnership.balls})</Text>
+            </Text>
+            <TouchableOpacity style={styles.miniBtn} onPress={() => setModalVisible(true)}>
+              <Text style={styles.miniBtnText}>Overs</Text>
+              <ChevronRight size={14} color={colors.accent} />
+            </TouchableOpacity>
           </View>
         </LinearGradient>
 
-        <View style={{ height: 4 }} /> 
+        <View style={{ height: 4 }} />
 
         {/* Live Match Stats */}
         <View style={styles.matchStatsCard}>
@@ -481,22 +482,22 @@ export default function Scorecard() {
               </View>
             ))}
           </View>
-          
+
           <View style={styles.statsDivider} />
 
           <View style={styles.statsBowling}>
             <View style={styles.playerRow}>
-               <View style={styles.playerNameCol}>
-                  <Text style={styles.bowlerLabel}>{currentBowler?.name || 'Bowler'} *</Text>
-               </View>
-               <View style={styles.playerRunsCol}>
-                  <Text style={styles.bowlerStatsText}>
-                    {currentBowler?.wickets}-{currentBowler?.runsGiven}
-                  </Text>
-                  <Text style={styles.bowlerOversText}>
-                    ({Math.floor((currentBowler?.ballsBowled || 0) / 6)}.{(currentBowler?.ballsBowled || 0) % 6})
-                  </Text>
-               </View>
+              <View style={styles.playerNameCol}>
+                <Text style={styles.bowlerLabel}>{currentBowler?.name || 'Bowler'} *</Text>
+              </View>
+              <View style={styles.playerRunsCol}>
+                <Text style={styles.bowlerStatsText}>
+                  {currentBowler?.wickets}-{currentBowler?.runsGiven}
+                </Text>
+                <Text style={styles.bowlerOversText}>
+                  ({Math.floor((currentBowler?.ballsBowled || 0) / 6)}.{(currentBowler?.ballsBowled || 0) % 6})
+                </Text>
+              </View>
             </View>
             <Text style={styles.econText}>
               Econ: {currentBowler?.ballsBowled ? (currentBowler.runsGiven / (currentBowler.ballsBowled / 6)).toFixed(1) : '0.0'}
@@ -516,9 +517,9 @@ export default function Scorecard() {
                 ball.isExtra && styles.extraBall
               ]}>
                 <Text style={styles.ballCircleText}>
-                  {ball.isWicket ? 'W' : 
-                   ball.isExtra ? (ball.extraType === 'wide' ? 'wd' : ball.extraType === 'no-ball' ? 'nb' : 'lb') : 
-                   ball.runs}
+                  {ball.isWicket ? 'W' :
+                    ball.isExtra ? (ball.extraType === 'wide' ? 'wd' : ball.extraType === 'no-ball' ? 'nb' : 'lb') :
+                      ball.runs}
                 </Text>
               </View>
             ))}
@@ -530,13 +531,13 @@ export default function Scorecard() {
           <View style={styles.controlsSection}>
             <View style={styles.runGrid}>
               {[0, 1, 2, 3, 4, 6].map(runs => (
-                <TouchableOpacity 
-                  key={runs} 
+                <TouchableOpacity
+                  key={runs}
                   style={[
-                    styles.gridBtn, 
+                    styles.gridBtn,
                     (runs === 4 || runs === 6) && styles.boundaryGridBtn,
                     isAudioPlaying && styles.playerDisabled
-                  ]} 
+                  ]}
                   onPress={() => handleRun(runs)}
                   disabled={isAudioPlaying}
                 >
@@ -552,9 +553,9 @@ export default function Scorecard() {
                 { label: 'LB', type: 'lb' },
                 { label: 'Byes', type: 'bye' }
               ].map((item) => (
-                <TouchableOpacity 
-                  key={item.label} 
-                  style={[styles.extraBtnNew, isAudioPlaying && styles.playerDisabled]} 
+                <TouchableOpacity
+                  key={item.label}
+                  style={[styles.extraBtnNew, isAudioPlaying && styles.playerDisabled]}
                   onPress={() => handleExtra(item.type as any)}
                   disabled={isAudioPlaying}
                 >
@@ -564,25 +565,25 @@ export default function Scorecard() {
             </View>
 
             <View style={styles.mainActionsRow}>
-              <TouchableOpacity 
-                style={[styles.wicketBtnNew, isAudioPlaying && styles.playerDisabled]} 
+              <TouchableOpacity
+                style={[styles.wicketBtnNew, isAudioPlaying && styles.playerDisabled]}
                 onPress={handleWicket}
                 disabled={isAudioPlaying}
               >
                 <Text style={styles.wicketBtnNewText}>Wicket</Text>
               </TouchableOpacity>
-              
+
               <View style={styles.secondaryActions}>
-                <TouchableOpacity 
-                  style={[styles.actionIconBtn, isAudioPlaying && styles.playerDisabled]} 
+                <TouchableOpacity
+                  style={[styles.actionIconBtn, isAudioPlaying && styles.playerDisabled]}
                   onPress={swapBatsmen}
                   disabled={isAudioPlaying}
                 >
                   <ArrowRightLeft size={20} color={colors.textSecondary} />
                   <Text style={styles.actionIconText}>Swap</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.actionIconBtn, isAudioPlaying && styles.playerDisabled]} 
+                <TouchableOpacity
+                  style={[styles.actionIconBtn, isAudioPlaying && styles.playerDisabled]}
                   onPress={undoLastBall}
                   disabled={isAudioPlaying}
                 >
@@ -591,7 +592,7 @@ export default function Scorecard() {
                 </TouchableOpacity>
               </View>
             </View>
-            
+
             <TouchableOpacity style={styles.fullScorecardLink} onPress={() => router.push('/full-scorecard')}>
               <Text style={styles.fullScorecardLinkText}>View Full Scorecard</Text>
               <ChevronRight size={18} color={colors.accent} />
@@ -605,8 +606,8 @@ export default function Scorecard() {
             <Text style={styles.selectionHeading}>Next Bowler</Text>
             <ScrollView style={styles.selectionList}>
               {bowlingTeamObj?.players.map((player, idx) => (
-                <TouchableOpacity 
-                  key={idx} 
+                <TouchableOpacity
+                  key={idx}
                   style={[styles.playerSelectItem, player.name === currentBowler?.name && styles.playerDisabled]}
                   onPress={() => selectNewBowler(player)}
                   disabled={player.name === currentBowler?.name}
@@ -625,8 +626,8 @@ export default function Scorecard() {
             <Text style={styles.selectionHeading}>New Batsman</Text>
             <ScrollView style={styles.selectionList}>
               {getAvailableBatsmen().map((player, idx) => (
-                <TouchableOpacity 
-                  key={idx} 
+                <TouchableOpacity
+                  key={idx}
                   style={styles.playerSelectItem}
                   onPress={() => selectNewBatsman(player)}
                 >
@@ -650,13 +651,13 @@ export default function Scorecard() {
       <ExtraRunsModal visible={showExtraRunsModal} onClose={() => setShowExtraRunsModal(false)} onSelectRuns={handleExtraRuns} extraType={extraType} />
       <OversModal visible={modalVisible} onClose={() => setModalVisible(false)} />
       {striker && nonStriker && (
-        <WicketModal 
-          visible={showWicketModal} 
-          onClose={() => setShowWicketModal(false)} 
-          onConfirm={handleWicketConfirm} 
-          strikerName={striker.name} 
-          nonStrikerName={nonStriker.name} 
-          outBatsmen={battingTeamObj?.players.filter(p => p.isOut || p.status === 'out').map(p => p.name) || []} 
+        <WicketModal
+          visible={showWicketModal}
+          onClose={() => setShowWicketModal(false)}
+          onConfirm={handleWicketConfirm}
+          strikerName={striker.name}
+          nonStrikerName={nonStriker.name}
+          outBatsmen={battingTeamObj?.players.filter(p => p.isOut || p.status === 'out').map(p => p.name) || []}
         />
       )}
 
@@ -1160,4 +1161,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 2,
   },
-});
+});
