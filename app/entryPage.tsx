@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { getMatchData } from './firebaseService';
 import * as Print from 'expo-print';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView } from 'react-native';
 import { colors } from './theme';
 import { router } from 'expo-router';
 import { useGameStore } from '../store/gameStore';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Trophy, Users, Hash, Settings2, Shield, Calendar } from 'lucide-react-native';
 
 export default function TeamEntry() {
   const [team1Name, setTeam1Name] = useState('');
@@ -145,7 +147,7 @@ export default function TeamEntry() {
       { name: team2Name, players: [] },
     ]);
     setTotalOvers(numOvers);
-    
+
     router.push('/players');
   };
 
@@ -168,68 +170,93 @@ export default function TeamEntry() {
   };
 
   return (
-    <>
-      <View style={styles.container}>
-        <Text style={styles.title}>Download Previous Match Scorecard</Text>
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Match Name</Text>
-          <TextInput
-            style={styles.input}
-            value={downloadMatchName}
-            onChangeText={setDownloadMatchName}
-            placeholder="e.g. TeamA_TeamB_2025-05-05"
-            placeholderTextColor={colors.textSecondary}
-            maxLength={50}
-          />
+    <View style={styles.container}>
+      <LinearGradient
+        colors={[colors.background, colors.surface]}
+        style={StyleSheet.absoluteFill}
+      />
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.header}>
+          <LinearGradient
+            colors={[colors.accent, colors.accentSecondary]}
+            style={styles.iconBadge}
+          >
+            <Trophy size={32} color={colors.textPrimary} />
+          </LinearGradient>
+          <Text style={styles.headerTitle}>Match Setup</Text>
+          <Text style={styles.headerSubtitle}>Configure your match details below</Text>
         </View>
-        <TouchableOpacity style={styles.button} onPress={handleDownloadMatch} disabled={downloading}>
-          <Text style={styles.buttonText}>{downloading ? 'Downloading...' : 'Download Scorecard PDF'}</Text>
-        </TouchableOpacity>
-        <View style={{ height: 20 }} />
-        <Text style={styles.title}>Enter Match Details</Text>
-      
-      <View style={styles.inputContainer}>
-        <Text style={styles.label}>Team 1 Name</Text>
-        <TextInput
-          style={styles.input}
-          value={team1Name}
-          onChangeText={setTeam1Name}
-          placeholder="Enter team 1 name"
-          placeholderTextColor={colors.textSecondary}
-          maxLength={30}
-        />
-      </View>
 
-      <View style={styles.inputContainer}>
-        <Text style={styles.label}>Team 2 Name</Text>
-        <TextInput
-          style={styles.input}
-          value={team2Name}
-          onChangeText={setTeam2Name}
-          placeholder="Enter team 2 name"
-          placeholderTextColor={colors.textSecondary}
-          maxLength={30}
-        />
-      </View>
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Settings2 size={20} color={colors.accent} />
+            <Text style={styles.cardTitle}>Match Details</Text>
+          </View>
 
-      <View style={styles.inputContainer}>
-        <Text style={styles.label}>Number of Overs</Text>
-        <TextInput
-          style={styles.input}
-          value={overs}
-          onChangeText={setOvers}
-          placeholder="Enter number of overs"
-          placeholderTextColor={colors.textSecondary}
-          keyboardType="numeric"
-          maxLength={2}
-        />
-      </View>
+          <View style={styles.inputGroup}>
+            <View style={styles.labelRow}>
+              <Users size={16} color={colors.textSecondary} />
+              <Text style={styles.label}>Team 1 Name</Text>
+            </View>
+            <TextInput
+              style={styles.input}
+              value={team1Name}
+              onChangeText={setTeam1Name}
+              // placeholder="e.g. Royal Challengers"
+              // placeholderTextColor="rgba(148, 163, 184, 0.4)"
+              maxLength={30}
+            />
+          </View>
 
-      <TouchableOpacity style={styles.button} onPress={handleContinue}>
-        <Text style={styles.buttonText}>Continue</Text>
-      </TouchableOpacity>
-      </View>
-    </>
+          <View style={styles.inputGroup}>
+            <View style={styles.labelRow}>
+              <Users size={16} color={colors.textSecondary} />
+              <Text style={styles.label}>Team 2 Name</Text>
+            </View>
+            <TextInput
+              style={styles.input}
+              value={team2Name}
+              onChangeText={setTeam2Name}
+              // placeholder="e.g. Mumbai Indians"
+              // placeholderTextColor="rgba(148, 163, 184, 0.4)"
+              maxLength={30}
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <View style={styles.labelRow}>
+              <Hash size={16} color={colors.textSecondary} />
+              <Text style={styles.label}>Number of Overs</Text>
+            </View>
+            <TextInput
+              style={styles.input}
+              value={overs}
+              onChangeText={setOvers}
+              placeholder="e.g. 20"
+              placeholderTextColor="rgba(148, 163, 184, 0.4)"
+              keyboardType="numeric"
+              maxLength={2}
+            />
+          </View>
+
+          <TouchableOpacity activeOpacity={0.8} style={styles.button} onPress={handleContinue}>
+            <LinearGradient
+              colors={[colors.accent, colors.accentAlt]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.buttonGradient}
+            >
+              <Text style={styles.buttonText}>Continue to Players</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.footerInfo}>
+          <Shield size={16} color={colors.textSecondary} />
+          <Text style={styles.footerText}>Secure scoring environment active</Text>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -237,46 +264,122 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    padding: 20,
     backgroundColor: colors.background,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 30,
-    textAlign: 'center',
-    color: colors.accent,
+  scrollContent: {
+    padding: 24,
+    paddingTop: 60,
   },
-  inputContainer: {
+  header: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  iconBadge: {
+    width: 80,
+    height: 80,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 20,
+    elevation: 10,
+    shadowColor: colors.accent,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
+  },
+  headerTitle: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    letterSpacing: -0.5,
+  },
+  headerSubtitle: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    marginTop: 8,
+  },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginLeft: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  inputGroup: {
+    marginBottom: 24,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    marginLeft: 4,
   },
   label: {
-    fontSize: 16,
-    marginBottom: 8,
-    color: colors.textDark,
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginLeft: 8,
   },
   input: {
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    padding: 12,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 16,
+    padding: 16,
     fontSize: 16,
-    backgroundColor: colors.surface,
     color: colors.textPrimary,
+    fontWeight: '500',
   },
   button: {
-    backgroundColor: colors.accent,
-    padding: 15,
-    borderRadius: 8,
+    marginTop: 12,
+    borderRadius: 16,
+    overflow: 'hidden',
+    elevation: 8,
+    shadowColor: colors.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+  },
+  buttonGradient: {
+    paddingVertical: 18,
     alignItems: 'center',
-    marginTop: 20,
+    justifyContent: 'center',
   },
   buttonText: {
     color: colors.textPrimary,
     fontSize: 18,
-    fontWeight: 'bold',
-    
-    
-    
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  footerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 40,
+    opacity: 0.6,
+  },
+  footerText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginLeft: 8,
+    fontWeight: '500',
   },
 });

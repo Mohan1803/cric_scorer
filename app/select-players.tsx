@@ -3,8 +3,9 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Dimensions
 import { router } from 'expo-router';
 import { useGameStore } from '../store/gameStore';
 import { colors } from './theme';
-import { User, Shield, Target, ChevronRight, CheckCircle2, Circle } from 'lucide-react-native';
+import { User, Shield, Target, ChevronRight, CheckCircle2, Circle, ChevronLeft } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
@@ -123,15 +124,22 @@ export default function SelectPlayersScreen() {
   const currentSelection = roleTab === 'striker' ? selectedStriker : (roleTab === 'nonStriker' ? selectedNonStriker : selectedBowler);
 
   return (
-    <View style={styles.container}>
-      <LinearGradient colors={[colors.background, colors.surface]} style={styles.headerBG}>
-        <View style={styles.headerContent}>
-          <Text style={styles.title}>Match Setup</Text>
-          <Text style={styles.subtitle}>
-            {roleTab === 'bowler' ? `Bowling: ${bowlingTeam}` : `Batting: ${battingTeam}`}
-          </Text>
-        </View>
-      </LinearGradient>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <View style={styles.topHeader}>
+        <TouchableOpacity 
+          style={styles.headerBackButton} 
+          onPress={() => router.back()}
+        >
+          <ChevronLeft color={colors.accent} size={28} />
+          <Text style={styles.headerBackText}>Back</Text>
+        </TouchableOpacity>
+      </View>
+      <View style={styles.container}>
+      <View style={styles.topInfo}>
+        <Text style={styles.subtitle}>
+          {roleTab === 'bowler' ? `Bowling: ${bowlingTeam}` : `Batting: ${battingTeam}`}
+        </Text>
+      </View>
 
       <StepIndicator />
 
@@ -156,9 +164,9 @@ export default function SelectPlayersScreen() {
               >
                 <View style={[styles.avatar, isSelected && styles.avatarSelected]}>
                   {isSelected ? (
-                    <CheckCircle2 size={20} color="#fff" />
+                    <CheckCircle2 size={24} color="#fff" />
                   ) : (
-                    <Text style={styles.avatarText}>{player.name.charAt(0)}</Text>
+                    <User size={28} color={colors.textSecondary} />
                   )}
                 </View>
                 <Text style={[styles.playerName, isSelected && styles.playerNameSelected]} numberOfLines={2}>
@@ -174,8 +182,9 @@ export default function SelectPlayersScreen() {
           })}
         </View>
       </ScrollView>
+    </View>
 
-      <View style={styles.footer}>
+    <View style={styles.footer}>
         <SelectionSummary />
         <TouchableOpacity 
           style={[styles.continueButton, (!selectedStriker || !selectedNonStriker || !selectedBowler) && styles.continueButtonDisabled]} 
@@ -185,7 +194,7 @@ export default function SelectPlayersScreen() {
           <ChevronRight size={24} color={colors.textDark} />
         </TouchableOpacity>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -194,21 +203,27 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  headerBG: {
-    paddingTop: 60,
-    paddingBottom: 30,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
+  topHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: colors.background,
   },
-  headerContent: {
+  headerBackButton: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: colors.text,
-    letterSpacing: 1,
+  headerBackText: {
+    color: colors.accent,
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  topInfo: {
+    paddingTop: 10,
+    paddingBottom: 10,
+    alignItems: 'center',
   },
   subtitle: {
     fontSize: 16,
@@ -240,7 +255,7 @@ const styles = StyleSheet.create({
   },
   stepCircleActive: {
     borderColor: colors.accent,
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    backgroundColor: 'rgba(6, 182, 212, 0.1)',
   },
   stepLabel: {
     marginTop: 8,
@@ -287,7 +302,7 @@ const styles = StyleSheet.create({
   },
   playerCardSelected: {
     borderColor: colors.accent,
-    backgroundColor: 'rgba(16, 185, 129, 0.05)',
+    backgroundColor: 'rgba(6, 182, 212, 0.05)',
   },
   playerCardDisabled: {
     opacity: 0.4,

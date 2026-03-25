@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { useGameStore } from '../store/gameStore';
 import { colors } from './theme';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Trophy } from 'lucide-react-native';
+import { Trophy, ChevronLeft } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
 
@@ -18,16 +18,20 @@ export default function TossScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <LinearGradient colors={[colors.background, colors.surface]} style={styles.headerBG}>
-        <View style={styles.headerContent}>
-          <View style={styles.iconContainer}>
-            <Trophy size={32} color={colors.accent} />
-          </View>
-          <Text style={styles.title}>The Toss</Text>
-          <Text style={styles.subtitle}>Who won the coin flip?</Text>
-        </View>
-      </LinearGradient>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <View style={styles.topHeader}>
+        <TouchableOpacity 
+          style={styles.headerBackButton} 
+          onPress={() => router.back()}
+        >
+          <ChevronLeft color={colors.accent} size={28} />
+          <Text style={styles.headerBackText}>Back</Text>
+        </TouchableOpacity>
+      </View>
+      <View style={styles.container}>
+      <View style={styles.topInfo}>
+        <Text style={styles.subtitle}>Who won the coin flip?</Text>
+      </View>
 
       <View style={styles.content}>
         {teams.map((team, index) => (
@@ -51,8 +55,9 @@ export default function TossScreen() {
             </LinearGradient>
           </TouchableOpacity>
         ))}
+        </View>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -61,12 +66,26 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  headerBG: {
-    paddingTop: 80,
-    paddingBottom: 40,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
+  topHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: colors.background,
+  },
+  headerBackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerBackText: {
+    color: colors.accent,
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  topInfo: {
+    paddingTop: 10,
+    paddingBottom: 20,
     alignItems: 'center',
   },
   headerContent: {
@@ -76,12 +95,12 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    backgroundColor: 'rgba(6, 182, 212, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 15,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.2)',
+    borderColor: 'rgba(6, 182, 212, 0.2)',
   },
   title: {
     fontSize: 32,

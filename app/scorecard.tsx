@@ -1,5 +1,7 @@
-import { useEffect, useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Animated, Easing, Dimensions } from 'react-native';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Animated, Easing, Dimensions, BackHandler } from 'react-native';
+import { Audio } from 'expo-av';
+import { useFocusEffect } from '@react-navigation/native';
 import { colors } from './theme';
 import BroadcastTicker from './BroadcastTicker';
 import { useRouter, usePathname } from 'expo-router';
@@ -9,13 +11,33 @@ import ExtraRunsModal from '../components/ExtraRunsModal';
 import WicketModal from '../components/WicketModal';
 import OversModal from '../components/OversModal';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronRight, RotateCcw, ArrowRightLeft, UserCircle2 } from 'lucide-react-native';
+import { ChevronRight, RotateCcw, ArrowRightLeft, UserCircle2, Zap } from 'lucide-react-native';
+import ConfettiCannon from 'react-native-confetti-cannon';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 export default function Scorecard() {
   const router = useRouter();
   const pathname = usePathname();
+
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        Alert.alert(
+          'Confirm Exit',
+          'You cannot go back from this page. If you want to close match means press ok else cancel',
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => { } },
+            { text: 'OK', onPress: () => router.replace('/entryPage') }
+          ]
+        );
+        return true;
+      };
+
+      BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => BackHandler.removeEventListener('hardwareBackPress', onBackPress);
+    }, [router])
+  );
   const {
     teams,
     striker,
@@ -49,6 +71,18 @@ export default function Scorecard() {
   const [showWicketModal, setShowWicketModal] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [extraType, setExtraType] = useState<'wide' | 'no-ball' | 'lb' | 'bye'>('wide');
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [celebrationText, setCelebrationText] = useState<string | null>(null);
+  const [wicketAnimation, setWicketAnimation] = useState<{type: 'golden' | 'duck' | 'normal', score: number, name: string} | null>(null);
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  const soundRef = useRef<Audio.Sound | null>(null);
+  
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(-width)).current;
+  const scaleAnim = useRef(new Animated.Value(0)).current;
+  const cheerBounceAnim = useRef(new Animated.Value(0)).current;
+  const cheerRotateAnim = useRef(new Animated.Value(0)).current;
+  const lastBallCountRef = useRef(ballHistory.length);
 
   const battingTeamObj = teams.find(team => team.name === battingTeam);
   const bowlingTeamObj = teams.find(team => team.name === bowlingTeam);
@@ -101,17 +135,105 @@ export default function Scorecard() {
   useEffect(() => {
     const battingTeamPlayers = battingTeamObj?.players || [];
     const maxWickets = battingTeamPlayers.length - 1;
-    if (currentInningsNumber === 1 && (totalCompletedOvers >= totalOvers || totalWickets >= maxWickets) && !awaitingSecondInningsStart) {
+    const isInningsOver = (totalCompletedOvers >= totalOvers || totalWickets >= maxWickets);
+
+    if (currentInningsNumber === 1 && isInningsOver && !awaitingSecondInningsStart) {
       setAwaitingSecondInningsStart(true);
       Alert.alert('Innings Over', 'First innings has ended. Ready to start second innings.');
     }
-  }, [ballHistory]);
+
+    // Over Completion Check (only if not innings over and not awaiting batsman)
+    const isForward = ballHistory.length > lastBallCountRef.current;
+    lastBallCountRef.current = ballHistory.length;
+
+    if (!isForward) return;
+
+    const lastBall = ballHistory[ballHistory.length - 1];
+    const isLastBallLegal = lastBall && (!lastBall.isExtra || (lastBall.isExtra && (lastBall.extraType === 'bye' || lastBall.extraType === 'lb')));
+
+    if (isLastBallLegal && legalDeliveries.length > 0 && legalDeliveries.length % 6 === 0 && !isInningsOver && !showNewBatsmanSelection) {
+      setShowNewBowlerSelection(true);
+    }
+  }, [ballHistory.length, showNewBatsmanSelection]);
+
+  useEffect(() => {
+    return () => {
+      if (soundRef.current) {
+        soundRef.current.unloadAsync();
+      }
+    };
+  }, []);
+
+  const playCelebrationSound = async (runs: number) => {
+    try {
+      if (soundRef.current) {
+        await soundRef.current.unloadAsync();
+      }
+
+      const soundSource = runs === 4 
+        ? require('../assets/audio/FOUR.mp3') 
+        : require('../assets/audio/SIX.mp3');
+
+      const { sound } = await Audio.Sound.createAsync(
+        soundSource,
+        { shouldPlay: true }
+      );
+      
+      soundRef.current = sound;
+      setIsAudioPlaying(true);
+
+      // Start Cheerleader Animation Loop
+      Animated.parallel([
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(cheerBounceAnim, { toValue: -20, duration: 250, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+            Animated.timing(cheerBounceAnim, { toValue: 0, duration: 250, easing: Easing.in(Easing.quad), useNativeDriver: true })
+          ])
+        ),
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(cheerRotateAnim, { toValue: 1, duration: 500, easing: Easing.linear, useNativeDriver: true }),
+            Animated.timing(cheerRotateAnim, { toValue: -1, duration: 500, easing: Easing.linear, useNativeDriver: true })
+          ])
+        )
+      ]).start();
+
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          setIsAudioPlaying(false);
+          cheerBounceAnim.setValue(0);
+          cheerRotateAnim.setValue(0);
+          sound.unloadAsync();
+          soundRef.current = null;
+        }
+      });
+
+    } catch (error) {
+      console.error('Error playing sound:', error);
+      setIsAudioPlaying(false);
+    }
+  };
 
   const handleRun = (runs: number) => {
     if (!striker || !currentBowler) return;
     updateScore({ runs, isExtra: false, isNoBall: false, batsmanName: striker.name, bowlerName: currentBowler.name, isWicket: false });
-    if (currentOver === 5 && !showNewBowlerSelection) {
-      setShowNewBowlerSelection(true);
+    
+    if (runs === 4 || runs === 6) {
+      setCelebrationText(runs === 6 ? 'MASSIVE SIX!' : 'FANTASTIC FOUR!');
+      setShowConfetti(true);
+      playCelebrationSound(runs);
+      
+      Animated.sequence([
+        Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 50, friction: 3 }),
+        Animated.delay(2000),
+        Animated.timing(fadeAnim, { toValue: 0, duration: 500, useNativeDriver: true })
+      ]).start(() => {
+        setShowConfetti(false);
+        setCelebrationText(null);
+        scaleAnim.setValue(0);
+        fadeAnim.setValue(1);
+      });
+      fadeAnim.setValue(1);
     }
   };
 
@@ -136,6 +258,28 @@ export default function Scorecard() {
 
   const handleWicketConfirm = (wicketType: string, runOutBatsman?: string, runOutRuns?: number) => {
     if (!striker || !currentBowler) return;
+    const outBatsman = runOutBatsman ? 
+      (runOutBatsman === striker.name ? striker : nonStriker) : 
+      striker;
+
+    if (outBatsman) {
+      const isGolden = (outBatsman.balls === 0 && (wicketType !== 'run-out')) || (outBatsman.balls === 1 && outBatsman.runs === 0);
+      const isDuck = outBatsman.runs === 0;
+      
+      setWicketAnimation({
+        type: isGolden ? 'golden' : (isDuck ? 'duck' : 'normal'),
+        score: outBatsman.runs,
+        name: outBatsman.name
+      });
+
+      Animated.sequence([
+        Animated.timing(slideAnim, { toValue: width + 100, duration: 4000, easing: Easing.linear, useNativeDriver: true })
+      ]).start(() => {
+        setWicketAnimation(null);
+        slideAnim.setValue(-200);
+      });
+    }
+
     updateScore({ runs: runOutRuns || 0, isExtra: false, isNoBall: false, batsmanName: runOutBatsman || striker.name, bowlerName: currentBowler.name, isWicket: true, wicketType: wicketType as any, runOutBatsman, runOutRuns });
     setShowWicketModal(false);
     setShowNewBatsmanSelection(true);
@@ -169,11 +313,100 @@ export default function Scorecard() {
       setStriker(player);
     }
     setShowNewBatsmanSelection(false);
+
+    // After batsman is selected, check if we need a new bowler
+    if (legalDeliveries.length > 0 && legalDeliveries.length % 6 === 0) {
+      const battingTeamPlayers = battingTeamObj?.players || [];
+      const maxWickets = battingTeamPlayers.length - 1;
+      const isStillInnings = totalCompletedOvers < totalOvers && totalWickets < maxWickets;
+      if (isStillInnings) {
+        setShowNewBowlerSelection(true);
+      }
+    }
   };
 
   const startNewInnings = () => {
     startSecondInnings();
     router.replace('/select-players');
+  };
+
+  const renderAnimations = () => {
+    return (
+      <>
+        {showConfetti && (
+          <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            <ConfettiCannon 
+              count={200} 
+              origin={{x: width/2, y: -20}} 
+              fadeOut={true}
+              fallSpeed={3000}
+            />
+            {celebrationText && (
+              <View style={styles.celebrationOverlay}>
+                {isAudioPlaying ? (
+                  <View style={styles.cheerleaderContainer}>
+                    {[1, 2, 3].map((_, i) => (
+                      <Animated.Image 
+                        key={i} 
+                        source={require('../assets/images/cheerleader.png')}
+                        style={[
+                          styles.cheerImage,
+                          { 
+                            transform: [
+                              { translateY: cheerBounceAnim },
+                              { rotate: cheerRotateAnim.interpolate({
+                                  inputRange: [-1, 1],
+                                  outputRange: ['-15deg', '15deg']
+                                })
+                              },
+                              { scaleX: i === 1 ? 1.2 : 1 }
+                            ]
+                          }
+                        ]}
+                        resizeMode="contain"
+                      />
+                    ))}
+                  </View>
+                ) : (
+                  <Animated.View style={[
+                    { transform: [{ scale: scaleAnim }], opacity: fadeAnim }
+                  ]}>
+                    <LinearGradient
+                      colors={[colors.accent, colors.accentSecondary]}
+                      style={styles.celebrationBadge}
+                    >
+                      <Zap color="#fff" size={32} />
+                      <Text style={styles.celebrationText}>{celebrationText}</Text>
+                    </LinearGradient>
+                  </Animated.View>
+                )}
+              </View>
+            )}
+          </View>
+        )}
+
+        {wicketAnimation && (
+          <Animated.View style={[
+            styles.wicketAnimationContainer,
+            { transform: [{ translateX: slideAnim }] }
+          ]}>
+            <View style={styles.duckContainer}>
+              <Text style={styles.duckEmoji}>
+                {wicketAnimation.type === 'golden' ? '👑🦆' : (wicketAnimation.type === 'duck' ? '🦆' : '🚶')}
+              </Text>
+              <View style={styles.wicketInfoCard}>
+                <Text style={styles.wicketInfoTitle}>
+                  {wicketAnimation.type === 'golden' ? 'GOLDEN DUCK!' : 
+                   wicketAnimation.type === 'duck' ? 'OUT FOR DUCK!' : 'OUT!'}
+                </Text>
+                <Text style={styles.wicketInfoName}>{wicketAnimation.name}</Text>
+                <Text style={styles.wicketInfoScore}>{wicketAnimation.score} Runs</Text>
+              </View>
+            </View>
+          </Animated.View>
+        )}
+      </>
+    );
   };
 
   return (
@@ -187,7 +420,7 @@ export default function Scorecard() {
       >
         {/* Scoreboard Header */}
         <LinearGradient
-          colors={[colors.surface, colors.background]}
+          colors={[colors.surface, '#111827']}
           style={styles.headerCard}
         >
           <View style={styles.headerTop}>
@@ -200,6 +433,9 @@ export default function Scorecard() {
             </View>
             <View style={styles.headerRight}>
               <Text style={styles.crrText}>CRR: {currentRunRate}</Text>
+              {currentInningsNumber === 1 && projectedScore > 0 && (
+                <Text style={styles.projScoreText}>PROJ: {projectedScore}</Text>
+              )}
               {currentInningsNumber === 2 && requiredRunRate && (
                 <Text style={styles.rrrText}>RRR: {requiredRunRate}</Text>
               )}
@@ -216,7 +452,7 @@ export default function Scorecard() {
 
           <View style={styles.headerSecondary}>
              <Text style={styles.partnershipText}>
-               Partnership: <Text style={{color: colors.accent}}>{partnership.runs} ({partnership.balls})</Text>
+               Partnership: <Text style={{color: colors.accentSecondary}}>{partnership.runs} ({partnership.balls})</Text>
              </Text>
              <TouchableOpacity style={styles.miniBtn} onPress={() => setModalVisible(true)}>
                 <Text style={styles.miniBtnText}>Overs</Text>
@@ -290,14 +526,19 @@ export default function Scorecard() {
         </View>
 
         {/* Controls Section */}
-        {!showNewBowlerSelection && !showNewBatsmanSelection && (
+        {!showNewBowlerSelection && !showNewBatsmanSelection && !awaitingSecondInningsStart && !matchCompleted && (
           <View style={styles.controlsSection}>
             <View style={styles.runGrid}>
               {[0, 1, 2, 3, 4, 6].map(runs => (
                 <TouchableOpacity 
                   key={runs} 
-                  style={[styles.gridBtn, (runs === 4 || runs === 6) && styles.boundaryGridBtn]} 
+                  style={[
+                    styles.gridBtn, 
+                    (runs === 4 || runs === 6) && styles.boundaryGridBtn,
+                    isAudioPlaying && styles.playerDisabled
+                  ]} 
                   onPress={() => handleRun(runs)}
+                  disabled={isAudioPlaying}
                 >
                   <Text style={styles.gridBtnText}>{runs}</Text>
                 </TouchableOpacity>
@@ -305,28 +546,46 @@ export default function Scorecard() {
             </View>
 
             <View style={styles.extraActionsRow}>
-              {['Wide', 'NB', 'LB', 'Byes'].map((type) => (
+              {[
+                { label: 'Wide', type: 'wide' },
+                { label: 'NB', type: 'no-ball' },
+                { label: 'LB', type: 'lb' },
+                { label: 'Byes', type: 'bye' }
+              ].map((item) => (
                 <TouchableOpacity 
-                  key={type} 
-                  style={styles.extraBtnNew} 
-                  onPress={() => handleExtra(type.toLowerCase().replace(' ', '-') as any)}
+                  key={item.label} 
+                  style={[styles.extraBtnNew, isAudioPlaying && styles.playerDisabled]} 
+                  onPress={() => handleExtra(item.type as any)}
+                  disabled={isAudioPlaying}
                 >
-                  <Text style={styles.extraBtnNewText}>{type}</Text>
+                  <Text style={styles.extraBtnNewText}>{item.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
 
             <View style={styles.mainActionsRow}>
-              <TouchableOpacity style={styles.wicketBtnNew} onPress={handleWicket}>
+              <TouchableOpacity 
+                style={[styles.wicketBtnNew, isAudioPlaying && styles.playerDisabled]} 
+                onPress={handleWicket}
+                disabled={isAudioPlaying}
+              >
                 <Text style={styles.wicketBtnNewText}>Wicket</Text>
               </TouchableOpacity>
               
               <View style={styles.secondaryActions}>
-                <TouchableOpacity style={styles.actionIconBtn} onPress={swapBatsmen}>
+                <TouchableOpacity 
+                  style={[styles.actionIconBtn, isAudioPlaying && styles.playerDisabled]} 
+                  onPress={swapBatsmen}
+                  disabled={isAudioPlaying}
+                >
                   <ArrowRightLeft size={20} color={colors.textSecondary} />
                   <Text style={styles.actionIconText}>Swap</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.actionIconBtn} onPress={undoLastBall}>
+                <TouchableOpacity 
+                  style={[styles.actionIconBtn, isAudioPlaying && styles.playerDisabled]} 
+                  onPress={undoLastBall}
+                  disabled={isAudioPlaying}
+                >
                   <RotateCcw size={20} color={colors.textSecondary} />
                   <Text style={styles.actionIconText}>Undo</Text>
                 </TouchableOpacity>
@@ -400,6 +659,8 @@ export default function Scorecard() {
           outBatsmen={battingTeamObj?.players.filter(p => p.isOut || p.status === 'out').map(p => p.name) || []} 
         />
       )}
+
+      {renderAnimations()}
     </View>
   );
 }
@@ -414,16 +675,16 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   headerCard: {
-    margin: 12,
-    padding: 16,
-    borderRadius: 20,
-    elevation: 8,
+    margin: 16,
+    padding: 20,
+    borderRadius: 24,
+    elevation: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 15,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   headerTop: {
     flexDirection: 'row',
@@ -450,8 +711,9 @@ const styles = StyleSheet.create({
   oversCountText: {
     fontSize: 18,
     color: colors.textSecondary,
-    marginLeft: 8,
-    fontWeight: '500',
+    marginLeft: 10,
+    fontWeight: '600',
+    opacity: 0.8,
   },
   headerRight: {
     alignItems: 'flex-end',
@@ -467,18 +729,26 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 2,
   },
+  projScoreText: {
+    fontSize: 14,
+    color: colors.accentYellow,
+    fontWeight: '700',
+    marginTop: 2,
+  },
   targetBanner: {
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginTop: 12,
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    marginTop: 16,
     alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.2)',
   },
   targetBannerText: {
-    color: colors.accent,
+    color: colors.accentSecondary,
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   headerSecondary: {
     flexDirection: 'row',
@@ -497,10 +767,12 @@ const styles = StyleSheet.create({
   miniBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
+    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(6, 182, 212, 0.15)',
   },
   miniBtnText: {
     color: colors.accent,
@@ -511,11 +783,12 @@ const styles = StyleSheet.create({
   matchStatsCard: {
     flexDirection: 'row',
     backgroundColor: colors.surface,
-    marginHorizontal: 12,
-    borderRadius: 16,
-    padding: 12,
+    marginHorizontal: 16,
+    borderRadius: 20,
+    padding: 16,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(255,255,255,0.05)',
+    elevation: 4,
   },
   statsBatting: {
     flex: 1.2,
@@ -538,7 +811,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   activePlayerBg: {
-    backgroundColor: 'rgba(16, 185, 129, 0.05)',
+    backgroundColor: 'rgba(6, 182, 212, 0.08)',
   },
   playerNameCol: {
     flex: 1,
@@ -602,15 +875,16 @@ const styles = StyleSheet.create({
     paddingRight: 20,
   },
   ballCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.cardAlt,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
+    marginRight: 10,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(255,255,255,0.1)',
+    elevation: 2,
   },
   ballCircleText: {
     fontSize: 12,
@@ -624,6 +898,10 @@ const styles = StyleSheet.create({
   boundaryBall: {
     backgroundColor: colors.accent,
     borderColor: colors.accent,
+    shadowColor: colors.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 5,
   },
   extraBall: {
     backgroundColor: colors.accentPurple,
@@ -652,8 +930,9 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   boundaryGridBtn: {
-    backgroundColor: 'rgba(16, 185, 129, 0.05)',
+    backgroundColor: 'rgba(6, 182, 212, 0.08)',
     borderColor: colors.accent,
+    borderWidth: 1.5,
   },
   gridBtnText: {
     fontSize: 20,
@@ -676,8 +955,10 @@ const styles = StyleSheet.create({
   },
   extraBtnNewText: {
     fontSize: 13,
-    color: colors.text,
-    fontWeight: '600',
+    color: colors.textSecondary,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   mainActionsRow: {
     flexDirection: 'row',
@@ -790,5 +1071,93 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
     color: colors.textDark,
-  }
+  },
+  celebrationOverlay: {
+    position: 'absolute',
+    top: height * 0.25,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+  },
+  cheerleaderContainer: {
+    flexDirection: 'row',
+    gap: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(10, 14, 26, 0.8)',
+    padding: 20,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: colors.accent,
+  },
+  cheerImage: {
+    width: 100,
+    height: 140,
+  },
+  celebrationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    borderRadius: 50,
+    gap: 15,
+    elevation: 20,
+    shadowColor: colors.accent,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+  },
+  celebrationText: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  wicketAnimationContainer: {
+    position: 'absolute',
+    top: height * 0.45,
+    height: 120,
+    width: 300,
+    zIndex: 1000,
+  },
+  duckContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+    borderRadius: 20,
+    padding: 12,
+    borderWidth: 2,
+    borderColor: colors.accentWarn,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 15,
+  },
+  duckEmoji: {
+    fontSize: 50,
+    marginRight: 15,
+  },
+  wicketInfoCard: {
+    flex: 1,
+  },
+  wicketInfoTitle: {
+    color: colors.accentWarn,
+    fontSize: 16,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  wicketInfoName: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  wicketInfoScore: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
+  },
 });

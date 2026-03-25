@@ -16,6 +16,8 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useGameStore } from '../store/gameStore';
 import { colors } from './theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { User, Users, Trash2, Plus, CheckCircle2, ChevronRight, ChevronLeft } from 'lucide-react-native';
 
 export default function PlayersEntry() {
   const teams = useGameStore((state) => state.teams);
@@ -126,16 +128,32 @@ export default function PlayersEntry() {
   const renderProgressBar = (teamIndex: number) => {
     const players = teamIndex === 0 ? team1Players : team2Players;
     const filledCount = players.filter(p => p.name.trim()).length;
-    const percent = (filledCount / 11) * 100;
-    const barColor = teamIndex === 0 ? colors.accent : colors.success;
+    const percent = Math.min((filledCount / 11) * 100, 100);
+    const isReady = filledCount >= 11;
 
     return (
-      <View style={styles.progressBarContainer}>
-        <View style={styles.progressTextRow}>
-          <Text style={styles.progressLabel}>{filledCount} / 11 Players Entered</Text>
+      <View style={styles.progressContainer}>
+        <View style={styles.progressHeader}>
+          <View style={styles.progressInfo}>
+            <Users size={16} color={isReady ? colors.success : colors.accent} />
+            <Text style={[styles.progressCount, isReady && { color: colors.success }]}>
+              {filledCount} <Text style={styles.progressTotal}>/ 11 Players</Text>
+            </Text>
+          </View>
+          {isReady && (
+            <View style={styles.readyBadge}>
+              <CheckCircle2 size={12} color={colors.textPrimary} />
+              <Text style={styles.readyText}>READY</Text>
+            </View>
+          )}
         </View>
         <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${percent}%`, backgroundColor: barColor }]} />
+          <LinearGradient
+            colors={isReady ? [colors.success, '#16A34A'] : [colors.accent, colors.accentAlt]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={[styles.progressFill, { width: `${percent}%` }]}
+          />
         </View>
       </View>
     );
@@ -143,35 +161,57 @@ export default function PlayersEntry() {
 
   const renderTeamForm = (teamIndex: number, players: typeof team1Players) => {
     return (
-      <View style={{ marginTop: 20 }}>
+      <View style={styles.formContent}>
         {renderProgressBar(teamIndex)}
 
-        {players.map((p, i) => (
-          <View key={i} style={styles.inputRow}>
-            <View style={styles.inputWrapper}>
-              <TextInput
-                ref={(ref) => {
-                  if (!inputRefs.current[teamIndex]) inputRefs.current[teamIndex] = [];
-                  inputRefs.current[teamIndex][i] = ref!;
-                }}
-                placeholder={`Player ${i + 1}`}
-                style={styles.input}
-                value={p.name}
-                onChangeText={(text) => updatePlayerName(teamIndex, i, text)}
-                returnKeyType="next"
-                onSubmitEditing={() => focusInput(teamIndex, i + 1)}
-                placeholderTextColor={colors.textSecondary}
-              />
-              <TouchableOpacity onPress={() => handleDelete(teamIndex, i)} style={styles.clearBtn}>
-                <Text style={{ fontSize: 14, color: colors.error }}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ))}
+        <View style={styles.playersList}>
+          {players.map((p, i) => (
+            <View key={i} style={styles.playerCard}>
+              <View style={styles.cardMain}>
+                <View style={styles.inputSection}>
+                  <TextInput
+                    ref={(ref) => {
+                      if (!inputRefs.current[teamIndex]) inputRefs.current[teamIndex] = [];
+                      inputRefs.current[teamIndex][i] = ref!;
+                    }}
+                    placeholder="Player Name"
+                    style={styles.playerInput}
+                    value={p.name}
+                    onChangeText={(text) => updatePlayerName(teamIndex, i, text)}
+                    returnKeyType="next"
+                    onSubmitEditing={() => focusInput(teamIndex, i + 1)}
+                    placeholderTextColor="rgba(148, 163, 184, 0.4)"
+                  />
+                </View>
 
-        {players.length < 11 && (
-          <TouchableOpacity onPress={() => handleAddPlayer(teamIndex)} style={styles.addBtn}>
-            <Text style={styles.addText}>+ Add Player</Text>
+                {p.name.trim().length > 0 && (
+                  <View style={styles.checkIcon}>
+                    <CheckCircle2 size={16} color={colors.success} />
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  onPress={() => handleDelete(teamIndex, i)}
+                  style={styles.deleteIconButton}
+                  activeOpacity={0.7}
+                >
+                  <Trash2 size={18} color={colors.accentWarn} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        {players.length < 15 && (
+          <TouchableOpacity
+            onPress={() => handleAddPlayer(teamIndex)}
+            style={styles.addPlayerCard}
+            activeOpacity={0.8}
+          >
+            <View style={styles.addPlayerInner}>
+              <Plus size={20} color={colors.accent} />
+              <Text style={styles.addPlayerText}>Add Player</Text>
+            </View>
           </TouchableOpacity>
         )}
       </View>
@@ -179,25 +219,54 @@ export default function PlayersEntry() {
   };
 
   return (
-    <>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <View style={styles.topHeader}>
+        <TouchableOpacity 
+          style={styles.headerBackButton} 
+          onPress={() => router.back()}
+        >
+          <ChevronLeft color={colors.accent} size={28} />
+          <Text style={styles.headerBackText}>Back</Text>
+        </TouchableOpacity>
+      </View>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={styles.tabs}>
-          <TouchableOpacity
-            style={[styles.tabBtn, activeTab === 0 && styles.activeTab]}
-            onPress={() => setActiveTab(0)}
-          >
-            <Text style={[styles.tabText, activeTab === 0 && styles.activeTabText]}>
-              {teams[0]?.name || 'Team A'}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tabBtn, activeTab === 1 && styles.activeTab]}
-            onPress={() => setActiveTab(1)}
-          >
-            <Text style={[styles.tabText, activeTab === 1 && styles.activeTabText]}>
-              {teams[1]?.name || 'Team B'}
-            </Text>
-          </TouchableOpacity>
+        <View style={styles.segmentedControlContainer}>
+          <View style={styles.segmentedControl}>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={[styles.segment, activeTab === 0 && styles.activeSegment]}
+              onPress={() => setActiveTab(0)}
+            >
+              {activeTab === 0 && (
+                <LinearGradient
+                  colors={[colors.accent, colors.accentAlt]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={StyleSheet.absoluteFill}
+                />
+              )}
+              <Text style={[styles.segmentText, activeTab === 0 && styles.activeSegmentText]}>
+                {teams[0]?.name || 'Team 1'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={[styles.segment, activeTab === 1 && styles.activeSegment]}
+              onPress={() => setActiveTab(1)}
+            >
+              {activeTab === 1 && (
+                <LinearGradient
+                  colors={[colors.accent, colors.accentAlt]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={StyleSheet.absoluteFill}
+                />
+              )}
+              <Text style={[styles.segmentText, activeTab === 1 && styles.activeSegmentText]}>
+                {teams[1]?.name || 'Team 2'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <ScrollView contentContainerStyle={styles.container}>
@@ -205,170 +274,224 @@ export default function PlayersEntry() {
 
           {team1Players.filter(p => p.name.trim()).length >= 11 &&
             team2Players.filter(p => p.name.trim()).length >= 11 && (
-              <TouchableOpacity style={styles.continueBtn} onPress={handleContinue}>
-                <Text style={styles.continueText}>Continue</Text>
+              <TouchableOpacity activeOpacity={0.8} style={styles.continueBtn} onPress={handleContinue}>
+                <LinearGradient
+                  colors={[colors.accent, colors.accentAlt]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.continueGradient}
+                >
+                  <Text style={styles.continueText}>Continue to Toss</Text>
+                </LinearGradient>
               </TouchableOpacity>
             )}
         </ScrollView>
       </KeyboardAvoidingView>
-    </>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
 
   container: {
-    padding: 24,
-    paddingBottom: 48,
+    padding: 16,
+    paddingBottom: 40,
     backgroundColor: colors.background,
     minHeight: '100%',
   },
-  tabs: {
+  topHeader: {
     flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: colors.background,
+  },
+  headerBackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerBackText: {
+    color: colors.accent,
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  segmentedControlContainer: {
+    paddingTop: 10,
+    paddingHorizontal: 16,
+    backgroundColor: colors.background,
+  },
+  segmentedControl: {
+    flexDirection: 'row',
+    height: 44,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+  },
+  segment: {
+    flex: 1,
+    borderRadius: 9,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 28,
-    backgroundColor: 'transparent',
-    marginBottom: 8,
+    overflow: 'hidden',
   },
-  tabBtn: {
-    paddingVertical: 12,
-    paddingHorizontal: 32,
-    borderRadius: 24,
-    marginHorizontal: 6,
-    backgroundColor: colors.surface,
-    elevation: 0,
-    shadowOpacity: 0,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-  },
-  activeTab: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-    shadowColor: colors.accent,
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    elevation: 5,
-  },
-  tabText: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: colors.textSecondary,
-    letterSpacing: 0.2,
-  },
-  activeTabText: {
-    color: colors.textPrimary,
-
-
-
-  },
-  inputRow: {
-    marginBottom: 18,
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    position: 'relative',
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    shadowColor: colors.shadow,
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  input: {
-    flex: 1,
-    backgroundColor: 'transparent',
-    borderColor: colors.border,
-    borderWidth: 1.2,
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    fontSize: 16,
-    color: colors.textPrimary,
-    fontWeight: '900',
-    letterSpacing: 0.15,
-
-
-
-  },
-  clearBtn: {
-    position: 'absolute',
-    right: 10,
-    padding: 6,
-    borderRadius: 16,
-    backgroundColor: colors.surface,
-  },
-  addBtn: {
-    backgroundColor: colors.accent,
-    paddingVertical: 13,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 12,
-    shadowColor: colors.accentAlt,
-    shadowOpacity: 0.10,
-    shadowRadius: 8,
+  activeSegment: {
     elevation: 3,
+    shadowColor: colors.accent,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
   },
-  addText: {
+  segmentText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  activeSegmentText: {
     color: colors.textPrimary,
-    fontSize: 18,
-    fontWeight: '900',
-    letterSpacing: 0.12,
-
-
-
-    textTransform: 'uppercase',
+    fontWeight: '800',
   },
-  continueBtn: {
-    marginTop: 40,
-    backgroundColor: colors.accentAlt,
-    paddingVertical: 21,
-    borderRadius: 18,
-    alignItems: 'center',
-    shadowColor: colors.accentAlt,
-    shadowOpacity: 0.18,
-    shadowRadius: 14,
-    elevation: 7,
-    minWidth: 200,
+  formContent: {
+    marginTop: 16,
   },
-  continueText: {
-    color: '#fff',
-    fontSize: 21,
-    fontWeight: '900',
-    letterSpacing: 0.22,
-    textTransform: 'uppercase',
-
-
-
+  progressContainer: {
+    marginBottom: 16,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
   },
-  progressBarContainer: {
-    marginBottom: 18,
-    marginTop: 2,
-  },
-  progressTextRow: {
+  progressHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 7,
+    alignItems: 'center',
+    marginBottom: 8,
   },
-  progressLabel: {
-    fontSize: 15,
-    fontWeight: '900',
+  progressInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  progressCount: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.accent,
+  },
+  progressTotal: {
+    fontSize: 12,
     color: colors.textSecondary,
-    letterSpacing: 0.12,
-
-
-
+    fontWeight: '500',
+  },
+  readyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.success,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 5,
+    gap: 3,
+  },
+  readyText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: colors.textPrimary,
   },
   progressTrack: {
-    height: 10,
-    backgroundColor: colors.cardAlt,
-    borderRadius: 5,
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 2,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    borderRadius: 5,
-    backgroundColor: colors.accent,
+    borderRadius: 2,
+  },
+  playersList: {
+    gap: 10,
+  },
+  playerCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+    elevation: 1,
+  },
+  cardMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  inputSection: {
+    flex: 1,
+  },
+  playerInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: colors.textPrimary,
+    fontWeight: '600',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+  },
+  checkIcon: {
+    marginRight: 2,
+  },
+  deleteIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: 'rgba(244, 63, 94, 0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(244, 63, 94, 0.1)',
+  },
+  addPlayerCard: {
+    marginTop: 15,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(6, 182, 212, 0.2)',
+    borderStyle: 'dashed',
+    padding: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(6, 182, 212, 0.02)',
+  },
+  addPlayerInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  addPlayerText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.accent,
+  },
+  continueBtn: {
+    marginTop: 32,
+    borderRadius: 16,
+    overflow: 'hidden',
+    elevation: 8,
+    shadowColor: colors.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+  },
+  continueGradient: {
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  continueText: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
 });

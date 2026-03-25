@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Modal, StyleSheet } from 'react-native';
-import ModalSelector from 'react-native-modal-selector';
+import { View, Text, TouchableOpacity, Modal, StyleSheet, Dimensions } from 'react-native';
+import { colors } from '../app/theme';
+import { Shield, User, X } from 'lucide-react-native';
+
+const { width } = Dimensions.get('window');
 
 interface WicketModalProps {
   visible: boolean;
@@ -40,29 +43,33 @@ export default function WicketModal({
     { key: 5, label: 'Hit Wicket' },
   ];
 
-  const runOutOptions = [
-    { key: 0, label: strikerName },
-    { key: 1, label: nonStrikerName },
-  ].filter(option => !outBatsmen.includes(option.label));
-
   return (
-    <Modal animationType="slide" transparent={true} visible={visible} onRequestClose={onClose}>
+    <Modal animationType="fade" transparent={true} visible={visible} onRequestClose={onClose}>
       <View style={styles.centeredView}>
         <View style={styles.modalView}>
-          <Text style={styles.modalTitle}>How Out?</Text>
+          <View style={styles.modalHeader}>
+            <View style={styles.iconCircle}>
+              <Shield size={24} color={colors.accent} />
+            </View>
+            <Text style={styles.modalTitle}>Dismissal</Text>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+              <X size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
 
-          <View style={styles.wicketTypeRow}>
+          <Text style={styles.sectionLabel}>How Out?</Text>
+          <View style={styles.wicketTypeGrid}>
             {wicketOptions.map(option => {
               const value = option.label.toLowerCase().replace(' ', '-');
               const selected = wicketType === value;
               return (
                 <TouchableOpacity
                   key={option.key}
-                  style={[styles.wicketTypeButton, selected && styles.wicketTypeButtonSelected]}
+                  style={[styles.wicketTypeBtn, selected && styles.wicketTypeBtnSelected]}
                   onPress={() => setWicketType(value)}
                   activeOpacity={0.8}
                 >
-                  <Text style={[styles.wicketTypeButtonText, selected && styles.wicketTypeButtonTextSelected]}>
+                  <Text style={[styles.wicketTypeBtnText, selected && styles.wicketTypeBtnTextSelected]}>
                     {option.label}
                   </Text>
                 </TouchableOpacity>
@@ -71,57 +78,68 @@ export default function WicketModal({
           </View>
 
           {wicketType === 'run-out' && (
-            <>
-              <Text style={styles.label}>Which batsman?</Text>
-              <ModalSelector
-                data={runOutOptions}
-                initValue="Select Batsman"
-                onChange={(option) => setRunOutBatsman(option.label)}
-                selectStyle={styles.selector}
-                selectTextStyle={styles.selectorText}
-                optionContainerStyle={styles.optionContainer}
-                optionTextStyle={styles.optionText}
-                cancelStyle={styles.cancelButton}
-                cancelTextStyle={styles.cancelText}
-              />
+            <View style={styles.runOutSection}>
+              <Text style={styles.sectionLabel}>Who got out?</Text>
+              <View style={styles.batsmanSelectionRow}>
+                {[strikerName, nonStrikerName].map((name, idx) => (
+                  <TouchableOpacity
+                    key={name}
+                    style={[
+                      styles.batsmanBtn,
+                      runOutBatsman === name && styles.batsmanBtnSelected
+                    ]}
+                    onPress={() => setRunOutBatsman(name)}
+                  >
+                    <User size={18} color={runOutBatsman === name ? colors.textDark : colors.textSecondary} />
+                    <Text style={[
+                      styles.batsmanBtnText,
+                      runOutBatsman === name && styles.batsmanBtnTextSelected
+                    ]}>
+                      {name}
+                    </Text>
+                    <Text style={styles.batsmanRoleText}>
+                      {idx === 0 ? 'Striker' : 'Non-Striker'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
-              <Text style={styles.label}>Runs completed</Text>
-              <View style={styles.runsContainer}>
+              <Text style={styles.sectionLabel}>Runs Completed</Text>
+              <View style={styles.runsGrid}>
                 {[0, 1, 2, 3].map((runs) => (
                   <TouchableOpacity
                     key={runs}
                     style={[
-                      styles.runButton,
-                      runOutRuns === runs && styles.selectedRun,
+                      styles.runBtn,
+                      runOutRuns === runs && styles.runBtnSelected,
                     ]}
                     onPress={() => setRunOutRuns(runs)}
                   >
-                    <Text
-                      style={[
-                        styles.runButtonText,
-                        runOutRuns === runs && { color: '#fff' },
-                      ]}
-                    >
+                    <Text style={[
+                      styles.runBtnText,
+                      runOutRuns === runs && styles.runBtnTextSelected,
+                    ]}>
                       {runs}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
-            </>
+            </View>
           )}
 
-          <View style={styles.buttonContainer}>
+          <View style={styles.footer}>
             <TouchableOpacity
-              style={[styles.button, styles.confirmButton]}
-              onPress={handleConfirm}
-            >
-              <Text style={styles.buttonText}>Confirm</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.button, styles.cancelButtonMain]}
+              style={styles.cancelAction}
               onPress={onClose}
             >
-              <Text style={styles.buttonText}>Cancel</Text>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.confirmAction}
+              onPress={handleConfirm}
+            >
+              <Text style={styles.confirmText}>Confirm Out</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -131,128 +149,169 @@ export default function WicketModal({
 }
 
 const styles = StyleSheet.create({
-  wicketTypeRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    marginBottom: 18,
-    gap: 10,
-  },
-  wicketTypeButton: {
-    backgroundColor: '#f0f0f0',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    marginHorizontal: 4,
-    marginBottom: 8,
-    borderWidth: 2,
-    borderColor: '#2196F3',
-  },
-  wicketTypeButtonSelected: {
-    backgroundColor: '#2196F3',
-    borderColor: '#2196F3',
-  },
-  wicketTypeButtonText: {
-    color: '#333',
-    fontWeight: 'bold',
-    fontSize: 15,
-  },
-  wicketTypeButtonTextSelected: {
-    color: '#fff',
-  },
   centeredView: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.85)',
   },
   modalView: {
-    backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 20,
+    backgroundColor: colors.surface,
+    borderRadius: 24,
+    padding: 24,
+    width: width * 0.9,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  modalHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    width: '90%',
+    marginBottom: 24,
+  },
+  iconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    color: '#333',
+    fontWeight: '800',
+    color: colors.text,
+    flex: 1,
   },
-  selector: {
-    width: '100%',
+  closeBtn: {
+    padding: 8,
+  },
+  sectionLabel: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 12,
+  },
+  wicketTypeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 24,
+  },
+  wicketTypeBtn: {
+    flexBasis: '31%',
+    backgroundColor: colors.cardAlt,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#2196F3',
-    padding: 15,
-    borderRadius: 8,
+    borderColor: 'rgba(255,255,255,0.05)',
+  },
+  wicketTypeBtnSelected: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  wicketTypeBtnText: {
+    color: colors.textSecondary,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  wicketTypeBtnTextSelected: {
+    color: colors.textDark,
+    fontWeight: '700',
+  },
+  runOutSection: {
+    marginBottom: 24,
+  },
+  batsmanSelectionRow: {
+    flexDirection: 'row',
+    gap: 12,
     marginBottom: 20,
   },
-  selectorText: {
-    color: '#2196F3',
-    fontWeight: 'bold',
+  batsmanBtn: {
+    flex: 1,
+    backgroundColor: colors.cardAlt,
+    padding: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
   },
-  optionContainer: {
-    backgroundColor: '#fff',
+  batsmanBtnSelected: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
-  optionText: {
-    color: '#333',
-    fontSize: 16,
+  batsmanBtnText: {
+    color: colors.textSecondary,
+    fontWeight: '700',
+    fontSize: 14,
+    marginTop: 8,
   },
-  cancelButton: {
-    backgroundColor: '#eee',
-    padding: 10,
+  batsmanBtnTextSelected: {
+    color: colors.textDark,
+  },
+  batsmanRoleText: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.4)',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  runsGrid: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  runBtn: {
+    flex: 1,
+    backgroundColor: colors.cardAlt,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+  },
+  runBtnSelected: {
+    backgroundColor: colors.success,
+    borderColor: colors.success,
+  },
+  runBtnText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.textSecondary,
+  },
+  runBtnTextSelected: {
+    color: '#fff',
+  },
+  footer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  cancelAction: {
+    flex: 1,
+    paddingVertical: 16,
+    alignItems: 'center',
   },
   cancelText: {
-    color: '#F44336',
-    fontWeight: 'bold',
-  },
-  label: {
+    color: colors.textSecondary,
+    fontWeight: '700',
     fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    alignSelf: 'flex-start',
-    color: '#333',
   },
-  runsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 10,
-    marginBottom: 20,
-  },
-  runButton: {
-    backgroundColor: '#f0f0f0',
-    padding: 15,
-    borderRadius: 10,
-    width: 50,
+  confirmAction: {
+    flex: 2,
+    backgroundColor: colors.accentWarn,
+    paddingVertical: 16,
+    borderRadius: 16,
     alignItems: 'center',
+    elevation: 4,
+    shadowColor: colors.accentWarn,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
-  selectedRun: {
-    backgroundColor: '#2196F3',
-  },
-  runButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    gap: 20,
-  },
-  button: {
-    padding: 15,
-    borderRadius: 10,
-    minWidth: 100,
-    alignItems: 'center',
-  },
-  confirmButton: {
-    backgroundColor: '#4CAF50',
-  },
-  cancelButtonMain: {
-    backgroundColor: '#f44336',
-  },
-  buttonText: {
-    color: 'white',
+  confirmText: {
+    color: '#fff',
+    fontWeight: '800',
     fontSize: 16,
-    fontWeight: 'bold',
   },
 });

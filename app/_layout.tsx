@@ -12,11 +12,9 @@ export default function RootLayout() {
     <>
       <Stack
         initialRouteName="index"
-        screenOptions={({ route }) => ({
-          headerShown: !['index', 'entryPage'].includes(route.name),
-          headerTitleAlign: 'center',
-          headerBackVisible: false,
-        })}
+        screenOptions={{
+          headerShown: false,
+        }}
       >
         <Stack.Screen name="index" />
         <Stack.Screen name="teamEntry"

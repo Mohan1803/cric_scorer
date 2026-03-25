@@ -8,13 +8,17 @@ import {
   TouchableOpacity,
   Modal,
   Pressable,
-  ScrollView
+  ScrollView,
+  Platform,
+  Alert,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useGameStore } from '../store/gameStore';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { router } from 'expo-router';
 import { colors } from './theme';
+import { ChevronLeft, Download } from 'lucide-react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -59,7 +63,7 @@ export default function FullScorecard() {
 
     const makeInningsHtml = (label: string, battingTeam: any, bowlingTeam: any, balls: any[]) => {
       if (!battingTeam || !bowlingTeam || balls.length === 0) return '';
-      const totalScore = balls.reduce((sum, ball) => sum + ball.runs + (ball.isExtra ? 1 : 0), 0);
+      const totalScore = balls.reduce((sum, ball) => sum + ball.runs + (ball.isExtra && (ball.extraType === 'wide' || ball.extraType === 'no-ball') ? 1 : 0), 0);
       const totalWickets = balls.filter(ball => ball.isWicket).length;
       const legalBalls = balls.filter(ball => !ball.isExtra).length;
       const totalOvers = Math.floor(legalBalls / 6);
@@ -67,9 +71,9 @@ export default function FullScorecard() {
 
       let wides = 0, noBalls = 0, legByes = 0, byes = 0;
       balls.forEach(ball => {
-        if (ball.extraType === 'wide') wides += ball.runs;
-        if (ball.extraType === 'no ball') noBalls += ball.runs;
-        if (ball.extraType === 'leg bye') legByes += ball.runs;
+        if (ball.extraType === 'wide') wides += (1 + ball.runs);
+        if (ball.extraType === 'no-ball') noBalls += (1 + ball.runs);
+        if (ball.extraType === 'leg bye' || ball.extraType === 'lb') legByes += ball.runs;
         if (ball.extraType === 'bye') byes += ball.runs;
       });
       const extras = wides + noBalls + legByes + byes;
@@ -137,73 +141,127 @@ export default function FullScorecard() {
     const html = `
     <html>
       <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
+          @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
           body {
-            font-family: 'Segoe UI', 'Roboto Mono', 'Consolas', monospace, Arial, sans-serif;
-            margin: 12px;
-            background: #f6f8fa;
-            color: #222;
+            font-family: 'Outfit', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #0A0E1A;
+            color: #FFFFFF;
           }
-          h1, h2, h3 {
-            color: #1847a3;
+          .card {
+            background: #111827;
+            border-radius: 16px;
+            margin-bottom: 24px;
+            overflow: hidden;
+            border: 1px solid rgba(6, 182, 212, 0.2);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+          }
+          .header {
+            background: linear-gradient(135deg, #06B6D4 0%, #0891B2 100%);
+            padding: 24px;
+            text-align: center;
+          }
+          .header h1 {
+            margin: 0;
+            font-size: 28px;
+            color: #0A0E1A;
             font-weight: 700;
-            letter-spacing: 0.5px;
+          }
+          .header p {
+            margin: 8px 0 0;
+            color: rgba(10, 14, 26, 0.8);
+            font-weight: 500;
+          }
+          .innings-title {
+            padding: 16px 24px;
+            background: rgba(6, 182, 212, 0.1);
+            border-bottom: 1px solid rgba(6, 182, 212, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+          .innings-title h2 {
+            margin: 0;
+            font-size: 20px;
+            color: #06B6D4;
+          }
+          .score-label {
+            font-size: 22px;
+            font-weight: 700;
+            color: #FFFFFF;
           }
           table {
-            border-collapse: collapse;
             width: 100%;
-            margin-bottom: 18px;
-            background: #fff;
-            font-size: 14px;
-            box-shadow: 0 2px 8px #e0e6ef44;
-          }
-          th, td {
-            border: 1px solid #b0b6c4;
-            padding: 4px 8px;
-            text-align: center;
-            font-family: 'Roboto Mono', 'Consolas', monospace, Arial, sans-serif;
+            border-collapse: collapse;
+            margin: 16px 0;
           }
           th {
-            background: #e8ebf7;
-            color: #0d1c33;
+            background: rgba(255, 255, 255, 0.05);
+            text-align: left;
+            padding: 12px 16px;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+          }
+          td {
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 14px;
+          }
+          .fow, .extras {
+            padding: 16px 24px;
+            background: rgba(255, 255, 255, 0.02);
             font-size: 13px;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.6;
+          }
+          .section-label {
+            color: #06B6D4;
             font-weight: 600;
-            letter-spacing: 0.3px;
-            border-bottom: 2px solid #1847a3;
+            margin-bottom: 4px;
           }
-          tr:nth-child(even) {
-            background: #f2f4f8;
+          .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 12px;
           }
-          tr:nth-child(odd) {
-            background: #fff;
-          }
-          .stat {
-            font-weight: bold;
-            color: #1847a3;
-          }
-          .section {
-            margin-bottom: 28px;
-          }
-          ul {
-            margin-bottom: 18px;
-          }
-          .empty-innings {
-            color: #b71c1c;
-            font-style: italic;
-            margin-bottom: 20px;
+          .winner-banner {
+            background: rgba(16, 185, 129, 0.1);
+            color: #10B981;
+            padding: 12px;
+            text-align: center;
+            font-weight: 600;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(16, 185, 129, 0.3);
           }
         </style>
       </head>
       <body>
-        <h1>Full Scorecard</h1>
-        ${getMatchMetaHtml()}
-        <div class="section">
-          <h2>First Innings</h2>
-          ${makeInningsHtml('First Innings', firstInningsBatting, firstInningsBowling, firstInningsBalls) || '<div class="empty-innings">No data for this innings.</div>'}
+        <div class="header">
+          <h1>Cric Scorer</h1>
+          <p>${teams?.map(t => t.name).join(' vs ')} • ${formatDate(new Date())}</p>
         </div>
-        <div class="section">
-          <h2>Second Innings</h2>
-          ${makeInningsHtml('Second Innings', secondInningsBatting, secondInningsBowling, secondInningsBalls) || '<div class="empty-innings">No data for this innings.</div>'}
+
+        <div style="padding: 24px 0;">
+          <div class="card">
+            ${makeInningsHtml('First Innings', firstInningsBatting, firstInningsBowling, firstInningsBalls)}
+          </div>
+          
+          <div class="card">
+            ${makeInningsHtml('Second Innings', secondInningsBatting, secondInningsBowling, secondInningsBalls)}
+          </div>
+        </div>
+
+        <div class="footer">
+          Generated by Cric Scorer App
         </div>
       </body>
     </html>
@@ -213,7 +271,11 @@ export default function FullScorecard() {
       const { uri } = await Print.printToFileAsync({ html });
       await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
     } catch (err) {
-      ToastAndroid.show('Failed to export scorecard', ToastAndroid.LONG);
+      if (Platform.OS === 'android') {
+        ToastAndroid.show('Failed to export scorecard', ToastAndroid.LONG);
+      } else {
+        alert('Failed to export scorecard');
+      }
     }
   };
 
@@ -227,11 +289,17 @@ export default function FullScorecard() {
   const secondInningsBattingTeamName = currentInningsNumber === 2 ? battingTeam : bowlingTeam;
   const secondInningsBowlingTeamName = currentInningsNumber === 2 ? bowlingTeam : battingTeam;
 
-  const showToast = (msg: string) => ToastAndroid.show(msg, ToastAndroid.SHORT);
+  const showNotice = (msg: string) => {
+    if (Platform.OS === 'android') {
+      ToastAndroid.show(msg, ToastAndroid.SHORT);
+    } else {
+      alert(msg);
+    }
+  };
 
 
   const handleNewMatch = () => {
-    showToast('Starting new match');
+    showNotice('Starting new match');
     startNewMatch();
     router.replace('/');
   };
@@ -262,7 +330,7 @@ export default function FullScorecard() {
     }
 
     const totalScore = inningsBallHistory.reduce(
-      (sum, ball) => sum + ball.runs + (ball.isExtra ? 1 : 0),
+      (sum, ball) => sum + ball.runs + (ball.isExtra && (ball.extraType === 'wide' || ball.extraType === 'no-ball') ? 1 : 0),
       0
     );
     const totalWickets = inningsBallHistory.filter(ball => ball.isWicket).length;
@@ -272,12 +340,20 @@ export default function FullScorecard() {
 
     return (
       <View style={styles.inningsContainer}>
-        <View style={styles.headerSticky}>
-          <Text style={styles.headerText}>
-            {inningsBattingTeam} {totalScore}/{totalWickets}
-          </Text>
-          <Text style={styles.oversText}>({totalOvers}.{currentBalls} Overs)</Text>
-        </View>
+        <LinearGradient
+          colors={[colors.accent, colors.accentSecondary]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.headerSticky}
+        >
+          <Text style={styles.inningsLabelText}>{inningsLabel}</Text>
+          <View style={styles.scoreRowLarge}>
+            <Text style={styles.headerText}>
+              {inningsBattingTeam} {totalScore}/{totalWickets}
+            </Text>
+            <Text style={styles.oversText}>({totalOvers}.{currentBalls})</Text>
+          </View>
+        </LinearGradient>
 
         {/* Batting Table */}
         <View style={styles.section}>
@@ -350,7 +426,7 @@ export default function FullScorecard() {
             const balls = inningsBallHistory;
             const wickets = balls
               .map((ball, i) => ball.isWicket ? ({
-                runs: balls.slice(0, i + 1).reduce((sum, b) => sum + b.runs + (b.isExtra ? 1 : 0), 0),
+                runs: balls.slice(0, i + 1).reduce((sum, b) => sum + b.runs + (b.isExtra && (b.extraType === 'wide' || b.extraType === 'no-ball') ? 1 : 0), 0),
                 number: balls.filter((b, idx) => b.isWicket && idx <= i).length,
                 batter: ball.batsmanName || '',
                 over: (() => {
@@ -369,7 +445,18 @@ export default function FullScorecard() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <View style={styles.topHeader}>
+        <TouchableOpacity 
+          style={styles.headerBackButton} 
+          onPress={() => router.back()}
+        >
+          <ChevronLeft color={colors.accent} size={28} />
+          <Text style={styles.headerBackText}>Back</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerMainTitle}>Full Scorecard</Text>
+      </View>
+      <ScrollView contentContainerStyle={styles.container}>
 
       {/* Robust innings rendering: */}
       {/* First Innings */}
@@ -396,145 +483,145 @@ export default function FullScorecard() {
           </TouchableOpacity>
         </View>
       )}
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 // === Styles ===
 const styles = StyleSheet.create({
   fowText: {
-    fontStyle: 'italic',
     color: colors.textSecondary,
-    marginVertical: 4,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  inningsLabelText: {
+    color: colors.textDark,
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    opacity: 0.8,
+  },
+  scoreRowLarge: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
+    marginTop: 4,
   },
   container: {
-    padding: 20,
+    padding: 16,
   },
   inningsContainer: {
-    marginBottom: 20,
-    borderRadius: 10,
+    marginBottom: 24,
+    borderRadius: 16,
     backgroundColor: colors.surface,
     overflow: 'hidden',
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(6, 182, 212, 0.1)',
   },
   headerSticky: {
     padding: 20,
-    backgroundColor: colors.accent,
     alignItems: 'center',
-    borderTopLeftRadius: 10,
-    borderTopRightRadius: 10,
   },
   headerText: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: '800',
     color: colors.textDark,
   },
   oversText: {
-    fontSize: 18,
+    fontSize: 16,
     color: colors.textDark,
-    marginTop: 5,
+    opacity: 0.9,
+    fontWeight: '600',
   },
   section: {
-    padding: 15,
+    padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    color: colors.accentAlt,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 12,
+    color: colors.accent,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   tableHeader: {
     flexDirection: 'row',
+    paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingBottom: 10,
-    marginBottom: 10,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
   },
   tableRow: {
     flexDirection: 'row',
-    paddingVertical: 8,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: 'rgba(255, 255, 255, 0.03)',
     alignItems: 'center',
-  },
-  topScorerRow: {
-    backgroundColor: colors.accentAlt,
-  },
-  topBowlerRow: {
-    backgroundColor: colors.success,
   },
   cell: {
     flex: 1,
     textAlign: 'center',
     color: colors.textPrimary,
+    fontSize: 14,
   },
   playerCell: {
     flex: 2,
     textAlign: 'left',
     color: colors.textPrimary,
-  },
-  topScorerBadge: {
-    color: colors.accent,
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  topBowlerBadge: {
-    color: colors.success,
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  notOutBadge: {
-    color: colors.success,
-    fontWeight: 'bold',
-    fontSize: 12,
-  },
-  outBadge: {
-    color: colors.error,
-    fontWeight: 'bold',
-    fontSize: 12,
+    fontWeight: '600',
   },
   buttonContainer: {
-    padding: 15,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 16,
+    paddingBottom: 40,
   },
   exportButton: {
-    backgroundColor: colors.card,
-    padding: 15,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    minWidth: 170,
+    backgroundColor: colors.accent,
+    padding: 18,
+    borderRadius: 12,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
   },
   buttonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+    color: colors.textDark,
+    fontSize: 16,
+    fontWeight: '700',
   },
   emptyText: {
     color: colors.textSecondary,
     textAlign: 'center',
-    marginVertical: 20,
-    fontSize: 16,
+    marginVertical: 24,
+    fontSize: 14,
   },
-  backButton: {
-    position: 'absolute',
-    top: 20,
-    left: 20,
-    backgroundColor: colors.surface,
-    paddingVertical: 8,
+  topHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 16,
-    borderRadius: 8,
-    elevation: 4,
-    zIndex: 20,
+    paddingVertical: 12,
+    backgroundColor: colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
   },
-  backButtonText: {
+  headerBackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerBackText: {
     color: colors.accent,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  headerMainTitle: {
+    flex: 1,
+    textAlign: 'center',
+    marginRight: 40, // Offset for the back button to keep title centered
+    color: colors.textPrimary,
     fontSize: 18,
+    fontWeight: '700',
   },
 });
