@@ -142,6 +142,9 @@ export default function TeamEntry() {
       return;
     }
 
+    const startNewMatch = useGameStore.getState().startNewMatch;
+    startNewMatch();
+
     setTeams([
       { name: team1Name, players: [] },
       { name: team2Name, players: [] },
