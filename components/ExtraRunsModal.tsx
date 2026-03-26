@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Modal, StyleSheet } from 'react-native';
-import { colors } from '../app/theme';
+import { colors, shadows } from '../app/theme';
 
 interface ExtraRunsModalProps {
   visible: boolean;
@@ -57,19 +57,23 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(10, 12, 20, 0.85)',
+    backgroundColor: 'rgba(2, 6, 23, 0.9)', // Obsidian overlay
+  },
+  overCard: {
+    backgroundColor: colors.surfaceDeeper,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   modalView: {
-    backgroundColor: colors.card,
-    borderRadius: 18,
-    padding: 26,
-    alignItems: 'center',
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 8,
+    backgroundColor: colors.surface,
+    borderRadius: 24,
+    padding: 24,
     width: '85%',
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.large,
   },
   modalTitle: {
     fontSize: 22,
@@ -100,6 +104,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 4,
     elevation: 2,
+  },
+  confirmAction: {
+    flex: 2,
+    backgroundColor: colors.accent,
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: colors.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   selectedButton: {
     backgroundColor: colors.accent,

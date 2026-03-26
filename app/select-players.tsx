@@ -1,17 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Dimensions } from 'react-native';
 import { router } from 'expo-router';
 import { useGameStore } from '../store/gameStore';
 import { colors } from './theme';
+import { User, Shield, Target, ChevronRight, CheckCircle2, Circle, ChevronLeft } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+const { width } = Dimensions.get('window');
 
 export default function SelectPlayersScreen() {
-  // Defensive: fallback for missing teams or players
-  const showError = (msg: string) => {
-    Alert.alert('Error', msg, [
-      { text: 'Go Home', onPress: () => router.replace('/entryPage') }
-    ]);
-  };
-
   const teams = useGameStore((state) => state.teams);
   const battingTeam = useGameStore((state) => state.battingTeam);
   const bowlingTeam = useGameStore((state) => state.bowlingTeam);
@@ -23,24 +21,11 @@ export default function SelectPlayersScreen() {
   const battingTeamObj = teams.find(team => team.name === battingTeam);
   const bowlingTeamObj = teams.find(team => team.name === bowlingTeam);
 
-  // Defensive: if teams or players missing, show error and prevent blank page
-  if (!battingTeamObj || !bowlingTeamObj || !battingTeamObj.players || !bowlingTeamObj.players || battingTeamObj.players.length === 0 || bowlingTeamObj.players.length === 0) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
-        <Text style={{ color: colors.accent, fontSize: 18, marginBottom: 16 }}>Team or player data missing. Please restart the match.</Text>
-        <TouchableOpacity style={{ backgroundColor: colors.accent, padding: 16, borderRadius: 12 }} onPress={() => router.replace('/entryPage')}>
-          <Text style={{ color: colors.textPrimary, fontWeight: 'bold', fontSize: 18 }}>Go to Home</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
   const [selectedStriker, setSelectedStriker] = useState<string | null>(null);
   const [selectedNonStriker, setSelectedNonStriker] = useState<string | null>(null);
   const [selectedBowler, setSelectedBowler] = useState<string | null>(null);
   const [roleTab, setRoleTab] = useState<'striker' | 'nonStriker' | 'bowler'>('striker');
 
-  // Reset selections when the component loads (for both innings)
   useEffect(() => {
     setSelectedStriker(null);
     setSelectedNonStriker(null);
@@ -48,156 +33,177 @@ export default function SelectPlayersScreen() {
     setRoleTab('striker');
   }, [currentInningsNumber, battingTeam, bowlingTeam]);
 
-  const handleContinue = () => {
-    if (!selectedStriker || !selectedNonStriker || !selectedBowler) {
-      Alert.alert('Error', 'Please select all players');
-      return;
+  const handleSelect = (playerName: string) => {
+    if (roleTab === 'striker') {
+      if (playerName === selectedNonStriker) {
+        Alert.alert('Selection Error', 'This player is already selected as Non-Striker');
+        return;
+      }
+      setSelectedStriker(playerName);
+      setTimeout(() => setRoleTab('nonStriker'), 200);
+    } else if (roleTab === 'nonStriker') {
+      if (playerName === selectedStriker) {
+        Alert.alert('Selection Error', 'This player is already selected as Striker');
+        return;
+      }
+      setSelectedNonStriker(playerName);
+      setTimeout(() => setRoleTab('bowler'), 200);
+    } else {
+      setSelectedBowler(playerName);
     }
-    if (!battingTeamObj || !bowlingTeamObj || !battingTeamObj.players || !bowlingTeamObj.players) {
-      showError('Team or player data missing. Please restart the match.');
-      return;
-    }
-    const striker = battingTeamObj.players.find(p => p.name === selectedStriker);
-    const nonStriker = battingTeamObj.players.find(p => p.name === selectedNonStriker);
-    const bowler = bowlingTeamObj.players.find(p => p.name === selectedBowler);
-    if (!striker || !nonStriker || !bowler) {
-      showError('Selected player not found in team list. Please re-select.');
-      return;
-    }
-    setStriker(striker);
-    setNonStriker(nonStriker);
-    setCurrentBowler(bowler);
-    router.replace('/scorecard');
   };
 
+  const handleContinue = () => {
+    if (!selectedStriker || !selectedNonStriker || !selectedBowler) {
+      Alert.alert('Incomplete Selection', 'Please select a Striker, Non-Striker, and Bowler to continue.');
+      return;
+    }
+    const striker = battingTeamObj?.players.find(p => p.name === selectedStriker);
+    const nonStriker = battingTeamObj?.players.find(p => p.name === selectedNonStriker);
+    const bowler = bowlingTeamObj?.players.find(p => p.name === selectedBowler);
+    
+    if (striker && nonStriker && bowler) {
+      setStriker(striker);
+      setNonStriker(nonStriker);
+      setCurrentBowler(bowler);
+      router.replace('/scorecard');
+    }
+  };
+
+  const StepIndicator = () => (
+    <View style={styles.stepContainer}>
+      {[
+        { id: 'striker', label: 'Striker', icon: Target },
+        { id: 'nonStriker', label: 'Non-Striker', icon: Shield },
+        { id: 'bowler', label: 'Bowler', icon: User }
+      ].map((step, idx) => {
+        const isActive = roleTab === step.id;
+        const isCompleted = (step.id === 'striker' && selectedStriker) || 
+                            (step.id === 'nonStriker' && selectedNonStriker) ||
+                            (step.id === 'bowler' && selectedBowler);
+        
+        return (
+          <View key={step.id} style={styles.stepItem}>
+            <TouchableOpacity 
+              onPress={() => setRoleTab(step.id as any)}
+              style={[styles.stepCircle, isActive && styles.stepCircleActive]}
+            >
+              {isCompleted ? (
+                <CheckCircle2 size={24} color={colors.accent} />
+              ) : (
+                <step.icon size={20} color={isActive ? colors.accent : colors.textSecondary} />
+              )}
+            </TouchableOpacity>
+            <Text style={[styles.stepLabel, isActive && styles.stepLabelActive]}>{step.label}</Text>
+            {idx < 2 && <View style={styles.stepConnector} />}
+          </View>
+        );
+      })}
+    </View>
+  );
+
+  const SelectionSummary = () => (
+    <View style={styles.summaryBar}>
+      <View style={styles.summaryItem}>
+        <Text style={styles.summaryLabel}>Batting</Text>
+        <Text style={styles.summaryValue} numberOfLines={1}>
+          {selectedStriker || '?'} & {selectedNonStriker || '?'}
+        </Text>
+      </View>
+      <View style={styles.summaryDivider} />
+      <View style={styles.summaryItem}>
+        <Text style={styles.summaryLabel}>Bowling</Text>
+        <Text style={styles.summaryValue} numberOfLines={1}>
+          {selectedBowler || '?'}
+        </Text>
+      </View>
+    </View>
+  );
+
+  const playersToDisplay = roleTab === 'bowler' ? bowlingTeamObj?.players : battingTeamObj?.players;
+  const currentSelection = roleTab === 'striker' ? selectedStriker : (roleTab === 'nonStriker' ? selectedNonStriker : selectedBowler);
 
   return (
-    <View style={{flex: 1, backgroundColor: colors.background}}>
-      {/* Role Tabs */}
-      <View style={{
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginTop: 28,
-        marginBottom: 22,
-        backgroundColor: colors.cardAlt,
-        borderRadius: 32,
-        padding: 6,
-        shadowColor: colors.shadow,
-        shadowOpacity: 0.12,
-        shadowRadius: 12,
-        elevation: 4,
-        alignSelf: 'center',
-        width: '96%',
-        maxWidth: 420,
-      }}>
-        {['striker', 'nonStriker', 'bowler'].map((tab, idx) => (
-          <TouchableOpacity
-            key={tab}
-            style={{
-              flex: 1,
-              paddingVertical: 10,
-              marginHorizontal: 4,
-              borderRadius: 24,
-              backgroundColor: roleTab === tab ? colors.accent : 'transparent',
-              ...(roleTab === tab
-                ? {
-                    elevation: 6,
-                    shadowColor: colors.accentAlt,
-                    shadowOpacity: 0.22,
-                  }
-                : {
-                    borderWidth: 1.5,
-                    borderColor: colors.accent,
-                  }),
-              alignItems: 'center',
-              justifyContent: 'center',
-              minWidth: 90,
-            }}
-            onPress={() => setRoleTab(tab as 'striker' | 'nonStriker' | 'bowler')}
-            accessibilityRole="button"
-            accessibilityLabel={`Select ${tab}`}
-            accessible
-          >
-            <Text style={{
-              color: roleTab === tab ? colors.textPrimary : colors.textSecondary,
-              fontWeight: 'bold',
-              fontSize: 15,
-              letterSpacing: 0.16,
-              textAlign: 'center',
-              paddingHorizontal: 2,
-            }}>
-              {tab === 'striker' ? 'Striker' : tab === 'nonStriker' ? 'Non-Striker' : 'Bowler'}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      <ScrollView style={{ flex: 1, paddingHorizontal: 20 }}>
-        {roleTab === 'striker' && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Select Striker</Text>
-            {battingTeamObj?.players.map((player, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.playerButton,
-                  selectedStriker === player.name && styles.selected,
-                  player.name === selectedNonStriker && styles.disabledButton,
-                ]}
-                onPress={() => setSelectedStriker(player.name)}
-                disabled={player.name === selectedNonStriker}
-              >
-                <Text style={styles.playerButtonText}>{typeof player.name === 'string' ? player.name : (player.name !== undefined && player.name !== null ? String(player.name) : '[No Name]')}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-        {roleTab === 'nonStriker' && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Select Non-Striker</Text>
-            {battingTeamObj?.players.map((player, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.playerButton,
-                  selectedNonStriker === player.name && styles.selected,
-                  player.name === selectedStriker && styles.disabledButton,
-                ]}
-                onPress={() => setSelectedNonStriker(player.name)}
-                disabled={player.name === selectedStriker}
-              >
-                <Text style={styles.playerButtonText}>{typeof player.name === 'string' ? player.name : (player.name !== undefined && player.name !== null ? String(player.name) : '[No Name]')}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-        {roleTab === 'bowler' && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Select Bowler</Text>
-            {bowlingTeamObj?.players.map((player, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.playerButton,
-                  selectedBowler === player.name && styles.selected,
-                ]}
-                onPress={() => setSelectedBowler(player.name)}
-              >
-                <Text style={styles.playerButtonText}>{typeof player.name === 'string' ? player.name : (player.name !== undefined && player.name !== null ? String(player.name) : '[No Name]')}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-        <TouchableOpacity
-          style={styles.continueButton}
-          onPress={handleContinue}
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <View style={styles.topHeader}>
+        <TouchableOpacity 
+          style={styles.headerBackButton} 
+          onPress={() => router.back()}
         >
-          <Text style={styles.continueButtonText}>
-            {currentInningsNumber === 2 ? 'Start Second Innings' : 'Start Match'}
-          </Text>
+          <ChevronLeft color={colors.accent} size={28} />
+          <Text style={styles.headerBackText}>Back</Text>
         </TouchableOpacity>
+      </View>
+      <View style={styles.container}>
+      <View style={styles.topInfo}>
+        <Text style={styles.subtitle}>
+          {roleTab === 'bowler' ? `Bowling: ${bowlingTeam}` : `Batting: ${battingTeam}`}
+        </Text>
+      </View>
+
+      <StepIndicator />
+
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.grid}>
+          {playersToDisplay?.map((player, index) => {
+            const isSelected = currentSelection === player.name;
+            const isDisabled = (roleTab === 'striker' && player.name === selectedNonStriker) ||
+                               (roleTab === 'nonStriker' && player.name === selectedStriker);
+            
+            return (
+              <TouchableOpacity
+                key={index}
+                activeOpacity={0.7}
+                onPress={() => handleSelect(player.name)}
+                style={[
+                  styles.playerCard,
+                  isSelected && styles.playerCardSelected,
+                  isDisabled && styles.playerCardDisabled
+                ]}
+                disabled={isDisabled}
+              >
+                <View style={[styles.avatar, isSelected && styles.avatarSelected]}>
+                  {isSelected ? (
+                    <CheckCircle2 size={24} color="#fff" />
+                  ) : (
+                    <User size={28} color={colors.textSecondary} />
+                  )}
+                </View>
+                {player.isReserve ? (
+                  <View style={styles.subBadge}>
+                    <Text style={styles.subBadgeText}>SUB</Text>
+                  </View>
+                ) : (
+                  <View style={styles.xiBadge}>
+                    <Text style={styles.xiBadgeText}>XI</Text>
+                  </View>
+                )}
+                <Text style={[styles.playerName, isSelected && styles.playerNameSelected]} numberOfLines={1}>
+                  {player.name}
+                </Text>
+                {isSelected && (
+                  <View style={styles.selectedBadge}>
+                    <Text style={styles.selectedBadgeText}>SELECTED</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </ScrollView>
     </View>
+
+    <View style={styles.footer}>
+        <SelectionSummary />
+        <TouchableOpacity 
+          style={[styles.continueButton, (!selectedStriker || !selectedNonStriker || !selectedBowler) && styles.continueButtonDisabled]} 
+          onPress={handleContinue}
+        >
+          <Text style={styles.continueButtonText}>Start Match</Text>
+          <ChevronRight size={24} color={colors.textDark} />
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
   );
 }
 
@@ -205,110 +211,246 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    padding: 20,
   },
-  section: {
-    marginBottom: 30,
-  },
-  sectionTitle: {
-    fontSize: 21,
-    fontWeight: 'bold',
-    marginBottom: 13,
-    color: colors.textPrimary,
-    letterSpacing: 0.1,
-  },
-  searchBarWrapper: {
+  topHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.cardAlt,
-    borderRadius: 8,
-    marginBottom: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: colors.background,
   },
-  searchInput: {
-    flex: 1,
+  headerBackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerBackText: {
+    color: colors.accent,
     fontSize: 16,
-    color: colors.textPrimary,
-    backgroundColor: 'transparent',
-    paddingVertical: 7,
-    paddingHorizontal: 6,
+    fontWeight: '600',
+    marginLeft: 4,
   },
-  roleFilterRow: {
+  topInfo: {
+    paddingTop: 10,
+    paddingBottom: 10,
+    alignItems: 'center',
+  },
+  subtitle: {
+    fontSize: 16,
+    color: colors.accent,
+    fontWeight: '600',
+    marginTop: 5,
+    textTransform: 'uppercase',
+  },
+  stepContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginBottom: 12,
-    gap: 6,
+    paddingVertical: 20,
+    paddingHorizontal: 10,
   },
-  roleFilterBtn: {
-    backgroundColor: colors.surface,
-    borderRadius: 15,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    marginHorizontal: 2,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
+  stepItem: {
+    alignItems: 'center',
+    width: (width - 40) / 3,
   },
-  roleFilterBtnActive: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accentAlt,
-  },
-  roleFilterText: {
-    color: colors.textPrimary,
-    fontWeight: 'bold',
-    fontSize: 15,
-    letterSpacing: 0.08,
-  },
-  playerButton: {
-    backgroundColor: colors.surface,
-    paddingVertical: 18,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    marginBottom: 13,
-    marginHorizontal: 2,
-    minHeight: 48,
+  stepCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.cardAlt,
     justifyContent: 'center',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     borderWidth: 2,
-    borderColor: 'transparent',
+    borderColor: colors.border,
+    zIndex: 1,
   },
-  selected: {
+  stepCircleActive: {
+    borderColor: colors.accent,
+    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+  },
+  stepLabel: {
+    marginTop: 8,
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  stepLabelActive: {
+    color: colors.accent,
+    fontWeight: '700',
+  },
+  stepConnector: {
+    position: 'absolute',
+    top: 24,
+    right: -width / 6,
+    width: width / 3,
+    height: 2,
+    backgroundColor: colors.border,
+    zIndex: 0,
+  },
+  scrollContent: {
+    paddingHorizontal: 15,
+    paddingBottom: 200,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  playerCard: {
+    width: (width - 45) / 2,
+    backgroundColor: colors.surface,
+    padding: 15,
+    borderRadius: 16,
+    marginBottom: 15,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  playerCardSelected: {
+    borderColor: colors.accent,
+    backgroundColor: 'rgba(6, 182, 212, 0.05)',
+  },
+  playerCardDisabled: {
+    opacity: 0.4,
+    backgroundColor: colors.cardAlt,
+  },
+  avatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: colors.cardAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  avatarSelected: {
     backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
-  disabledButton: {
-    backgroundColor: colors.disabled,
-    opacity: 0.5,
+  avatarText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.textSecondary,
   },
-  playerButtonText: {
-    fontSize: 18,
-    color: colors.textPrimary,
-    fontWeight: 'bold',
-    
-    
-    
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+  playerName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  playerNameSelected: {
+    color: colors.accent,
+  },
+  selectedBadge: {
+    marginTop: 8,
+    backgroundColor: colors.accent,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  selectedBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: colors.textDark,
+  },
+  xiBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(225, 26, 34, 0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(225, 26, 34, 0.3)',
+  },
+  xiBadgeText: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: colors.accent,
+  },
+  subBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(148, 163, 184, 0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.2)',
+  },
+  subBadgeText: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: colors.textSecondary,
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.surface,
+    padding: 20,
+    paddingBottom: 40,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    elevation: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
+  },
+  summaryBar: {
+    flexDirection: 'row',
+    backgroundColor: colors.cardAlt,
+    borderRadius: 15,
+    padding: 12,
+    marginBottom: 15,
+  },
+  summaryItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  summaryDivider: {
+    width: 1,
+    backgroundColor: colors.border,
+    marginVertical: 4,
+  },
+  summaryLabel: {
+    fontSize: 10,
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  summaryValue: {
+    fontSize: 14,
+    color: colors.text,
+    fontWeight: '700',
   },
   continueButton: {
     backgroundColor: colors.accent,
-    padding: 18,
-    borderRadius: 12,
+    flexDirection: 'row',
+    height: 60,
+    borderRadius: 15,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 28,
-    minWidth: 180,
-    shadowColor: colors.shadow,
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 3,
+    elevation: 5,
+  },
+  continueButtonDisabled: {
+    backgroundColor: colors.disabled,
+    opacity: 0.7,
   },
   continueButtonText: {
-    color: colors.textPrimary,
-    fontSize: 20,
-    fontWeight: '900',
-    
-    
-    
-    letterSpacing: 0.2,
-    textTransform: 'uppercase',
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.textDark,
+    marginRight: 8,
   },
-});
+});
