@@ -97,7 +97,7 @@ export default function Scorecard() {
   const totalWickets = ballHistory.filter(ball => ball.isWicket).length;
 
   const runsNeeded = target !== null ? target - totalScore + 1 : null;
-  const ballsRemaining = totalOvers * 6 - ballHistory.filter(ball => !ball.isExtra || (ball.isExtra && (ball.extraType !== 'bye' && ball.extraType !== 'lb'))).length;
+  const ballsRemaining = totalOvers * 6 - legalDeliveries.length;
 
   const currentRunRate = legalDeliveries.length > 0
     ? (totalScore / (legalDeliveries.length / 6)).toFixed(2)
@@ -107,9 +107,9 @@ export default function Scorecard() {
     ? Math.round((totalScore / (legalDeliveries.length / 6)) * totalOvers)
     : 0;
 
-  const requiredRunRate = (currentInningsNumber === 2 && ballsRemaining > 0)
-    ? ((runsNeeded! - 1) / (ballsRemaining / 6)).toFixed(2)
-    : null;
+  const requiredRunRate = (currentInningsNumber === 2 && ballsRemaining > 0 && runsNeeded !== null)
+    ? (Math.max(0, runsNeeded - 1) / (ballsRemaining / 6)).toFixed(2)
+    : (currentInningsNumber === 2 && ballsRemaining === 0 && runsNeeded !== null && runsNeeded > 1) ? '∞' : null;
 
   const partnership = getCurrentPartnership(ballHistory, striker, nonStriker);
 
