@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Animated, Easing, Dimensions, BackHandler } from 'react-native';
 import { Audio } from 'expo-av';
 import { useFocusEffect } from '@react-navigation/native';
-import { colors } from './theme';
+import { colors, shadows } from './theme';
 import BroadcastTicker from './BroadcastTicker';
 import { useRouter, usePathname } from 'expo-router';
 import { useGameStore } from '../store/gameStore';
@@ -421,7 +421,7 @@ export default function Scorecard() {
       >
         {/* Scoreboard Header */}
         <LinearGradient
-          colors={[colors.surface, '#111827']}
+          colors={[colors.accent, colors.surfaceDeeper]}
           style={styles.headerCard}
         >
           <View style={styles.headerTop}>
@@ -438,7 +438,9 @@ export default function Scorecard() {
                 <Text style={styles.projScoreText}>PROJ: {projectedScore}</Text>
               )}
               {currentInningsNumber === 2 && requiredRunRate && (
-                <Text style={styles.rrrText}>RRR: {requiredRunRate}</Text>
+                <>
+                  <Text style={styles.rrrText}>RRR: {requiredRunRate}</Text>
+                </>
               )}
             </View>
           </View>
@@ -613,7 +615,18 @@ export default function Scorecard() {
                   disabled={player.name === currentBowler?.name}
                 >
                   <UserCircle2 size={24} color={player.name === currentBowler?.name ? colors.disabled : colors.accent} />
-                  <Text style={styles.playerSelectName}>{player.name}</Text>
+                  <View style={styles.playerSelectNameContainer}>
+                    <Text style={styles.playerSelectName}>{player.name}</Text>
+                    {player.isReserve ? (
+                      <View style={[styles.miniStatusTag, styles.subTag]}>
+                        <Text style={styles.miniStatusTagText}>SUB</Text>
+                      </View>
+                    ) : (
+                      <View style={[styles.miniStatusTag, styles.xiTag]}>
+                        <Text style={styles.miniStatusTagText}>XI</Text>
+                      </View>
+                    )}
+                  </View>
                   {player.name === currentBowler?.name && <Text style={styles.disabledTag}>Cannot bowl</Text>}
                 </TouchableOpacity>
               ))}
@@ -632,7 +645,18 @@ export default function Scorecard() {
                   onPress={() => selectNewBatsman(player)}
                 >
                   <UserCircle2 size={24} color={colors.accent} />
-                  <Text style={styles.playerSelectName}>{player.name}</Text>
+                  <View style={styles.playerSelectNameContainer}>
+                    <Text style={styles.playerSelectName}>{player.name}</Text>
+                    {player.isReserve ? (
+                      <View style={[styles.miniStatusTag, styles.subTag]}>
+                        <Text style={styles.miniStatusTagText}>SUB</Text>
+                      </View>
+                    ) : (
+                      <View style={[styles.miniStatusTag, styles.xiTag]}>
+                        <Text style={styles.miniStatusTagText}>XI</Text>
+                      </View>
+                    )}
+                  </View>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -676,16 +700,14 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   headerCard: {
-    margin: 16,
-    padding: 20,
-    borderRadius: 24,
-    elevation: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 15,
+    margin: 12,
+    padding: 16,
+    borderRadius: 20,
+    ...shadows.large,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(249, 205, 5, 0.2)', // RCB Gold border
+    borderBottomWidth: 3,
+    borderBottomColor: colors.accentSecondary,
   },
   headerTop: {
     flexDirection: 'row',
@@ -705,14 +727,14 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   totalScoreText: {
-    fontSize: 36,
+    fontSize: 30,
     fontWeight: '800',
     color: colors.text,
   },
   oversCountText: {
-    fontSize: 18,
+    fontSize: 14,
     color: colors.textSecondary,
-    marginLeft: 10,
+    marginLeft: 8,
     fontWeight: '600',
     opacity: 0.8,
   },
@@ -721,18 +743,18 @@ const styles = StyleSheet.create({
   },
   crrText: {
     fontSize: 14,
-    color: colors.accent,
+    color: '#FFFFFF',
     fontWeight: '700',
   },
   rrrText: {
     fontSize: 14,
-    color: colors.accentWarn,
+    color: '#FFFFFF',
     fontWeight: '700',
     marginTop: 2,
   },
   projScoreText: {
     fontSize: 14,
-    color: colors.accentYellow,
+    color: '#FFFFFF',
     fontWeight: '700',
     marginTop: 2,
   },
@@ -755,8 +777,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 16,
-    paddingTop: 12,
+    marginTop: 12,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.05)',
   },
@@ -783,13 +805,13 @@ const styles = StyleSheet.create({
   },
   matchStatsCard: {
     flexDirection: 'row',
-    backgroundColor: colors.surface,
-    marginHorizontal: 16,
-    borderRadius: 20,
-    padding: 16,
+    backgroundColor: colors.surfaceDeeper,
+    marginHorizontal: 12,
+    borderRadius: 16,
+    padding: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
-    elevation: 4,
+    borderColor: 'rgba(255,255,255,0.03)',
+    ...shadows.small,
   },
   statsBatting: {
     flex: 1.2,
@@ -807,8 +829,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
     borderRadius: 8,
   },
   activePlayerBg: {
@@ -826,7 +848,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   strikerText: {
-    color: colors.text,
+    color: colors.accent,
     fontWeight: '700',
   },
   playerRunsText: {
@@ -835,23 +857,25 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   playerBallsText: {
-    fontSize: 12,
+    fontSize: 11,
     color: colors.textSecondary,
     fontWeight: '400',
   },
   bowlerLabel: {
     fontSize: 13,
-    color: colors.text,
-    fontWeight: '700',
+    color: colors.textSecondary,
+    fontWeight: '500',
   },
   bowlerStatsText: {
     fontSize: 14,
     color: colors.text,
     fontWeight: '700',
+    textAlign: 'right',
   },
   bowlerOversText: {
     fontSize: 11,
     color: colors.textSecondary,
+    marginLeft: 4,
   },
   econText: {
     fontSize: 11,
@@ -876,20 +900,19 @@ const styles = StyleSheet.create({
     paddingRight: 20,
   },
   ballCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.surface,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
+    marginRight: 6,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    elevation: 2,
+    borderColor: 'rgba(255,255,255,0.05)',
   },
   ballCircleText: {
-    fontSize: 12,
-    color: colors.text,
+    color: colors.textPrimary,
+    fontSize: 11,
     fontWeight: '700',
   },
   wicketBall: {
@@ -905,8 +928,8 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
   },
   extraBall: {
-    backgroundColor: colors.accentPurple,
-    borderColor: colors.accentPurple,
+    backgroundColor: colors.accentSecondary,
+    borderColor: colors.accentSecondary,
   },
   controlsSection: {
     paddingHorizontal: 12,
@@ -920,23 +943,23 @@ const styles = StyleSheet.create({
   },
   gridBtn: {
     width: (width - 48) / 3,
-    height: 54,
+    height: 48,
     backgroundColor: colors.surface,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: colors.border,
     elevation: 2,
   },
   boundaryGridBtn: {
-    backgroundColor: 'rgba(6, 182, 212, 0.08)',
+    backgroundColor: 'rgba(225, 26, 34, 0.08)',
     borderColor: colors.accent,
-    borderWidth: 1.5,
+    borderWidth: 1,
   },
   gridBtnText: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
     color: colors.text,
   },
@@ -947,7 +970,7 @@ const styles = StyleSheet.create({
   },
   extraBtnNew: {
     flex: 1,
-    height: 40,
+    height: 36,
     backgroundColor: colors.cardAlt,
     borderRadius: 8,
     justifyContent: 'center',
@@ -955,7 +978,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   extraBtnNewText: {
-    fontSize: 13,
+    fontSize: 11,
     color: colors.textSecondary,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -968,16 +991,16 @@ const styles = StyleSheet.create({
   },
   wicketBtnNew: {
     flex: 1,
-    height: 56,
+    height: 50,
     backgroundColor: colors.accentWarn,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 10,
     elevation: 4,
   },
   wicketBtnNewText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
     color: '#fff',
   },
@@ -986,8 +1009,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   actionIconBtn: {
-    width: 56,
-    height: 56,
+    width: 50,
+    height: 50,
     backgroundColor: colors.surface,
     borderRadius: 12,
     justifyContent: 'center',
@@ -1042,8 +1065,33 @@ const styles = StyleSheet.create({
   playerSelectName: {
     fontSize: 16,
     color: colors.text,
-    marginLeft: 12,
     fontWeight: '600',
+  },
+  playerSelectNameContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 12,
+    gap: 8,
+  },
+  miniStatusTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  xiTag: {
+    backgroundColor: 'rgba(225, 26, 34, 0.1)',
+    borderColor: 'rgba(225, 26, 34, 0.3)',
+  },
+  subTag: {
+    backgroundColor: 'rgba(148, 163, 184, 0.1)',
+    borderColor: 'rgba(148, 163, 184, 0.2)',
+  },
+  miniStatusTagText: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: colors.textSecondary,
   },
   playerDisabled: {
     opacity: 0.5,

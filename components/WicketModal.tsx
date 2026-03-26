@@ -299,12 +299,12 @@ const styles = StyleSheet.create({
   },
   confirmAction: {
     flex: 2,
-    backgroundColor: colors.accentWarn,
+    backgroundColor: colors.accent,
     paddingVertical: 16,
     borderRadius: 16,
     alignItems: 'center',
     elevation: 4,
-    shadowColor: colors.accentWarn,
+    shadowColor: colors.accent,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -314,4 +314,5 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 16,
   },
+
 });

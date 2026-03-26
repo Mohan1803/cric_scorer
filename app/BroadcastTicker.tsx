@@ -106,21 +106,24 @@ export default function BroadcastTicker() {
 
 const styles = StyleSheet.create({
   tickerWrap: {
-    height: 38,
-    backgroundColor: colors.accent,
+    height: 34,
+    backgroundColor: colors.surfaceDeeper,
     justifyContent: 'center',
     overflow: 'hidden',
     width: '100%',
-    borderBottomWidth: 2,
-    borderBottomColor: colors.accentAlt,
-    elevation: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(249, 205, 5, 0.3)', // RCB Gold border
+    elevation: 8,
     zIndex: 10,
   },
   tickerText: {
-    color: colors.textDark,
-    fontWeight: 'bold',
-    fontSize: 18,
-    letterSpacing: 1.2,
-    paddingHorizontal: 10,
+    color: colors.accentSecondary,
+    fontWeight: '800',
+    fontSize: 14,
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+    paddingHorizontal: 20,
   },
 });
+
+

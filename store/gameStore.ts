@@ -1,5 +1,7 @@
 import { router } from 'expo-router';
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface Player {
   name: string;
@@ -14,7 +16,8 @@ export interface Player {
   // role: 'batsman' | 'bowler';
   // status: 'active' | 'out';
   role: string,
-  status: string
+  status: string,
+  isReserve?: boolean
 }
 
 export interface BallRecord {
@@ -102,7 +105,9 @@ export interface GameState {
   clearUndoStack: () => void;
 }
 
-export const useGameStore = create<GameState>((set, get) => ({
+export const useGameStore = create<GameState>()(
+  persist(
+    (set, get) => ({
   initialStriker: null,
   currentInningsNumber: 1,
   initialNonStriker: null,
@@ -526,6 +531,14 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     set(finalUpdates);
   },
-
-
+}), {
+  name: 'cric-scorer-match-state',
+  storage: createJSONStorage(() => AsyncStorage),
+  onRehydrateStorage: (state) => {
+    return (state, error) => {
+      if (state && state.matchDate && typeof state.matchDate === 'string') {
+        state.matchDate = new Date(state.matchDate);
+      }
+    };
+  },
 }));

@@ -9,13 +9,14 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Dimensions,
   TextInput as RNTextInput,
 } from 'react-native';
 
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useGameStore } from '../store/gameStore';
-import { colors } from './theme';
+import { colors, shadows } from './theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { User, Users, Trash2, Plus, CheckCircle2, ChevronRight, ChevronLeft } from 'lucide-react-native';
 
@@ -76,7 +77,7 @@ export default function PlayersEntry() {
     const updatedTeams = [
       {
         ...teams[0],
-        players: validTeam1.map(p => ({
+        players: validTeam1.map((p, i) => ({
           name: p.name.trim(),
           runs: 0,
           balls: 0,
@@ -86,12 +87,13 @@ export default function PlayersEntry() {
           wickets: 0,
           runsGiven: 0,
           role: p.role,
-          status: ''
+          status: '',
+          isReserve: i >= 11
         })),
       },
       {
         ...teams[1],
-        players: validTeam2.map(p => ({
+        players: validTeam2.map((p, i) => ({
           name: p.name.trim(),
           runs: 0,
           balls: 0,
@@ -101,7 +103,8 @@ export default function PlayersEntry() {
           wickets: 0,
           runsGiven: 0,
           role: p.role,
-          status: ''
+          status: '',
+          isReserve: i >= 11
         })),
       },
     ];
@@ -134,18 +137,12 @@ export default function PlayersEntry() {
     return (
       <View style={styles.progressContainer}>
         <View style={styles.progressHeader}>
-          <View style={styles.progressInfo}>
-            <Users size={16} color={isReady ? colors.success : colors.accent} />
+          <Text style={styles.progressTitle}>Team Composition</Text>
+          <View style={styles.progressBadge}>
             <Text style={[styles.progressCount, isReady && { color: colors.success }]}>
-              {filledCount} <Text style={styles.progressTotal}>/ 11 Players</Text>
+              {filledCount}<Text style={styles.progressTotal}>/11</Text>
             </Text>
           </View>
-          {isReady && (
-            <View style={styles.readyBadge}>
-              <CheckCircle2 size={12} color={colors.textPrimary} />
-              <Text style={styles.readyText}>READY</Text>
-            </View>
-          )}
         </View>
         <View style={styles.progressTrack}>
           <LinearGradient
@@ -159,59 +156,66 @@ export default function PlayersEntry() {
     );
   };
 
+  const renderPlayerRow = (p: { name: string; role: string }, i: number, teamIndex: number, isSub: boolean) => (
+    <View key={i} style={[styles.playerCard, isSub ? styles.subCard : styles.activeCard]}>
+      <View style={styles.cardHeader}>
+        <Text style={styles.rankText}>{isSub ? `SUB ${i + 1}` : `PRO ${i + 1}`}</Text>
+        {p.name.trim().length > 0 && <CheckCircle2 size={12} color={colors.success} />}
+      </View>
+      <View style={styles.cardMain}>
+        <TextInput
+          ref={(ref) => {
+            if (!inputRefs.current[teamIndex]) inputRefs.current[teamIndex] = [];
+            inputRefs.current[teamIndex][i + (isSub ? 11 : 0)] = ref!;
+          }}
+          placeholder="Enter Player Name"
+          style={styles.playerInput}
+          value={p.name}
+          onChangeText={(text) => updatePlayerName(teamIndex, i + (isSub ? 11 : 0), text)}
+          returnKeyType="next"
+          placeholderTextColor="rgba(148, 163, 184, 0.4)"
+        />
+        <TouchableOpacity
+          onPress={() => handleDelete(teamIndex, i + (isSub ? 11 : 0))}
+          style={styles.deleteBtn}
+        >
+          <Trash2 size={16} color="rgba(239, 68, 68, 0.6)" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   const renderTeamForm = (teamIndex: number, players: typeof team1Players) => {
+    const starters = players.slice(0, 11);
+    const subs = players.slice(11);
+
     return (
       <View style={styles.formContent}>
         {renderProgressBar(teamIndex)}
 
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Starting Eleven</Text>
+          <View style={styles.sectionLine} />
+        </View>
         <View style={styles.playersList}>
-          {players.map((p, i) => (
-            <View key={i} style={styles.playerCard}>
-              <View style={styles.cardMain}>
-                <View style={styles.inputSection}>
-                  <TextInput
-                    ref={(ref) => {
-                      if (!inputRefs.current[teamIndex]) inputRefs.current[teamIndex] = [];
-                      inputRefs.current[teamIndex][i] = ref!;
-                    }}
-                    placeholder="Player Name"
-                    style={styles.playerInput}
-                    value={p.name}
-                    onChangeText={(text) => updatePlayerName(teamIndex, i, text)}
-                    returnKeyType="next"
-                    onSubmitEditing={() => focusInput(teamIndex, i + 1)}
-                    placeholderTextColor="rgba(148, 163, 184, 0.4)"
-                  />
-                </View>
+          {starters.map((p, i) => renderPlayerRow(p, i, teamIndex, false))}
+        </View>
 
-                {p.name.trim().length > 0 && (
-                  <View style={styles.checkIcon}>
-                    <CheckCircle2 size={16} color={colors.success} />
-                  </View>
-                )}
-
-                <TouchableOpacity
-                  onPress={() => handleDelete(teamIndex, i)}
-                  style={styles.deleteIconButton}
-                  activeOpacity={0.7}
-                >
-                  <Trash2 size={18} color={colors.accentWarn} />
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))}
+        <View style={[styles.sectionHeader, { marginTop: 24 }]}>
+          <Text style={styles.sectionTitle}>Bench / Reserves</Text>
+          <View style={styles.sectionLine} />
+        </View>
+        <View style={styles.playersList}>
+          {subs.map((p, i) => renderPlayerRow(p, i, teamIndex, true))}
         </View>
 
         {players.length < 15 && (
           <TouchableOpacity
             onPress={() => handleAddPlayer(teamIndex)}
-            style={styles.addPlayerCard}
-            activeOpacity={0.8}
+            style={styles.addPlayerBtn}
           >
-            <View style={styles.addPlayerInner}>
-              <Plus size={20} color={colors.accent} />
-              <Text style={styles.addPlayerText}>Add Player</Text>
-            </View>
+            <Plus size={18} color={colors.accentSecondary} />
+            <Text style={styles.addPlayerText}>Add Reserve</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -221,13 +225,15 @@ export default function PlayersEntry() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={styles.topHeader}>
-        <TouchableOpacity 
-          style={styles.headerBackButton} 
+        <TouchableOpacity
+          style={styles.headerBackButton}
           onPress={() => router.back()}
         >
-          <ChevronLeft color={colors.accent} size={28} />
-          <Text style={styles.headerBackText}>Back</Text>
+          <ChevronLeft color={colors.accent} size={24} />
+          <Text style={styles.headerBackText}>Teams</Text>
         </TouchableOpacity>
+        <Text style={styles.headerTitle}>Entry</Text>
+        <View style={{ width: 60 }} />
       </View>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.segmentedControlContainer}>
@@ -301,32 +307,41 @@ const styles = StyleSheet.create({
   },
   topHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     backgroundColor: colors.background,
   },
   headerBackButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    width: 60,
   },
   headerBackText: {
     color: colors.accent,
+    fontSize: 14,
+    fontWeight: '700',
+    marginLeft: -4,
+  },
+  headerTitle: {
+    color: colors.textPrimary,
     fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 4,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    letterSpacing: 2,
   },
   segmentedControlContainer: {
-    paddingTop: 10,
-    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingHorizontal: 12,
     backgroundColor: colors.background,
   },
   segmentedControl: {
     flexDirection: 'row',
-    height: 44,
+    height: 38,
     backgroundColor: colors.surface,
-    borderRadius: 12,
-    padding: 3,
+    borderRadius: 10,
+    padding: 2,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.05)',
   },
@@ -354,54 +369,47 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   formContent: {
-    marginTop: 16,
+    marginTop: 8,
   },
   progressContainer: {
-    marginBottom: 16,
-    backgroundColor: colors.surface,
+    marginBottom: 20,
+    backgroundColor: 'rgba(21, 42, 85, 0.3)',
     borderRadius: 12,
-    padding: 12,
+    padding: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderColor: 'rgba(249, 205, 5, 0.1)',
   },
   progressHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
-  progressInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  progressTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+  },
+  progressBadge: {
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
   },
   progressCount: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: colors.accent,
+    fontSize: 14,
+    fontWeight: '900',
+    color: colors.accentSecondary,
   },
   progressTotal: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  readyBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.success,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 5,
-    gap: 3,
-  },
-  readyText: {
-    fontSize: 9,
-    fontWeight: '900',
-    color: colors.textPrimary,
+    fontSize: 10,
+    color: colors.textMuted,
   },
   progressTrack: {
     height: 4,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
     borderRadius: 2,
     overflow: 'hidden',
   },
@@ -409,79 +417,100 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 2,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 12,
+  },
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: colors.textPrimary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  sectionLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
   playersList: {
-    gap: 10,
+    gap: 8,
   },
   playerCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    borderRadius: 10,
     padding: 10,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.05)',
-    elevation: 1,
+  },
+  activeCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: colors.accent,
+  },
+  subCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: colors.surfaceLight,
+    opacity: 0.9,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  rankText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: colors.textMuted,
+    letterSpacing: 1,
   },
   cardMain: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-  },
-  inputSection: {
-    flex: 1,
+    gap: 12,
   },
   playerInput: {
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.15)',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 15,
     color: colors.textPrimary,
-    fontWeight: '600',
+    fontWeight: '700',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderColor: 'rgba(255,255,255,0.03)',
   },
-  checkIcon: {
-    marginRight: 2,
+  deleteBtn: {
+    padding: 6,
   },
-  deleteIconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: 'rgba(244, 63, 94, 0.05)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  addPlayerBtn: {
+    marginTop: 20,
+    backgroundColor: 'rgba(249, 205, 5, 0.05)',
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(244, 63, 94, 0.1)',
-  },
-  addPlayerCard: {
-    marginTop: 15,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(6, 182, 212, 0.2)',
+    borderColor: 'rgba(249, 205, 5, 0.2)',
     borderStyle: 'dashed',
-    padding: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(6, 182, 212, 0.02)',
-  },
-  addPlayerInner: {
+    paddingVertical: 16,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
   },
   addPlayerText: {
     fontSize: 14,
-    fontWeight: '700',
-    color: colors.accent,
+    fontWeight: '800',
+    color: colors.accentSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   continueBtn: {
     marginTop: 32,
     borderRadius: 16,
     overflow: 'hidden',
-    elevation: 8,
-    shadowColor: colors.accent,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
+    ...shadows.medium,
   },
   continueGradient: {
     paddingVertical: 18,
@@ -491,7 +520,9 @@ const styles = StyleSheet.create({
   continueText: {
     color: colors.textPrimary,
     fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+    fontWeight: '900',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
 });
+

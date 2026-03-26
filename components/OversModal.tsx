@@ -24,7 +24,11 @@ const OversModal = ({ visible, onClose }: { visible: boolean; onClose: () => voi
   const renderOver = (over: OverData, i: number) => (
     <View key={i} style={styles.overCard}>
       <View style={styles.overHeader}>
-        <Text style={styles.overNumberText}>Over {over.overNumber + 1}</Text>
+        <View style={styles.overHeaderLeft}>
+          <Text style={styles.overNumberText}>Over {over.overNumber + 1}</Text>
+          <Text style={styles.headerSeparator}>•</Text>
+          <Text style={styles.bowlerNameText}>{over.deliveries[0]?.bowlerName || 'Unknown'}</Text>
+        </View>
         <LayoutGrid size={14} color={colors.textSecondary} />
       </View>
       <View style={styles.ballsGrid}>
@@ -198,7 +202,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   overCard: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceDeeper,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
@@ -216,6 +220,20 @@ const styles = StyleSheet.create({
   overNumberText: {
     color: colors.text,
     fontSize: 15,
+    fontWeight: '700',
+  },
+  overHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerSeparator: {
+    color: 'rgba(255,255,255,0.2)',
+    fontSize: 14,
+  },
+  bowlerNameText: {
+    color: colors.accent,
+    fontSize: 14,
     fontWeight: '700',
   },
   ballsGrid: {
@@ -251,9 +269,10 @@ const styles = StyleSheet.create({
     borderColor: colors.accent,
   },
   extraBall: {
-    backgroundColor: colors.accentPurple,
-    borderColor: colors.accentPurple,
+    backgroundColor: colors.accentGold,
+    borderColor: colors.accentGold,
   },
+
   extraRunsText: {
     fontSize: 9,
     color: colors.accentYellow,

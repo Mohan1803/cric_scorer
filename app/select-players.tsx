@@ -169,7 +169,16 @@ export default function SelectPlayersScreen() {
                     <User size={28} color={colors.textSecondary} />
                   )}
                 </View>
-                <Text style={[styles.playerName, isSelected && styles.playerNameSelected]} numberOfLines={2}>
+                {player.isReserve ? (
+                  <View style={styles.subBadge}>
+                    <Text style={styles.subBadgeText}>SUB</Text>
+                  </View>
+                ) : (
+                  <View style={styles.xiBadge}>
+                    <Text style={styles.xiBadgeText}>XI</Text>
+                  </View>
+                )}
+                <Text style={[styles.playerName, isSelected && styles.playerNameSelected]} numberOfLines={1}>
                   {player.name}
                 </Text>
                 {isSelected && (
@@ -348,6 +357,38 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '800',
     color: colors.textDark,
+  },
+  xiBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(225, 26, 34, 0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(225, 26, 34, 0.3)',
+  },
+  xiBadgeText: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: colors.accent,
+  },
+  subBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(148, 163, 184, 0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.2)',
+  },
+  subBadgeText: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: colors.textSecondary,
   },
   footer: {
     position: 'absolute',

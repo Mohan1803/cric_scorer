@@ -172,16 +172,16 @@ export default function TeamEntry() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={[colors.background, colors.surface]}
+        colors={[colors.background, colors.surfaceDeeper, '#0F172A']}
         style={StyleSheet.absoluteFill}
       />
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <LinearGradient
-            colors={[colors.accent, colors.accentSecondary]}
+            colors={[colors.accent, colors.accentAlt]}
             style={styles.iconBadge}
           >
-            <Trophy size={32} color={colors.textPrimary} />
+            <Trophy size={32} color="#fff" />
           </LinearGradient>
           <Text style={styles.headerTitle}>Match Setup</Text>
           <Text style={styles.headerSubtitle}>Configure your match details below</Text>
