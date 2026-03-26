@@ -305,134 +305,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     minHeight: '100%',
   },
-<<<<<<< HEAD
-  tabs: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 28,
-    backgroundColor: 'transparent',
-    marginBottom: 8,
-  },
-  tabBtn: {
-    paddingVertical: 12,
-    paddingHorizontal: 32,
-    borderRadius: 24,
-    marginHorizontal: 6,
-    backgroundColor: colors.surface,
-    elevation: 0,
-    shadowOpacity: 0,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-  },
-  activeTab: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-    shadowColor: colors.accent,
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    elevation: 5,
-  },
-  tabText: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: colors.textSecondary,
-    letterSpacing: 0.2,
-  },
-  activeTabText: {
-    color: colors.textPrimary,
-
-
-
-  },
-  inputRow: {
-    marginBottom: 18,
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    position: 'relative',
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    shadowColor: colors.shadow,
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  input: {
-    flex: 1,
-    backgroundColor: 'transparent',
-    borderColor: colors.border,
-    borderWidth: 1.2,
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    fontSize: 16,
-    color: colors.textPrimary,
-    fontWeight: '900',
-    letterSpacing: 0.15,
-
-
-
-  },
-  clearBtn: {
-    position: 'absolute',
-    right: 10,
-    padding: 6,
-    borderRadius: 16,
-    backgroundColor: colors.surface,
-  },
-  addBtn: {
-    backgroundColor: colors.accent,
-    paddingVertical: 13,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 12,
-    shadowColor: colors.accentAlt,
-    shadowOpacity: 0.10,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  addText: {
-    color: colors.textPrimary,
-    fontSize: 18,
-    fontWeight: '900',
-    letterSpacing: 0.12,
-
-
-
-    textTransform: 'uppercase',
-  },
-  continueBtn: {
-    marginTop: 40,
-    backgroundColor: colors.accentAlt,
-    paddingVertical: 21,
-    borderRadius: 18,
-    alignItems: 'center',
-    shadowColor: colors.accentAlt,
-    shadowOpacity: 0.18,
-    shadowRadius: 14,
-    elevation: 7,
-    minWidth: 200,
-  },
-  continueText: {
-    color: '#fff',
-    fontSize: 21,
-    fontWeight: '900',
-    letterSpacing: 0.22,
-    textTransform: 'uppercase',
-
-
-
-  },
-  progressBarContainer: {
-    marginBottom: 18,
-    marginTop: 2,
-  },
-  progressTextRow: {
-=======
   topHeader: {
->>>>>>> ui_test_branch
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -516,12 +389,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '900',
     color: colors.textSecondary,
-<<<<<<< HEAD
-    letterSpacing: 0.12,
-
-
-
-=======
     textTransform: 'uppercase',
     letterSpacing: 1.5,
   },
@@ -539,7 +406,6 @@ const styles = StyleSheet.create({
   progressTotal: {
     fontSize: 10,
     color: colors.textMuted,
->>>>>>> ui_test_branch
   },
   progressTrack: {
     height: 4,
