@@ -249,10 +249,6 @@ export default function Scorecard() {
   };
 
   const handleWicket = () => {
-    if (getAvailableBatsmen().length === 0) {
-      Alert.alert('Innings Over', 'No more batsmen available');
-      return;
-    }
     setShowWicketModal(true);
   };
 
@@ -282,7 +278,11 @@ export default function Scorecard() {
 
     updateScore({ runs: runOutRuns || 0, isExtra: false, isNoBall: false, batsmanName: runOutBatsman || striker.name, bowlerName: currentBowler.name, isWicket: true, wicketType: wicketType as any, runOutBatsman, runOutRuns });
     setShowWicketModal(false);
-    setShowNewBatsmanSelection(true);
+    
+    // Only show selection if there are more batsmen to come in
+    if (getAvailableBatsmen().length > 0) {
+      setShowNewBatsmanSelection(true);
+    }
   };
 
   const selectNewBowler = (player: typeof currentBowler) => {
