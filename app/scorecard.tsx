@@ -1,9 +1,8 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Animated, Easing, Dimensions, BackHandler } from 'react-native';
 import { Audio } from 'expo-av';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors, shadows } from './theme';
-import BroadcastTicker from './BroadcastTicker';
 import { useRouter, usePathname } from 'expo-router';
 import { useGameStore } from '../store/gameStore';
 import { getCurrentPartnership } from '../store/partnershipUtils';
@@ -70,18 +69,17 @@ export default function Scorecard() {
   const [showExtraRunsModal, setShowExtraRunsModal] = useState(false);
   const [showWicketModal, setShowWicketModal] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
-  const [extraType, setExtraType] = useState<'wide' | 'no-ball' | 'lb' | 'bye'>('wide');
+  const [extraType, setExtraType] = useState<'wide' | 'no-ball' | 'lb' | 'bye' | 'penalty'>('wide');
   const [showConfetti, setShowConfetti] = useState(false);
-  const [celebrationText, setCelebrationText] = useState<string | null>(null);
-  const [wicketAnimation, setWicketAnimation] = useState<{ type: 'golden' | 'duck' | 'normal', score: number, name: string } | null>(null);
+  const [celebrationText, setCelebrationText] = useState('');
+  const [scoreAnimation, setScoreAnimation] = useState<number | null>(null);
+  const [wicketAnimation, setWicketAnimation] = useState<{ type: 'golden' | 'duck' | 'normal', score: number, name: string, dismissalDetail?: string } | null>(null);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const soundRef = useRef<Audio.Sound | null>(null);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(-width)).current;
   const scaleAnim = useRef(new Animated.Value(0)).current;
-  const cheerBounceAnim = useRef(new Animated.Value(0)).current;
-  const cheerRotateAnim = useRef(new Animated.Value(0)).current;
   const lastBallCountRef = useRef(ballHistory.length);
 
   const battingTeamObj = teams.find(team => team.name === battingTeam);
@@ -182,27 +180,11 @@ export default function Scorecard() {
       soundRef.current = sound;
       setIsAudioPlaying(true);
 
-      // Start Cheerleader Animation Loop
-      Animated.parallel([
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(cheerBounceAnim, { toValue: -20, duration: 250, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-            Animated.timing(cheerBounceAnim, { toValue: 0, duration: 250, easing: Easing.in(Easing.quad), useNativeDriver: true })
-          ])
-        ),
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(cheerRotateAnim, { toValue: 1, duration: 500, easing: Easing.linear, useNativeDriver: true }),
-            Animated.timing(cheerRotateAnim, { toValue: -1, duration: 500, easing: Easing.linear, useNativeDriver: true })
-          ])
-        )
-      ]).start();
+      // Sound is playing
 
       sound.setOnPlaybackStatusUpdate((status) => {
         if (status.isLoaded && status.didJustFinish) {
           setIsAudioPlaying(false);
-          cheerBounceAnim.setValue(0);
-          cheerRotateAnim.setValue(0);
           sound.unloadAsync();
           soundRef.current = null;
         }
@@ -229,7 +211,7 @@ export default function Scorecard() {
         Animated.timing(fadeAnim, { toValue: 0, duration: 500, useNativeDriver: true })
       ]).start(() => {
         setShowConfetti(false);
-        setCelebrationText(null);
+        setCelebrationText('');
         scaleAnim.setValue(0);
         fadeAnim.setValue(1);
       });
@@ -237,7 +219,12 @@ export default function Scorecard() {
     }
   };
 
-  const handleExtra = (type: 'wide' | 'no-ball' | 'lb' | 'bye') => {
+  const handleExtra = (type: 'wide' | 'no-ball' | 'lb' | 'bye' | 'penalty') => {
+    if (type === 'penalty') {
+      if (!striker || !currentBowler) return;
+      updateScore({ runs: 5, isExtra: true, isNoBall: false, extraType: 'penalty', batsmanName: striker.name, batsmanId: striker.id, bowlerName: currentBowler.name, bowlerId: currentBowler.id, isWicket: false });
+      return;
+    }
     setExtraType(type);
     setShowExtraRunsModal(true);
   };
@@ -252,7 +239,7 @@ export default function Scorecard() {
     setShowWicketModal(true);
   };
 
-  const handleWicketConfirm = (wicketType: string, runOutBatsman?: string, runOutBatsmanId?: string, runOutRuns?: number) => {
+  const handleWicketConfirm = (wicketType: string, runOutBatsman?: string, runOutBatsmanId?: string, runOutRuns?: number, fielderName?: string, fielderId?: string) => {
     if (!striker || !currentBowler) return;
     const outBatsman = runOutBatsmanId ?
       (runOutBatsmanId === striker.id ? striker : nonStriker) :
@@ -262,10 +249,24 @@ export default function Scorecard() {
       const isGolden = (outBatsman.balls === 0 && (wicketType !== 'run-out')) || (outBatsman.balls === 1 && outBatsman.runs === 0);
       const isDuck = outBatsman.runs === 0;
 
+      let detail = '';
+      switch (wicketType) {
+        case 'caught': detail = `c ${fielderName || 'Fielder'} b ${currentBowler.name}`; break;
+        case 'bowled': detail = `b ${currentBowler.name}`; break;
+        case 'lbw': detail = `lbw b ${currentBowler.name}`; break;
+        case 'stumped': detail = `st ${fielderName || 'Fielder'} b ${currentBowler.name}`; break;
+        case 'run-out': detail = `run out (${fielderName || ''})`; break;
+        case 'caught-&-bowled':
+        case 'caught-and-bowled': detail = `c&b ${currentBowler.name}`; break;
+        case 'hit-wicket': detail = `hit wicket b ${currentBowler.name}`; break;
+        default: detail = `b ${currentBowler.name}`;
+      }
+
       setWicketAnimation({
         type: isGolden ? 'golden' : (isDuck ? 'duck' : 'normal'),
         score: outBatsman.runs,
-        name: outBatsman.name
+        name: outBatsman.name,
+        dismissalDetail: detail
       });
 
       Animated.sequence([
@@ -288,7 +289,9 @@ export default function Scorecard() {
       wicketType: wicketType as any, 
       runOutBatsman, 
       runOutBatsmanId, 
-      runOutRuns 
+      runOutRuns,
+      fielderName,
+      fielderId
     });
     setShowWicketModal(false);
     
@@ -356,44 +359,17 @@ export default function Scorecard() {
             />
             {celebrationText && (
               <View style={styles.celebrationOverlay}>
-                {isAudioPlaying ? (
-                  <View style={styles.cheerleaderContainer}>
-                    {[1, 2, 3].map((_, i) => (
-                      <Animated.Image
-                        key={i}
-                        source={require('../assets/images/cheerleader.png')}
-                        style={[
-                          styles.cheerImage,
-                          {
-                            transform: [
-                              { translateY: cheerBounceAnim },
-                              {
-                                rotate: cheerRotateAnim.interpolate({
-                                  inputRange: [-1, 1],
-                                  outputRange: ['-15deg', '15deg']
-                                })
-                              },
-                              { scaleX: i === 1 ? 1.2 : 1 }
-                            ]
-                          }
-                        ]}
-                        resizeMode="contain"
-                      />
-                    ))}
-                  </View>
-                ) : (
-                  <Animated.View style={[
-                    { transform: [{ scale: scaleAnim }], opacity: fadeAnim }
-                  ]}>
-                    <LinearGradient
-                      colors={[colors.accent, colors.accentSecondary]}
-                      style={styles.celebrationBadge}
-                    >
-                      <Zap color="#fff" size={32} />
-                      <Text style={styles.celebrationText}>{celebrationText}</Text>
-                    </LinearGradient>
-                  </Animated.View>
-                )}
+                <Animated.View style={[
+                  { transform: [{ scale: scaleAnim }], opacity: fadeAnim }
+                ]}>
+                  <LinearGradient
+                    colors={[colors.accent, colors.accentSecondary]}
+                    style={styles.celebrationBadge}
+                  >
+                    <Zap color="#fff" size={32} />
+                    <Text style={styles.celebrationText}>{celebrationText}</Text>
+                  </LinearGradient>
+                </Animated.View>
               </View>
             )}
           </View>
@@ -414,6 +390,9 @@ export default function Scorecard() {
                     wicketAnimation.type === 'duck' ? 'OUT FOR DUCK!' : 'OUT!'}
                 </Text>
                 <Text style={styles.wicketInfoName}>{wicketAnimation.name}</Text>
+                {wicketAnimation.dismissalDetail && (
+                  <Text style={styles.wicketInfoDismissal}>{wicketAnimation.dismissalDetail}</Text>
+                )}
                 <Text style={styles.wicketInfoScore}>{wicketAnimation.score} Runs</Text>
               </View>
             </View>
@@ -425,7 +404,6 @@ export default function Scorecard() {
 
   return (
     <View style={styles.safeArea}>
-      <BroadcastTicker />
 
       <ScrollView
         stickyHeaderIndices={[1]}
@@ -486,8 +464,11 @@ export default function Scorecard() {
               <View key={idx} style={[styles.playerRow, idx === 0 && styles.activePlayerBg]}>
                 <View style={styles.playerNameCol}>
                   <Text style={[styles.playerLabel, player?.id === striker?.id && styles.strikerText]}>
-                    {player?.name || 'Batsman'} {player?.id === striker?.id ? '*' : ''}
+                    {player?.name || 'Batsman'}{player?.isCaptain ? ' (C)' : ''}{player?.isWicketKeeper ? ' (WK)' : ''} {player?.id === striker?.id ? '*' : ''}
                   </Text>
+                  {player?.isOut && player?.dismissalDetail && (
+                    <Text style={styles.dismissalTextSmall}>{player.dismissalDetail}</Text>
+                  )}
                 </View>
                 <View style={styles.playerRunsCol}>
                   <Text style={styles.playerRunsText}>
@@ -503,7 +484,7 @@ export default function Scorecard() {
           <View style={styles.statsBowling}>
             <View style={styles.playerRow}>
               <View style={styles.playerNameCol}>
-                <Text style={styles.bowlerLabel}>{currentBowler?.name || 'Bowler'} *</Text>
+                <Text style={styles.bowlerLabel}>{currentBowler?.name || 'Bowler'}{currentBowler?.isCaptain ? ' (C)' : ''}{currentBowler?.isWicketKeeper ? ' (WK)' : ''} *</Text>
               </View>
               <View style={styles.playerRunsCol}>
                 <Text style={styles.bowlerStatsText}>
@@ -566,7 +547,8 @@ export default function Scorecard() {
                 { label: 'Wide', type: 'wide' },
                 { label: 'NB', type: 'no-ball' },
                 { label: 'LB', type: 'lb' },
-                { label: 'Byes', type: 'bye' }
+                { label: 'BYE', type: 'bye' },
+                { label: 'PEN', type: 'penalty' },
               ].map((item) => (
                 <TouchableOpacity
                   key={item.label}
@@ -623,11 +605,11 @@ export default function Scorecard() {
               {bowlingTeamObj?.players.map((player, idx) => (
                 <TouchableOpacity
                   key={player.id}
-                  style={[styles.playerSelectItem, player.id === currentBowler?.id && styles.playerDisabled]}
+                  style={[styles.playerSelectItem, (player.id === currentBowler?.id || player.isWicketKeeper) && styles.playerDisabled]}
                   onPress={() => selectNewBowler(player)}
-                  disabled={player.id === currentBowler?.id}
+                  disabled={player.id === currentBowler?.id || player.isWicketKeeper}
                 >
-                  <UserCircle2 size={24} color={player.id === currentBowler?.id ? colors.disabled : colors.accent} />
+                  <UserCircle2 size={24} color={(player.id === currentBowler?.id || player.isWicketKeeper) ? colors.disabled : colors.accent} />
                   <View style={styles.playerSelectNameContainer}>
                     <View>
                       <Text style={styles.playerSelectName}>{player.name}</Text>
@@ -635,7 +617,11 @@ export default function Scorecard() {
                         {Math.floor(player.ballsBowled / 6)}.{player.ballsBowled % 6} Overs
                       </Text>
                     </View>
-                    {player.isReserve ? (
+                    {player.isWicketKeeper ? (
+                      <View style={[styles.miniStatusTag, styles.xiTag, { backgroundColor: 'rgba(234, 179, 8, 0.1)', borderColor: 'rgba(234, 179, 8, 0.3)' }]}>
+                        <Text style={[styles.miniStatusTagText, { color: colors.accentSecondary }]}>WK</Text>
+                      </View>
+                    ) : player.isReserve ? (
                       <View style={[styles.miniStatusTag, styles.subTag]}>
                         <Text style={styles.miniStatusTagText}>SUB</Text>
                       </View>
@@ -645,7 +631,8 @@ export default function Scorecard() {
                       </View>
                     )}
                   </View>
-                  {player.id === currentBowler?.id && <Text style={styles.disabledTag}>Cannot bowl</Text>}
+                  {player.id === currentBowler?.id && <Text style={styles.disabledTag}>Prev Bowler</Text>}
+                  {player.isWicketKeeper && <Text style={styles.disabledTag}>WK Cannot bowl</Text>}
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -702,6 +689,8 @@ export default function Scorecard() {
           nonStrikerName={nonStriker.name}
           nonStrikerId={nonStriker.id}
           outBatsmen={battingTeamObj?.players.filter(p => p.isOut || p.status === 'out').map(p => p.name) || []}
+          fielders={bowlingTeamObj?.players || []}
+          wicketKeeper={bowlingTeamObj?.players.find(p => p.isWicketKeeper)}
         />
       )}
 
@@ -870,6 +859,12 @@ const styles = StyleSheet.create({
   strikerText: {
     color: colors.accent,
     fontWeight: '700',
+  },
+  dismissalTextSmall: {
+    fontSize: 10,
+    color: colors.textSecondary,
+    fontStyle: 'italic',
+    marginTop: 1,
   },
   playerRunsText: {
     fontSize: 14,
@@ -1155,21 +1150,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 1000,
   },
-  cheerleaderContainer: {
-    flexDirection: 'row',
-    gap: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(10, 14, 26, 0.8)',
-    padding: 20,
-    borderRadius: 30,
-    borderWidth: 2,
-    borderColor: colors.accent,
-  },
-  cheerImage: {
-    width: 100,
-    height: 140,
-  },
   celebrationBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1223,15 +1203,21 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   wicketInfoName: {
-    color: '#fff',
+    fontSize: 20,
+    fontWeight: '800',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  wicketInfoDismissal: {
     fontSize: 14,
+    color: colors.accentWarn,
     fontWeight: '700',
-    marginTop: 2,
+    marginBottom: 8,
+    fontStyle: 'italic',
   },
   wicketInfoScore: {
+    fontSize: 16,
     color: colors.textSecondary,
-    fontSize: 12,
     fontWeight: '600',
-    marginTop: 2,
   },
 });

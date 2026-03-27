@@ -33,7 +33,10 @@ export default function TeamEntry() {
     function getTableRows(players: any[], isBatting: boolean) {
       return players.map((p: any) =>
         `<tr>
-        <td>${p.name}${isBatting && p.isOut === false ? ' (not out)' : ''}</td>
+        <td>
+          ${p.name}${isBatting && p.isOut === false ? ' (not out)' : ''}
+          ${isBatting && p.isOut && p.dismissalDetail ? `<br/><small style="color: #666; font-size: 10px;">${p.dismissalDetail}</small>` : ''}
+        </td>
         ${isBatting
           ? `<td>${p.runs}</td><td>${p.balls}</td><td>${p.fours}</td><td>${p.sixes}</td><td>${p.balls > 0 ? ((p.runs / p.balls) * 100).toFixed(1) : '0.0'}</td>`
           : `<td>${Math.floor(p.ballsBowled / 6)}.${p.ballsBowled % 6}</td><td>${p.runsGiven}</td><td>${p.wickets}</td><td>${p.ballsBowled > 0 ? (p.runsGiven / (p.ballsBowled / 6)).toFixed(1) : '0.0'}</td>`}
@@ -47,14 +50,15 @@ export default function TeamEntry() {
       const legalBalls = balls.filter((ball: any) => !ball.isExtra).length;
       const totalOvers = Math.floor(legalBalls / 6);
       const currentBalls = legalBalls % 6;
-      let wides = 0, noBalls = 0, legByes = 0, byes = 0;
+      let wides = 0, noBalls = 0, legByes = 0, byes = 0, penalty = 0;
       balls.forEach((ball: any) => {
-        if (ball.extraType === 'wide') wides += ball.runs;
-        if (ball.extraType === 'no ball') noBalls += ball.runs;
-        if (ball.extraType === 'leg bye') legByes += ball.runs;
+        if (ball.extraType === 'wide') wides += (1 + ball.runs);
+        if (ball.extraType === 'no-ball') noBalls += (1 + ball.runs);
+        if (ball.extraType === 'leg bye' || ball.extraType === 'lb') legByes += ball.runs;
         if (ball.extraType === 'bye') byes += ball.runs;
+        if (ball.extraType === 'penalty') penalty += ball.runs;
       });
-      const extras = wides + noBalls + legByes + byes;
+      const extras = wides + noBalls + legByes + byes + penalty;
       const battingTable = `
         <table border="1" cellpadding="4" cellspacing="0">
           <tr><th>Batter</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th></tr>
@@ -68,7 +72,7 @@ export default function TeamEntry() {
         </table>
       `;
       // Fall of Wickets (FOW)
-      type Wicket = { runs: number; number: number; batter: string; over: string };
+      type Wicket = { runs: number; number: number; batter: string; over: string; detail: string };
       const wickets = balls.map((ball: any, i: number) => (ball.isWicket ? {
         runs: balls.slice(0, i + 1).reduce((sum: number, b: any) => sum + b.runs + (b.isExtra ? 1 : 0), 0),
         number: balls.filter((b: any, idx: number) => b.isWicket && idx <= i).length,
@@ -76,10 +80,11 @@ export default function TeamEntry() {
         over: (() => {
           const legalBalls = balls.slice(0, i + 1).filter((b: any) => !b.isExtra).length;
           return `${Math.floor((legalBalls - 1) / 6)}.${(legalBalls - 1) % 6}`;
-        })()
+        })(),
+        detail: ball.dismissalDetail || ''
       } : null)).filter((w: any): w is Wicket => w !== null);
       const fowSection = `<h3>Fall of Wickets</h3><p>${wickets.length > 0
-        ? wickets.map((w: any) => `${w.runs}/${w.number} (${w.batter}, ${w.over})`).join('; ')
+        ? wickets.map((w: any) => `${w.runs}/${w.number} (${w.batter}${w.detail ? ', ' + w.detail : ''}, ${w.over})`).join('; ')
         : 'None'}</p>`;
       return `
       <h2>${label}: ${battingTeam.name} ${totalScore}/${totalWickets} (${totalOvers}.${currentBalls} ov)</h2>
@@ -87,24 +92,96 @@ export default function TeamEntry() {
       ${bowlingTable}
       ${fowSection}
       <h3>Extras</h3>
-      <p>Total: ${extras}${wides ? `, Wides: ${wides}` : ''}${noBalls ? `, No Balls: ${noBalls}` : ''}${legByes ? `, Leg Byes: ${legByes}` : ''}${byes ? `, Byes: ${byes}` : ''}</p>
+      <p>Total: ${extras}${wides ? `, Wides: ${wides}` : ''}${noBalls ? `, No Balls: ${noBalls}` : ''}${legByes ? `, Leg Byes: ${legByes}` : ''}${byes ? `, Byes: ${byes}` : ''}${penalty ? `, Penalty: ${penalty}` : ''}</p>
       <hr/>
     `;
     }
     let html = `
       <html>
       <head>
-        <style>
-          body { font-family: Arial, sans-serif; margin: 24px; background: #f7f7f7; }
-          h1, h2, h3 { color: #24527a; }
-          table { width: 100%; border-collapse: collapse; margin-bottom: 24px; background: #fff; }
-          th, td { padding: 8px 12px; border: 1px solid #ddd; text-align: center; }
-          th { background: #e3eefc; }
-          .section { margin-bottom: 32px; }
-          .extras, .fow { font-size: 14px; color: #555; }
-          .empty-innings { color: #999; font-style: italic; }
-          .teams-header { font-size: 20px; margin-bottom: 16px; }
-        </style>
+          @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
+          body {
+            font-family: 'Outfit', sans-serif;
+            margin: 0;
+            padding: 40px;
+            background: #FFFFFF;
+            color: #1E293B;
+          }
+          .teams-header {
+            border-bottom: 3px solid #EE2A34;
+            padding: 20px 0;
+            text-align: left;
+            margin-bottom: 30px;
+          }
+          .teams-header h1 {
+            margin: 0;
+            font-size: 32px;
+            color: #EE2A34;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+          }
+          .teams-header h2 {
+            margin: 10px 0 0;
+            font-size: 20px;
+            color: #0F172A;
+            font-weight: 700;
+          }
+          .teams-header p {
+            margin: 5px 0 0;
+            color: #64748B;
+            font-size: 14px;
+            font-weight: 600;
+          }
+          .section {
+            margin-bottom: 30px;
+            border: 1px solid #E2E8F0;
+          }
+          .section h2 {
+            padding: 10px 15px;
+            background: #F1F5F9;
+            margin: 0;
+            font-size: 18px;
+            color: #0F172A;
+            border-bottom: 2px solid #CBD5E1;
+            font-weight: 700;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0;
+          }
+          th {
+            background: #F8FAFC;
+            text-align: center;
+            padding: 10px;
+            color: #475569;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border: 1px solid #E2E8F0;
+          }
+          td {
+            padding: 10px;
+            border: 1px solid #F1F5F9;
+            font-size: 13px;
+            color: #334155;
+            text-align: center;
+          }
+          .fow, .extras {
+            padding: 15px;
+            background: #FFFFFF;
+            font-size: 12px;
+            color: #475569;
+            line-height: 1.5;
+            border-top: 1px solid #E2E8F0;
+          }
+          .empty-innings {
+            padding: 20px;
+            color: #94A3B8;
+            font-style: italic;
+            text-align: center;
+          }
       </head>
       <body>
         <div class="teams-header">

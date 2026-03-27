@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Modal, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, StyleSheet, Dimensions, ScrollView } from 'react-native';
 import { colors } from '../app/theme';
 import { Shield, User, X } from 'lucide-react-native';
 
@@ -8,12 +8,14 @@ const { width } = Dimensions.get('window');
 interface WicketModalProps {
   visible: boolean;
   onClose: () => void;
-  onConfirm: (wicketType: string, runOutBatsman?: string, runOutBatsmanId?: string, runOutRuns?: number) => void;
+  onConfirm: (wicketType: string, runOutBatsman?: string, runOutBatsmanId?: string, runOutRuns?: number, fielderName?: string, fielderId?: string) => void;
   strikerName: string;
   strikerId: string;
   nonStrikerName: string;
   nonStrikerId: string;
   outBatsmen: string[];
+  fielders: { id: string, name: string }[];
+  wicketKeeper?: { id: string, name: string };
 }
 
 export default function WicketModal({
@@ -24,18 +26,32 @@ export default function WicketModal({
   strikerId,
   nonStrikerName,
   nonStrikerId,
-  outBatsmen
+  outBatsmen,
+  fielders,
+  wicketKeeper
 }: WicketModalProps) {
   const [wicketType, setWicketType] = useState('bowled');
   const [runOutBatsmanId, setRunOutBatsmanId] = useState(strikerId);
   const [runOutRuns, setRunOutRuns] = useState(0);
+  const [selectedFielderId, setSelectedFielderId] = useState<string | null>(null);
 
   const handleConfirm = () => {
+    let finalFielderName = fielders.find(f => f.id === selectedFielderId)?.name;
+    let finalFielderId = selectedFielderId || undefined;
+
+    if (wicketType === 'stumped' && wicketKeeper) {
+      finalFielderName = wicketKeeper.name;
+      finalFielderId = wicketKeeper.id;
+    } else if (wicketType === 'caught-and-bowled') {
+      finalFielderName = undefined;
+      finalFielderId = undefined;
+    }
+
     if (wicketType === 'run-out') {
       const name = runOutBatsmanId === strikerId ? strikerName : nonStrikerName;
-      onConfirm(wicketType, name, runOutBatsmanId, runOutRuns);
+      onConfirm(wicketType, name, runOutBatsmanId, runOutRuns, finalFielderName, finalFielderId);
     } else {
-      onConfirm(wicketType);
+      onConfirm(wicketType, undefined, undefined, undefined, finalFielderName, finalFielderId);
     }
   };
 
@@ -46,6 +62,7 @@ export default function WicketModal({
     { key: 3, label: 'Run Out' },
     { key: 4, label: 'LBW' },
     { key: 5, label: 'Hit Wicket' },
+    { key: 6, label: 'Caught & Bowled' },
   ];
 
   return (
@@ -62,78 +79,105 @@ export default function WicketModal({
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.sectionLabel}>How Out?</Text>
-          <View style={styles.wicketTypeGrid}>
-            {wicketOptions.map(option => {
-              const value = option.label.toLowerCase().replace(' ', '-');
-              const selected = wicketType === value;
-              return (
-                <TouchableOpacity
-                  key={option.key}
-                  style={[styles.wicketTypeBtn, selected && styles.wicketTypeBtnSelected]}
-                  onPress={() => setWicketType(value)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.wicketTypeBtnText, selected && styles.wicketTypeBtnTextSelected]}>
-                    {option.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {wicketType === 'run-out' && (
-            <View style={styles.runOutSection}>
-              <Text style={styles.sectionLabel}>Who got out?</Text>
-              <View style={styles.batsmanSelectionRow}>
-                {[
-                  { name: strikerName, id: strikerId, role: 'Striker' },
-                  { name: nonStrikerName, id: nonStrikerId, role: 'Non-Striker' }
-                ].map((player, idx) => (
+          <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+            <Text style={styles.sectionLabel}>How Out?</Text>
+            <View style={styles.wicketTypeGrid}>
+              {wicketOptions.map(option => {
+                const value = option.label.toLowerCase().replace(/\s/g, '-');
+                const selected = wicketType === value;
+                return (
                   <TouchableOpacity
-                    key={player.id}
-                    style={[
-                      styles.batsmanBtn,
-                      runOutBatsmanId === player.id && styles.batsmanBtnSelected
-                    ]}
-                    onPress={() => setRunOutBatsmanId(player.id)}
+                    key={option.key}
+                    style={[styles.wicketTypeBtn, selected && styles.wicketTypeBtnSelected]}
+                    onPress={() => setWicketType(value)}
+                    activeOpacity={0.8}
                   >
-                    <User size={18} color={runOutBatsmanId === player.id ? colors.textDark : colors.textSecondary} />
-                    <Text style={[
-                      styles.batsmanBtnText,
-                      runOutBatsmanId === player.id && styles.batsmanBtnTextSelected
-                    ]}>
-                      {player.name}
-                    </Text>
-                    <Text style={styles.batsmanRoleText}>
-                      {player.role}
+                    <Text style={[styles.wicketTypeBtnText, selected && styles.wicketTypeBtnTextSelected]}>
+                      {option.label}
                     </Text>
                   </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={styles.sectionLabel}>Runs Completed</Text>
-              <View style={styles.runsGrid}>
-                {[0, 1, 2, 3].map((runs) => (
-                  <TouchableOpacity
-                    key={runs}
-                    style={[
-                      styles.runBtn,
-                      runOutRuns === runs && styles.runBtnSelected,
-                    ]}
-                    onPress={() => setRunOutRuns(runs)}
-                  >
-                    <Text style={[
-                      styles.runBtnText,
-                      runOutRuns === runs && styles.runBtnTextSelected,
-                    ]}>
-                      {runs}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+                );
+              })}
             </View>
-          )}
+
+            {wicketType === 'run-out' && (
+              <View style={styles.runOutSection}>
+                <Text style={styles.sectionLabel}>Who got out?</Text>
+                <View style={styles.batsmanSelectionRow}>
+                  {[
+                    { name: strikerName, id: strikerId, role: 'Striker' },
+                    { name: nonStrikerName, id: nonStrikerId, role: 'Non-Striker' }
+                  ].map((player, idx) => (
+                    <TouchableOpacity
+                      key={player.id}
+                      style={[
+                        styles.batsmanBtn,
+                        runOutBatsmanId === player.id && styles.batsmanBtnSelected
+                      ]}
+                      onPress={() => setRunOutBatsmanId(player.id)}
+                    >
+                      <User size={18} color={runOutBatsmanId === player.id ? colors.textDark : colors.textSecondary} />
+                      <Text style={[
+                        styles.batsmanBtnText,
+                        runOutBatsmanId === player.id && styles.batsmanBtnTextSelected
+                      ]}>
+                        {player.name}
+                      </Text>
+                      <Text style={styles.batsmanRoleText}>
+                        {player.role}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={styles.sectionLabel}>Runs Completed</Text>
+                <View style={styles.runsGrid}>
+                  {[0, 1, 2, 3].map((runs) => (
+                    <TouchableOpacity
+                      key={runs}
+                      style={[
+                        styles.runBtn,
+                        runOutRuns === runs && styles.runBtnSelected,
+                      ]}
+                      onPress={() => setRunOutRuns(runs)}
+                    >
+                      <Text style={[
+                        styles.runBtnText,
+                        runOutRuns === runs && styles.runBtnTextSelected,
+                      ]}>
+                        {runs}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {(wicketType === 'caught' || wicketType === 'run-out') && (
+              <View style={styles.fielderSection}>
+                <Text style={styles.sectionLabel}>Fielder involved</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.fielderScroll}>
+                  {fielders.map(fielder => (
+                    <TouchableOpacity
+                      key={fielder.id}
+                      style={[
+                        styles.fielderBtn,
+                        selectedFielderId === fielder.id && styles.fielderBtnSelected
+                      ]}
+                      onPress={() => setSelectedFielderId(selectedFielderId === fielder.id ? null : fielder.id)}
+                    >
+                      <Text style={[
+                        styles.fielderBtnText,
+                        selectedFielderId === fielder.id && styles.fielderBtnTextSelected
+                      ]}>
+                        {fielder.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+          </ScrollView>
 
           <View style={styles.footer}>
             <TouchableOpacity
@@ -166,15 +210,19 @@ const styles = StyleSheet.create({
   modalView: {
     backgroundColor: colors.surface,
     borderRadius: 24,
-    padding: 24,
+    padding: 16,
     width: width * 0.9,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
+    maxHeight: Dimensions.get('window').height * 0.8,
+  },
+  modalBody: {
+    marginBottom: 16,
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
   },
   iconCircle: {
     width: 40,
@@ -205,8 +253,8 @@ const styles = StyleSheet.create({
   wicketTypeGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 24,
+    gap: 8,
+    marginBottom: 16,
   },
   wicketTypeBtn: {
     flexBasis: '31%',
@@ -231,12 +279,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   runOutSection: {
-    marginBottom: 24,
+    marginBottom: 16,
   },
   batsmanSelectionRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
+    gap: 10,
+    marginBottom: 16,
   },
   batsmanBtn: {
     flex: 1,
@@ -268,7 +316,7 @@ const styles = StyleSheet.create({
   },
   runsGrid: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
   runBtn: {
     flex: 1,
@@ -322,5 +370,32 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 16,
   },
-
+  fielderSection: {
+    marginBottom: 24,
+  },
+  fielderScroll: {
+    flexDirection: 'row',
+  },
+  fielderBtn: {
+    backgroundColor: colors.cardAlt,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+  },
+  fielderBtnSelected: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  fielderBtnText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  fielderBtnTextSelected: {
+    color: colors.textDark,
+    fontWeight: '700',
+  },
 });
