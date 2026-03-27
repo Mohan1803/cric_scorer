@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { getMatchData } from './firebaseService';
 import * as Print from 'expo-print';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from './theme';
 import { router } from 'expo-router';
 import { useGameStore } from '../store/gameStore';
@@ -256,7 +257,7 @@ export default function TeamEntry() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <LinearGradient
         colors={[colors.background, colors.surfaceDeeper, '#0F172A']}
         style={StyleSheet.absoluteFill}
@@ -360,7 +361,7 @@ export default function TeamEntry() {
           <Text style={styles.footerText}>Secure scoring environment active</Text>
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 

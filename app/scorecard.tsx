@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Animated, Easing, Dimensions, BackHandler } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors, shadows } from './theme';
@@ -448,7 +449,7 @@ export default function Scorecard() {
   };
 
   return (
-    <View style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea}>
 
       <ScrollView
         stickyHeaderIndices={[1]}
@@ -740,7 +741,7 @@ export default function Scorecard() {
       )}
 
       {renderAnimations()}
-    </View>
+    </SafeAreaView>
   );
 }
 
