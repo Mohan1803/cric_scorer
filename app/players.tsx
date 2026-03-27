@@ -329,14 +329,12 @@ const styles = StyleSheet.create({
   },
   headerBackText: {
     color: colors.accent,
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 12,
     marginLeft: -4,
   },
   headerTitle: {
     color: colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '900',
+    fontSize: 14,
     textTransform: 'uppercase',
     letterSpacing: 2,
   },
@@ -369,13 +367,11 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
   },
   segmentText: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
     color: colors.textSecondary,
   },
   activeSegmentText: {
     color: colors.textPrimary,
-    fontWeight: '800',
   },
   formContent: {
     marginTop: 8,
@@ -395,8 +391,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   progressTitle: {
-    fontSize: 12,
-    fontWeight: '900',
+    fontSize: 10,
     color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 1.5,
@@ -408,8 +403,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   progressCount: {
-    fontSize: 14,
-    fontWeight: '900',
+    fontSize: 12,
     color: colors.accentSecondary,
   },
   progressTotal: {
@@ -433,8 +427,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   sectionTitle: {
-    fontSize: 13,
-    fontWeight: '900',
+    fontSize: 11,
     color: colors.textPrimary,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -471,7 +464,6 @@ const styles = StyleSheet.create({
   },
   rankText: {
     fontSize: 9,
-    fontWeight: '900',
     color: colors.textMuted,
     letterSpacing: 1,
   },
@@ -486,9 +478,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 15,
+    fontSize: 13,
     color: colors.textPrimary,
-    fontWeight: '700',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.03)',
   },
@@ -509,8 +500,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   addPlayerText: {
-    fontSize: 14,
-    fontWeight: '800',
+    fontSize: 12,
     color: colors.accentSecondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -522,14 +512,13 @@ const styles = StyleSheet.create({
     ...shadows.medium,
   },
   continueGradient: {
-    paddingVertical: 18,
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   continueText: {
     color: colors.textPrimary,
-    fontSize: 18,
-    fontWeight: '900',
+    fontSize: 16,
     letterSpacing: 1,
     textTransform: 'uppercase',
   },

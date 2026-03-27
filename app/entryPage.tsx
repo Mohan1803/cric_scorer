@@ -6,14 +6,20 @@ import { colors } from './theme';
 import { router } from 'expo-router';
 import { useGameStore } from '../store/gameStore';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Trophy, Users, Hash, Settings2, Shield, Calendar } from 'lucide-react-native';
+import { Trophy, Users, Hash, Settings2, Shield, Calendar, Zap } from 'lucide-react-native';
 
 export default function TeamEntry() {
   const [team1Name, setTeam1Name] = useState('');
   const [team2Name, setTeam2Name] = useState('');
   const [overs, setOvers] = useState('');
-  const setTeams = useGameStore((state) => state.setTeams);
-  const setTotalOvers = useGameStore((state) => state.setTotalOvers);
+  const { 
+    setTeams, 
+    setTotalOvers, 
+    enableAnimations, 
+    enableSounds, 
+    setEnableAnimations, 
+    setEnableSounds 
+  } = useGameStore();
 
   const downloadMatchPDF = (matchData: any, matchName: string) => {
     const formatDate = (date: Date) => {
@@ -319,6 +325,24 @@ export default function TeamEntry() {
             />
           </View>
 
+          <View style={styles.settingsRow}>
+            <TouchableOpacity 
+              style={[styles.settingItem, !enableAnimations && styles.settingDisabled]} 
+              onPress={() => setEnableAnimations(!enableAnimations)}
+            >
+              <Zap size={16} color={enableAnimations ? colors.accent : colors.textMuted} />
+              <Text style={[styles.settingText, !enableAnimations && { color: colors.textMuted }]}>Animations</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.settingItem, !enableSounds && styles.settingDisabled]} 
+              onPress={() => setEnableSounds(!enableSounds)}
+            >
+              <Shield size={16} color={enableSounds ? colors.accentSecondary : colors.textMuted} />
+              <Text style={[styles.settingText, !enableSounds && { color: colors.textMuted }]}>Sounds</Text>
+            </TouchableOpacity>
+          </View>
+
           <TouchableOpacity activeOpacity={0.8} style={styles.button} onPress={handleContinue}>
             <LinearGradient
               colors={[colors.accent, colors.accentAlt]}
@@ -368,20 +392,19 @@ const styles = StyleSheet.create({
     shadowRadius: 15,
   },
   headerTitle: {
-    fontSize: 32,
-    fontWeight: '800',
+    fontSize: 24,
     color: colors.textPrimary,
-    letterSpacing: -0.5,
+    letterSpacing: -0.2,
   },
   headerSubtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: colors.textSecondary,
-    marginTop: 8,
+    marginTop: 4,
   },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 24,
-    padding: 24,
+    borderRadius: 16,
+    padding: 16,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.05)',
     elevation: 4,
@@ -393,28 +416,26 @@ const styles = StyleSheet.create({
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 20,
   },
   cardTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 14,
     color: colors.textPrimary,
     marginLeft: 10,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
   inputGroup: {
-    marginBottom: 24,
+    marginBottom: 16,
   },
   labelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 6,
     marginLeft: 4,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 12,
     color: colors.textSecondary,
     marginLeft: 8,
   },
@@ -422,11 +443,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 16,
-    padding: 16,
-    fontSize: 16,
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 14,
     color: colors.textPrimary,
-    fontWeight: '500',
   },
   button: {
     marginTop: 12,
@@ -439,15 +459,40 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
   },
   buttonGradient: {
-    paddingVertical: 18,
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   buttonText: {
     color: colors.textPrimary,
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 16,
     letterSpacing: 0.5,
+  },
+  settingsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 20,
+    marginTop: 8,
+  },
+  settingItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 12,
+    paddingVertical: 10,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  settingDisabled: {
+    opacity: 0.5,
+  },
+  settingText: {
+    fontSize: 12,
+    color: colors.textPrimary,
   },
   footerInfo: {
     flexDirection: 'row',

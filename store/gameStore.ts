@@ -85,6 +85,8 @@ export interface GameState {
   oversData: OverData[];
   firstInningsOversData: OverData[];
   previousStriker: Player | null;
+  enableAnimations: boolean;
+  enableSounds: boolean;
 
   setTeams: (teams: Team[]) => void;
   setTossWinner: (team: string) => void;
@@ -98,6 +100,8 @@ export interface GameState {
   undoLastBall: () => void;
   swapBatsmen: () => void;
   startSecondInnings: () => void;
+  setEnableAnimations: (enabled: boolean) => void;
+  setEnableSounds: (enabled: boolean) => void;
   startNewMatch: () => void;
   checkDuplicateName: (teamIndex: number, name: string) => boolean;
   setSecondInningsOver: (overs: number) => void;
@@ -131,6 +135,8 @@ export const useGameStore = create<GameState>()(
       firstInningsBallHistory: [],
       totalOvers: 0,
       secondInningsOver: 0,
+      enableAnimations: true,
+      enableSounds: true,
 
       target: null,
       matchDate: new Date(),
@@ -166,6 +172,8 @@ export const useGameStore = create<GameState>()(
       setSecondInningsOver: (overs: number) => set({ secondInningsOver: overs }),
       setAwaitingSecondInningsStart: (flag: boolean) => set({ awaitingSecondInningsStart: flag }),
       setPreviousStriker: (player: Player | null) => set({ previousStriker: player }),
+      setEnableAnimations: (enabled: boolean) => set({ enableAnimations: enabled }),
+      setEnableSounds: (enabled: boolean) => set({ enableSounds: enabled }),
 
       batsmanToReplace: null,
       showBatsmanSelectModal: false,

@@ -173,8 +173,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '900',
+    fontSize: 16,
     color: colors.textPrimary,
     textTransform: 'uppercase',
     letterSpacing: 2,
@@ -207,8 +206,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   teamName: {
-    fontSize: 16,
-    fontWeight: '900',
+    fontSize: 14,
     color: colors.accent,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -240,10 +238,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   roleTitle: {
-    fontSize: 12,
-    fontWeight: '800',
+    fontSize: 11,
     color: colors.textMuted,
-    marginBottom: 10,
+    marginBottom: 8,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
@@ -268,13 +265,11 @@ const styles = StyleSheet.create({
     borderColor: colors.accentSecondary,
   },
   playerChipText: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 12,
     color: colors.textSecondary,
   },
   playerChipTextActive: {
     color: colors.background,
-    fontWeight: '800',
   },
   continueBtn: {
     marginTop: 20,
@@ -291,8 +286,7 @@ const styles = StyleSheet.create({
   },
   continueText: {
     color: colors.textDark,
-    fontSize: 16,
-    fontWeight: '900',
+    fontSize: 14,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },

@@ -61,7 +61,9 @@ export default function Scorecard() {
     previousStriker,
     setPreviousStriker,
     matchCompleted,
-    batsmanToReplace
+    batsmanToReplace,
+    enableAnimations,
+    enableSounds,
   } = useGameStore();
 
   const [showNewBowlerSelection, setShowNewBowlerSelection] = useState(false);
@@ -163,6 +165,7 @@ export default function Scorecard() {
   }, []);
 
   const playCelebrationSound = async (runs: number) => {
+    if (!enableSounds) return;
     try {
       if (soundRef.current) {
         await soundRef.current.unloadAsync();
@@ -196,26 +199,62 @@ export default function Scorecard() {
     }
   };
 
+  const playWicketSound = async () => {
+    if (!enableSounds) return;
+    try {
+      if (soundRef.current) {
+        await soundRef.current.unloadAsync();
+      }
+
+      const { sound } = await Audio.Sound.createAsync(
+        require('../assets/audio/Wicket.mp3'),
+        { shouldPlay: true }
+      );
+
+      soundRef.current = sound;
+      setIsAudioPlaying(true);
+
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          setIsAudioPlaying(false);
+          sound.unloadAsync();
+          soundRef.current = null;
+        }
+      });
+    } catch (error) {
+      console.error('Error playing wicket sound:', error);
+      setIsAudioPlaying(false);
+    }
+  };
+
   const handleRun = (runs: number) => {
     if (!striker || !currentBowler) return;
     updateScore({ runs, isExtra: false, isNoBall: false, batsmanName: striker.name, batsmanId: striker.id, bowlerName: currentBowler.name, bowlerId: currentBowler.id, isWicket: false });
 
     if (runs === 4 || runs === 6) {
       setCelebrationText(runs === 6 ? 'MASSIVE SIX!' : 'FANTASTIC FOUR!');
-      setShowConfetti(true);
-      playCelebrationSound(runs);
+      
+      if (enableAnimations) {
+        setShowConfetti(true);
+        playCelebrationSound(runs);
 
-      Animated.sequence([
-        Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 50, friction: 3 }),
-        Animated.delay(2000),
-        Animated.timing(fadeAnim, { toValue: 0, duration: 500, useNativeDriver: true })
-      ]).start(() => {
-        setShowConfetti(false);
-        setCelebrationText('');
-        scaleAnim.setValue(0);
+        Animated.sequence([
+          Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 50, friction: 3 }),
+          Animated.delay(2000),
+          Animated.timing(fadeAnim, { toValue: 0, duration: 500, useNativeDriver: true })
+        ]).start(() => {
+          setShowConfetti(false);
+          setCelebrationText('');
+          scaleAnim.setValue(0);
+          fadeAnim.setValue(1);
+        });
         fadeAnim.setValue(1);
-      });
-      fadeAnim.setValue(1);
+      } else {
+        // Just show text briefly or skip
+        playCelebrationSound(runs);
+        setCelebrationText(runs === 6 ? 'MASSIVE SIX!' : 'FANTASTIC FOUR!');
+        setTimeout(() => setCelebrationText(''), 2000);
+      }
     }
   };
 
@@ -269,12 +308,18 @@ export default function Scorecard() {
         dismissalDetail: detail
       });
 
-      Animated.sequence([
-        Animated.timing(slideAnim, { toValue: width + 100, duration: 4000, easing: Easing.linear, useNativeDriver: true })
-      ]).start(() => {
-        setWicketAnimation(null);
-        slideAnim.setValue(-200);
-      });
+      playWicketSound();
+
+      if (enableAnimations) {
+        Animated.sequence([
+          Animated.timing(slideAnim, { toValue: width + 100, duration: 4000, easing: Easing.linear, useNativeDriver: true })
+        ]).start(() => {
+          setWicketAnimation(null);
+          slideAnim.setValue(-200);
+        });
+      } else {
+        setTimeout(() => setWicketAnimation(null), 2000);
+      }
     }
 
     updateScore({ 
