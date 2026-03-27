@@ -371,7 +371,7 @@ export const useGameStore = create<GameState>()(
         // 3. Strike Rotation
         const newLegalBalls = legalDeliveries + (isLegal ? 1 : 0);
         const isOverEnd = isLegal && (newLegalBalls % 6 === 0);
-        let shouldSwap = (record.runs % 2 === 1);
+        let shouldSwap = (record.runs % 2 === 1 && record.extraType !== 'penalty');
         if (isOverEnd) shouldSwap = !shouldSwap;
 
         if (shouldSwap) {
