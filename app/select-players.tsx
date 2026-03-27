@@ -21,46 +21,46 @@ export default function SelectPlayersScreen() {
   const battingTeamObj = teams.find(team => team.name === battingTeam);
   const bowlingTeamObj = teams.find(team => team.name === bowlingTeam);
 
-  const [selectedStriker, setSelectedStriker] = useState<string | null>(null);
-  const [selectedNonStriker, setSelectedNonStriker] = useState<string | null>(null);
-  const [selectedBowler, setSelectedBowler] = useState<string | null>(null);
+  const [selectedStrikerId, setSelectedStrikerId] = useState<string | null>(null);
+  const [selectedNonStrikerId, setSelectedNonStrikerId] = useState<string | null>(null);
+  const [selectedBowlerId, setSelectedBowlerId] = useState<string | null>(null);
   const [roleTab, setRoleTab] = useState<'striker' | 'nonStriker' | 'bowler'>('striker');
 
   useEffect(() => {
-    setSelectedStriker(null);
-    setSelectedNonStriker(null);
-    setSelectedBowler(null);
+    setSelectedStrikerId(null);
+    setSelectedNonStrikerId(null);
+    setSelectedBowlerId(null);
     setRoleTab('striker');
   }, [currentInningsNumber, battingTeam, bowlingTeam]);
 
-  const handleSelect = (playerName: string) => {
+  const handleSelect = (playerId: string) => {
     if (roleTab === 'striker') {
-      if (playerName === selectedNonStriker) {
+      if (playerId === selectedNonStrikerId) {
         Alert.alert('Selection Error', 'This player is already selected as Non-Striker');
         return;
       }
-      setSelectedStriker(playerName);
+      setSelectedStrikerId(playerId);
       setTimeout(() => setRoleTab('nonStriker'), 200);
     } else if (roleTab === 'nonStriker') {
-      if (playerName === selectedStriker) {
+      if (playerId === selectedStrikerId) {
         Alert.alert('Selection Error', 'This player is already selected as Striker');
         return;
       }
-      setSelectedNonStriker(playerName);
+      setSelectedNonStrikerId(playerId);
       setTimeout(() => setRoleTab('bowler'), 200);
     } else {
-      setSelectedBowler(playerName);
+      setSelectedBowlerId(playerId);
     }
   };
 
   const handleContinue = () => {
-    if (!selectedStriker || !selectedNonStriker || !selectedBowler) {
+    if (!selectedStrikerId || !selectedNonStrikerId || !selectedBowlerId) {
       Alert.alert('Incomplete Selection', 'Please select a Striker, Non-Striker, and Bowler to continue.');
       return;
     }
-    const striker = battingTeamObj?.players.find(p => p.name === selectedStriker);
-    const nonStriker = battingTeamObj?.players.find(p => p.name === selectedNonStriker);
-    const bowler = bowlingTeamObj?.players.find(p => p.name === selectedBowler);
+    const striker = battingTeamObj?.players.find(p => p.id === selectedStrikerId);
+    const nonStriker = battingTeamObj?.players.find(p => p.id === selectedNonStrikerId);
+    const bowler = bowlingTeamObj?.players.find(p => p.id === selectedBowlerId);
     
     if (striker && nonStriker && bowler) {
       setStriker(striker);
@@ -78,9 +78,9 @@ export default function SelectPlayersScreen() {
         { id: 'bowler', label: 'Bowler', icon: User }
       ].map((step, idx) => {
         const isActive = roleTab === step.id;
-        const isCompleted = (step.id === 'striker' && selectedStriker) || 
-                            (step.id === 'nonStriker' && selectedNonStriker) ||
-                            (step.id === 'bowler' && selectedBowler);
+        const isCompleted = (step.id === 'striker' && selectedStrikerId) || 
+                            (step.id === 'nonStriker' && selectedNonStrikerId) ||
+                            (step.id === 'bowler' && selectedBowlerId);
         
         return (
           <View key={step.id} style={styles.stepItem}>
@@ -107,21 +107,21 @@ export default function SelectPlayersScreen() {
       <View style={styles.summaryItem}>
         <Text style={styles.summaryLabel}>Batting</Text>
         <Text style={styles.summaryValue} numberOfLines={1}>
-          {selectedStriker || '?'} & {selectedNonStriker || '?'}
+          {(battingTeamObj?.players.find(p => p.id === selectedStrikerId)?.name || '?')} & {(battingTeamObj?.players.find(p => p.id === selectedNonStrikerId)?.name || '?')}
         </Text>
       </View>
       <View style={styles.summaryDivider} />
       <View style={styles.summaryItem}>
         <Text style={styles.summaryLabel}>Bowling</Text>
         <Text style={styles.summaryValue} numberOfLines={1}>
-          {selectedBowler || '?'}
+          {bowlingTeamObj?.players.find(p => p.id === selectedBowlerId)?.name || '?'}
         </Text>
       </View>
     </View>
   );
 
   const playersToDisplay = roleTab === 'bowler' ? bowlingTeamObj?.players : battingTeamObj?.players;
-  const currentSelection = roleTab === 'striker' ? selectedStriker : (roleTab === 'nonStriker' ? selectedNonStriker : selectedBowler);
+  const currentSelectionId = roleTab === 'striker' ? selectedStrikerId : (roleTab === 'nonStriker' ? selectedNonStrikerId : selectedBowlerId);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
@@ -146,15 +146,15 @@ export default function SelectPlayersScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.grid}>
           {playersToDisplay?.map((player, index) => {
-            const isSelected = currentSelection === player.name;
-            const isDisabled = (roleTab === 'striker' && player.name === selectedNonStriker) ||
-                               (roleTab === 'nonStriker' && player.name === selectedStriker);
+            const isSelected = currentSelectionId === player.id;
+            const isDisabled = (roleTab === 'striker' && player.id === selectedNonStrikerId) ||
+                               (roleTab === 'nonStriker' && player.id === selectedStrikerId);
             
             return (
               <TouchableOpacity
-                key={index}
+                key={player.id}
                 activeOpacity={0.7}
-                onPress={() => handleSelect(player.name)}
+                onPress={() => handleSelect(player.id)}
                 style={[
                   styles.playerCard,
                   isSelected && styles.playerCardSelected,
@@ -181,6 +181,11 @@ export default function SelectPlayersScreen() {
                 <Text style={[styles.playerName, isSelected && styles.playerNameSelected]} numberOfLines={1}>
                   {player.name}
                 </Text>
+                {roleTab === 'bowler' && (
+                  <Text style={styles.oversText}>
+                    {Math.floor(player.ballsBowled / 6)}.{player.ballsBowled % 6} Overs
+                  </Text>
+                )}
                 {isSelected && (
                   <View style={styles.selectedBadge}>
                     <Text style={styles.selectedBadgeText}>SELECTED</Text>
@@ -196,7 +201,7 @@ export default function SelectPlayersScreen() {
     <View style={styles.footer}>
         <SelectionSummary />
         <TouchableOpacity 
-          style={[styles.continueButton, (!selectedStriker || !selectedNonStriker || !selectedBowler) && styles.continueButtonDisabled]} 
+          style={[styles.continueButton, (!selectedStrikerId || !selectedNonStrikerId || !selectedBowlerId) && styles.continueButtonDisabled]} 
           onPress={handleContinue}
         >
           <Text style={styles.continueButtonText}>Start Match</Text>
@@ -345,6 +350,12 @@ const styles = StyleSheet.create({
   },
   playerNameSelected: {
     color: colors.accent,
+  },
+  oversText: {
+    fontSize: 10,
+    color: colors.textSecondary,
+    marginTop: 2,
+    fontWeight: '600',
   },
   selectedBadge: {
     marginTop: 8,
