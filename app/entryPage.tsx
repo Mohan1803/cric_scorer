@@ -53,7 +53,7 @@ export default function TeamEntry() {
       if (!battingTeam || !bowlingTeam || balls.length === 0) return '';
       const totalScore = balls.reduce((sum, ball) => sum + ball.runs + (ball.isExtra ? 1 : 0), 0);
       const totalWickets = balls.filter((ball: any) => ball.isWicket).length;
-      const legalBalls = balls.filter((ball: any) => !ball.isExtra).length;
+      const legalBalls = balls.filter((ball: any) => !ball.isExtra || (ball.isExtra && (ball.extraType === 'bye' || ball.extraType === 'lb' || ball.extraType === 'penalty'))).length;
       const totalOvers = Math.floor(legalBalls / 6);
       const currentBalls = legalBalls % 6;
       let wides = 0, noBalls = 0, legByes = 0, byes = 0, penalty = 0;

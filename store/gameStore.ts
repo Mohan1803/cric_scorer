@@ -43,6 +43,8 @@ export interface BallRecord {
   replacedBatsmanName?: string;
   replacedBatsmanId?: string;
   dismissalDetail?: string;
+  nonStrikerId?: string;
+  nonStrikerName?: string;
 }
 
 export interface Team {
@@ -273,6 +275,8 @@ export const useGameStore = create<GameState>()(
         const newBallHistory = [...state.ballHistory, {
           ...record,
           bowlerName: state.currentBowler?.name || record.bowlerName || '',
+          nonStrikerId: state.nonStriker?.id,
+          nonStrikerName: state.nonStriker?.name,
           dismissalDetail: record.isWicket ? (() => {
             switch (record.wicketType as any) {
               case 'caught': return `c ${record.fielderName || 'Fielder'} b ${record.bowlerName}`;
@@ -287,7 +291,7 @@ export const useGameStore = create<GameState>()(
           })() : undefined
         }];
 
-        const legalDeliveries = state.ballHistory.filter(b => !b.isExtra || (b.extraType === 'bye' || b.extraType === 'lb')).length;
+        const legalDeliveries = state.ballHistory.filter(b => !b.isExtra || (b.extraType === 'bye' || b.extraType === 'lb' || b.extraType === 'penalty')).length;
         const currentOverNumber = Math.floor(legalDeliveries / 6);
         const enrichedRecord = newBallHistory[newBallHistory.length - 1];
         let updatedOversData = [...state.oversData];
@@ -302,7 +306,7 @@ export const useGameStore = create<GameState>()(
           };
         }
 
-        const isLegal = !record.isExtra || (record.extraType === 'bye' || record.extraType === 'lb');
+        const isLegal = !record.isExtra || (record.extraType === 'bye' || record.extraType === 'lb' || record.extraType === 'penalty');
         const penaltyRuns = (record.isExtra && record.extraType === 'penalty') ? record.runs : 0;
 
         let tempStriker = state.striker;
@@ -323,7 +327,7 @@ export const useGameStore = create<GameState>()(
               if (isBowler) {
                 return {
                   ...player,
-                  ballsBowled: player.ballsBowled + (record.extraType !== 'penalty' && isLegal ? 1 : 0),
+                  ballsBowled: player.ballsBowled + (isLegal ? 1 : 0),
                   runsGiven: player.runsGiven + (record.isExtra ? (record.extraType === 'wide' || record.extraType === 'no-ball' ? record.runs + 1 : (record.extraType === 'penalty' ? record.runs : 0)) : record.runs),
                   wickets: player.wickets + (record.isWicket && record.wicketType !== 'run-out' ? 1 : 0),
                 };
@@ -437,8 +441,8 @@ export const useGameStore = create<GameState>()(
 
         const lastBall = state.ballHistory[state.ballHistory.length - 1];
         const newBallHistory = state.ballHistory.slice(0, -1);
-        const wasLegal = !lastBall.isExtra || (lastBall.extraType === 'bye' || lastBall.extraType === 'lb');
-        const legalBallsCount = newBallHistory.filter(b => !b.isExtra || (b.extraType === 'bye' || b.extraType === 'lb')).length;
+        const wasLegal = !lastBall.isExtra || (lastBall.extraType === 'bye' || lastBall.extraType === 'lb' || lastBall.extraType === 'penalty');
+        const legalBallsCount = newBallHistory.filter(b => !b.isExtra || (b.extraType === 'bye' || b.extraType === 'lb' || b.extraType === 'penalty')).length;
         const totalRunsRemoved = (lastBall.isExtra && lastBall.extraType === 'penalty') ? lastBall.runs : (lastBall.runs + (lastBall.isExtra && (lastBall.extraType === 'wide' || lastBall.extraType === 'no-ball') ? 1 : 0));
 
         const updatedTeams = state.teams.map(team => ({

@@ -88,7 +88,7 @@ export default function Scorecard() {
   const bowlingTeamObj = teams.find(team => team.name === bowlingTeam);
 
   const legalDeliveries = ballHistory.filter(ball =>
-    !ball.isExtra || (ball.isExtra && (ball.extraType === 'bye' || ball.extraType === 'lb'))
+    !ball.isExtra || (ball.isExtra && (ball.extraType === 'bye' || ball.extraType === 'lb' || ball.extraType === 'penalty'))
   );
 
   const totalCompletedOvers = Math.floor(legalDeliveries.length / 6);
@@ -149,7 +149,7 @@ export default function Scorecard() {
     if (!isForward) return;
 
     const lastBall = ballHistory[ballHistory.length - 1];
-    const isLastBallLegal = lastBall && (!lastBall.isExtra || (lastBall.isExtra && (lastBall.extraType === 'bye' || lastBall.extraType === 'lb')));
+    const isLastBallLegal = lastBall && (!lastBall.isExtra || (lastBall.isExtra && (lastBall.extraType === 'bye' || lastBall.extraType === 'lb' || lastBall.extraType === 'penalty')));
 
     if (isLastBallLegal && legalDeliveries.length > 0 && legalDeliveries.length % 6 === 0 && !isInningsOver && !showNewBatsmanSelection) {
       setShowNewBowlerSelection(true);
@@ -559,7 +559,7 @@ export default function Scorecard() {
               ]}>
                 <Text style={styles.ballCircleText}>
                   {ball.isWicket ? 'W' :
-                    ball.isExtra ? (ball.extraType === 'wide' ? 'wd' : ball.extraType === 'no-ball' ? 'nb' : 'lb') :
+                    ball.isExtra ? (ball.extraType === 'wide' ? 'wd' : ball.extraType === 'no-ball' ? 'nb' : ball.extraType === 'penalty' ? 'pen' : 'lb') :
                       ball.runs}
                 </Text>
               </View>

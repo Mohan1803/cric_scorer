@@ -68,9 +68,37 @@ export default function FullScorecard() {
       if (!battingTeam || !bowlingTeam || balls.length === 0) return '';
       const totalScore = balls.reduce((sum, ball) => sum + ball.runs + (ball.isExtra && (ball.extraType === 'wide' || ball.extraType === 'no-ball') ? 1 : 0), 0);
       const totalWickets = balls.filter(ball => ball.isWicket).length;
-      const legalBalls = balls.filter(ball => !ball.isExtra).length;
+      const legalBalls = balls.filter(ball => !ball.isExtra || (ball.isExtra && (ball.extraType === 'bye' || ball.extraType === 'lb' || ball.extraType === 'penalty'))).length;
       const totalOvers = Math.floor(legalBalls / 6);
       const currentBalls = legalBalls % 6;
+
+      // Derive Batting Order
+      const battingOrderIds: string[] = [];
+      balls.forEach(b => {
+        if (b.batsmanId && !battingOrderIds.includes(b.batsmanId)) {
+          battingOrderIds.push(b.batsmanId);
+        }
+        if (b.nonStrikerId && !battingOrderIds.includes(b.nonStrikerId)) {
+          battingOrderIds.push(b.nonStrikerId);
+        }
+        if (b.runOutBatsmanId && !battingOrderIds.includes(b.runOutBatsmanId)) {
+          battingOrderIds.push(b.runOutBatsmanId);
+        }
+      });
+      const sortedBatters = battingOrderIds
+        .map(id => battingTeam.players.find((p: any) => p.id === id))
+        .filter((p): p is any => !!p);
+
+      // Derive Bowling Order
+      const bowlingOrderIds: string[] = [];
+      balls.forEach(b => {
+        if (b.bowlerId && !bowlingOrderIds.includes(b.bowlerId)) {
+          bowlingOrderIds.push(b.bowlerId);
+        }
+      });
+      const sortedBowlers = bowlingOrderIds
+        .map(id => bowlingTeam.players.find((p: any) => p.id === id))
+        .filter((p): p is any => !!p);
 
       let wides = 0, noBalls = 0, legByes = 0, byes = 0, penalty = 0;
       balls.forEach(ball => {
@@ -85,14 +113,14 @@ export default function FullScorecard() {
       const battingTable = `
         <table border="1" cellpadding="4" cellspacing="0">
           <tr><th>Batter</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th></tr>
-          ${getTableRows(battingTeam.players, true)}
+          ${getTableRows(sortedBatters, true)}
         </table>
       `;
 
       const bowlingTable = `
         <table border="1" cellpadding="4" cellspacing="0">
           <tr><th>Bowler</th><th>O</th><th>R</th><th>W</th><th>Econ</th></tr>
-          ${getTableRows(bowlingTeam.players.filter((p: any) => p.ballsBowled > 0), false)}
+          ${getTableRows(sortedBowlers, false)}
         </table>
       `;
 
@@ -347,6 +375,36 @@ export default function FullScorecard() {
       );
     }
 
+    // Derive Batting Order
+    const battingOrderIds: string[] = [];
+    inningsBallHistory.forEach(b => {
+      if (b.batsmanId && !battingOrderIds.includes(b.batsmanId)) {
+        battingOrderIds.push(b.batsmanId);
+      }
+      if (b.nonStrikerId && !battingOrderIds.includes(b.nonStrikerId)) {
+        battingOrderIds.push(b.nonStrikerId);
+      }
+      if (b.runOutBatsmanId && !battingOrderIds.includes(b.runOutBatsmanId)) {
+        battingOrderIds.push(b.runOutBatsmanId);
+      }
+    });
+
+    const participatingBatters = battingOrderIds
+      .map(id => battingTeamObj.players.find(p => p.id === id))
+      .filter((p): p is any => !!p);
+
+    // Derive Bowling Order
+    const bowlingOrderIds: string[] = [];
+    inningsBallHistory.forEach(b => {
+      if (b.bowlerId && !bowlingOrderIds.includes(b.bowlerId)) {
+        bowlingOrderIds.push(b.bowlerId);
+      }
+    });
+
+    const participatingBowlers = bowlingOrderIds
+      .map(id => bowlingTeamObj.players.find(p => p.id === id))
+      .filter((p): p is any => !!p);
+
     const totalScore = inningsBallHistory.reduce(
       (sum, ball) => sum + ball.runs + (ball.isExtra && (ball.extraType === 'wide' || ball.extraType === 'no-ball') ? 1 : 0),
       0
@@ -385,7 +443,7 @@ export default function FullScorecard() {
             <Text style={styles.cell}>SR</Text>
           </View>
           <FlatList
-            data={battingTeamObj.players}
+            data={participatingBatters}
             keyExtractor={(item) => item.id}
             renderItem={({ item: player }) => {
               const strikeRate = player.balls > 0 ? ((player.runs / player.balls) * 100).toFixed(1) : '0.0';
@@ -422,7 +480,7 @@ export default function FullScorecard() {
             <Text style={styles.cell}>Econ</Text>
           </View>
           <FlatList
-            data={bowlingTeamObj.players.filter(p => p.ballsBowled > 0)}
+            data={participatingBowlers}
             keyExtractor={(item) => item.id}
             renderItem={({ item: player }) => {
               const overs = Math.floor(player.ballsBowled / 6);

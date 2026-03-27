@@ -42,7 +42,7 @@ const OversModal = ({ visible, onClose }: { visible: boolean; onClose: () => voi
           ];
 
           const displayText = ball.isExtra
-            ? (ball.extraType === 'wide' ? 'wd' : ball.extraType === 'no-ball' ? 'nb' : ball.extraType === 'lb' ? 'lb' : 'b')
+            ? (ball.extraType === 'wide' ? 'wd' : ball.extraType === 'no-ball' ? 'nb' : ball.extraType === 'penalty' ? 'pen' : ball.extraType === 'lb' ? 'lb' : 'b')
             : ball.isWicket
               ? 'W'
               : `${ball.runs}`;
