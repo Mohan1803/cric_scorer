@@ -234,7 +234,7 @@ export default function Scorecard() {
 
     if (runs === 4 || runs === 6) {
       setCelebrationText(runs === 6 ? 'MASSIVE SIX!' : 'FANTASTIC FOUR!');
-      
+
       if (enableAnimations) {
         setShowConfetti(true);
         playCelebrationSound(runs);
@@ -323,24 +323,24 @@ export default function Scorecard() {
       }
     }
 
-    updateScore({ 
-      runs: runOutRuns || 0, 
-      isExtra: false, 
-      isNoBall: false, 
-      batsmanName: runOutBatsman || striker.name, 
-      batsmanId: runOutBatsmanId || striker.id, 
-      bowlerName: currentBowler.name, 
-      bowlerId: currentBowler.id, 
-      isWicket: true, 
-      wicketType: wicketType as any, 
-      runOutBatsman, 
-      runOutBatsmanId, 
+    updateScore({
+      runs: runOutRuns || 0,
+      isExtra: false,
+      isNoBall: false,
+      batsmanName: runOutBatsman || striker.name,
+      batsmanId: runOutBatsmanId || striker.id,
+      bowlerName: currentBowler.name,
+      bowlerId: currentBowler.id,
+      isWicket: true,
+      wicketType: wicketType as any,
+      runOutBatsman,
+      runOutBatsmanId,
       runOutRuns,
       fielderName,
       fielderId
     });
     setShowWicketModal(false);
-    
+
     // Only show selection if there are more batsmen to come in
     if (getAvailableBatsmen().length > 0) {
       setShowNewBatsmanSelection(true);
@@ -750,6 +750,7 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,
+    paddingTop: 20,
   },
   scrollContent: {
     paddingBottom: 20,
