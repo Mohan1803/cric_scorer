@@ -4,6 +4,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface Player {
+  id: string;
   name: string;
   runs: number;
   balls: number;
@@ -27,14 +28,17 @@ export interface BallRecord {
   extraType?: 'wide' | 'no-ball' | 'lb' | 'bye';
   batsmanName: string;
   bowlerName: string;
+  batsmanId: string;
+  bowlerId: string;
   isWicket: boolean;
   wicketType?: 'bowled' | 'caught' | 'stumped' | 'run-out';
   runOutBatsman?: string;
+  runOutBatsmanId?: string;
   runOutRuns?: number;
   isFour?: boolean;
   isSix?: boolean;
   replacedBatsmanName?: string;
-
+  replacedBatsmanId?: string;
 }
 
 export interface Team {
@@ -285,9 +289,9 @@ export const useGameStore = create<GameState>()(
         const updatedTeams = state.teams.map((team) => ({
           ...team,
           players: team.players.map((player) => {
-            const isBowler = player.name === record.bowlerName;
-            const isStriker = player.name === state.striker?.name;
-            const isNonStriker = player.name === state.nonStriker?.name;
+            const isBowler = player.id === record.bowlerId;
+            const isStriker = player.id === state.striker?.id;
+            const isNonStriker = player.id === state.nonStriker?.id;
 
             // Bowler updates
             if (isBowler) {
@@ -303,6 +307,7 @@ export const useGameStore = create<GameState>()(
             let isOut = record.isWicket && record.wicketType !== 'run-out' && isStriker;
             if (record.isWicket && record.wicketType === 'run-out') {
               if (
+                (record.runOutBatsmanId === player.id) ||
                 (record.runOutBatsman === 'striker' && isStriker) ||
                 (record.runOutBatsman === 'non-striker' && isNonStriker) ||
                 (record.runOutBatsman === state.striker?.name && isStriker) ||
@@ -363,13 +368,13 @@ export const useGameStore = create<GameState>()(
         // Synchronize current players from updated teams
         const allPlayers = updatedTeams.flatMap(t => t.players);
         if (tempStriker) {
-          finalUpdates.striker = allPlayers.find(p => p.name === tempStriker.name) || tempStriker;
+          finalUpdates.striker = allPlayers.find(p => p.id === tempStriker.id) || tempStriker;
         }
         if (tempNonStriker) {
-          finalUpdates.nonStriker = allPlayers.find(p => p.name === tempNonStriker.name) || tempNonStriker;
+          finalUpdates.nonStriker = allPlayers.find(p => p.id === tempNonStriker.id) || tempNonStriker;
         }
         if (state.currentBowler) {
-          finalUpdates.currentBowler = allPlayers.find(p => p.name === state.currentBowler?.name) || state.currentBowler;
+          finalUpdates.currentBowler = allPlayers.find(p => p.id === state.currentBowler?.id) || state.currentBowler;
         }
 
         // Handle Wicket State Updates
@@ -388,11 +393,11 @@ export const useGameStore = create<GameState>()(
 
           // Determine which SLOT is now out (it might have swapped)
           if (record.wicketType === 'run-out') {
-            const outName = record.runOutBatsman === 'striker' ? state.striker?.name : (record.runOutBatsman === 'non-striker' ? state.nonStriker?.name : record.runOutBatsman);
-            finalUpdates.batsmanToReplace = tempStriker?.name === outName ? 'striker' : 'non-striker';
+            const outId = record.runOutBatsmanId || (record.runOutBatsman === 'striker' ? state.striker?.id : (record.runOutBatsman === 'non-striker' ? state.nonStriker?.id : null));
+            finalUpdates.batsmanToReplace = tempStriker?.id === outId ? 'striker' : 'non-striker';
           } else {
             // Normal wicket: the batsman who was the striker at the START of the ball is out
-            finalUpdates.batsmanToReplace = tempStriker?.name === state.striker?.name ? 'striker' : 'non-striker';
+            finalUpdates.batsmanToReplace = tempStriker?.id === state.striker?.id ? 'striker' : 'non-striker';
           }
           finalUpdates.showBatsmanSelectModal = true;
         }
@@ -445,7 +450,7 @@ export const useGameStore = create<GameState>()(
         const updatedTeams = state.teams.map(team => ({
           ...team,
           players: team.players.map(player => {
-            if (player.name === lastBall.batsmanName && (wasLegal || isBatsmanScoringExtra)) {
+            if (player.id === lastBall.batsmanId && (wasLegal || isBatsmanScoringExtra)) {
               return {
                 ...player,
                 runs: player.runs - lastBall.runs,
@@ -454,7 +459,7 @@ export const useGameStore = create<GameState>()(
                 sixes: player.sixes - (isSix ? 1 : 0),
               };
             }
-            if (player.name === lastBall.bowlerName) {
+            if (player.id === lastBall.bowlerId) {
               return {
                 ...player,
                 ballsBowled: player.ballsBowled - (lastBall.isExtra && (lastBall.extraType === 'wide' || lastBall.extraType === 'no-ball') ? 0 : 1),
@@ -515,7 +520,7 @@ export const useGameStore = create<GameState>()(
         const lastLegalBall = [...newBallHistory].reverse().find(b => !b.isExtra || (b.extraType === 'bye' || b.extraType === 'lb'));
         if (lastLegalBall) {
           const allPlayers = finalUpdates.teams?.flatMap(t => t.players) || updatedTeams.flatMap(t => t.players);
-          finalUpdates.currentBowler = allPlayers.find(p => p.name === lastLegalBall.bowlerName) || null;
+          finalUpdates.currentBowler = allPlayers.find(p => p.id === lastLegalBall.bowlerId) || null;
         }
 
         // Edge case: Undo back to match start

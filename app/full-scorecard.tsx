@@ -368,7 +368,7 @@ export default function FullScorecard() {
           </View>
           <FlatList
             data={battingTeamObj.players}
-            keyExtractor={(item) => item.name}
+            keyExtractor={(item) => item.id}
             renderItem={({ item: player }) => {
               const strikeRate = player.balls > 0 ? ((player.runs / player.balls) * 100).toFixed(1) : '0.0';
               return (
@@ -398,7 +398,7 @@ export default function FullScorecard() {
           </View>
           <FlatList
             data={bowlingTeamObj.players.filter(p => p.ballsBowled > 0)}
-            keyExtractor={(item) => item.name}
+            keyExtractor={(item) => item.id}
             renderItem={({ item: player }) => {
               const overs = Math.floor(player.ballsBowled / 6);
               const balls = player.ballsBowled % 6;

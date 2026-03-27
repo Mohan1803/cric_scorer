@@ -28,7 +28,7 @@ export function getCurrentPartnership(ballHistory: BallRecord[], striker: Player
   for (const ball of partnershipBalls) {
     // Only count balls faced by current partnership
     if (
-      (ball.batsmanName === striker.name || ball.batsmanName === nonStriker.name) &&
+      (ball.batsmanId === striker.id || ball.batsmanId === nonStriker.id) &&
       (!ball.isExtra || (ball.extraType === 'bye' || ball.extraType === 'lb'))
     ) {
       balls++;
@@ -38,7 +38,7 @@ export function getCurrentPartnership(ballHistory: BallRecord[], striker: Player
         runs++;
       }
     } else if (
-      (ball.batsmanName === striker.name || ball.batsmanName === nonStriker.name) &&
+      (ball.batsmanId === striker.id || ball.batsmanId === nonStriker.id) &&
       ball.isExtra && (ball.extraType === 'wide' || ball.extraType === 'no-ball')
     ) {
       // Count runs for wide/no-ball even if not a legal delivery
@@ -63,7 +63,7 @@ export function getHighestPartnership(ballHistory: BallRecord[]) {
     if (!currentPartnership) {
       // On first ball or after wicket, start new partnership
       currentPartnership = {
-        batsmen: [ball.batsmanName, getOtherBatsman(ballHistory, i, ball.batsmanName)],
+        batsmen: [ball.batsmanName, getOtherBatsman(ballHistory, i, ball.batsmanId)],
         runs: 0,
         balls: 0,
       };
@@ -92,11 +92,11 @@ export function getHighestPartnership(ballHistory: BallRecord[]) {
 }
 
 // Helper: Guess the other batsman for a given ball (looks back in history)
-export function getOtherBatsman(ballHistory: BallRecord[], idx: number, batsman: string): string {
+export function getOtherBatsman(ballHistory: BallRecord[], idx: number, batsmanId: string): string {
   // Look for another batsman in previous balls
   for (let i = idx - 1; i >= 0; i--) {
     const prev = ballHistory[i];
-    if (prev.batsmanName !== batsman) return prev.batsmanName;
+    if (prev.batsmanId !== batsmanId) return prev.batsmanName;
   }
   return "";
 }

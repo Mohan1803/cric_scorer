@@ -117,8 +117,8 @@ export default function Scorecard() {
     return battingTeamObj?.players.filter(player =>
       player.status !== 'out' &&
       !player.isOut &&
-      player.name !== striker?.name &&
-      player.name !== nonStriker?.name
+      player.id !== striker?.id &&
+      player.id !== nonStriker?.id
     ) || [];
   };
 
@@ -216,7 +216,7 @@ export default function Scorecard() {
 
   const handleRun = (runs: number) => {
     if (!striker || !currentBowler) return;
-    updateScore({ runs, isExtra: false, isNoBall: false, batsmanName: striker.name, bowlerName: currentBowler.name, isWicket: false });
+    updateScore({ runs, isExtra: false, isNoBall: false, batsmanName: striker.name, batsmanId: striker.id, bowlerName: currentBowler.name, bowlerId: currentBowler.id, isWicket: false });
 
     if (runs === 4 || runs === 6) {
       setCelebrationText(runs === 6 ? 'MASSIVE SIX!' : 'FANTASTIC FOUR!');
@@ -244,7 +244,7 @@ export default function Scorecard() {
 
   const handleExtraRuns = (runs: number) => {
     if (!striker || !currentBowler) return;
-    updateScore({ runs, isExtra: true, isNoBall: extraType === 'no-ball', extraType, batsmanName: striker.name, bowlerName: currentBowler.name, isWicket: false });
+    updateScore({ runs, isExtra: true, isNoBall: extraType === 'no-ball', extraType, batsmanName: striker.name, batsmanId: striker.id, bowlerName: currentBowler.name, bowlerId: currentBowler.id, isWicket: false });
     setShowExtraRunsModal(false);
   };
 
@@ -252,10 +252,10 @@ export default function Scorecard() {
     setShowWicketModal(true);
   };
 
-  const handleWicketConfirm = (wicketType: string, runOutBatsman?: string, runOutRuns?: number) => {
+  const handleWicketConfirm = (wicketType: string, runOutBatsman?: string, runOutBatsmanId?: string, runOutRuns?: number) => {
     if (!striker || !currentBowler) return;
-    const outBatsman = runOutBatsman ?
-      (runOutBatsman === striker.name ? striker : nonStriker) :
+    const outBatsman = runOutBatsmanId ?
+      (runOutBatsmanId === striker.id ? striker : nonStriker) :
       striker;
 
     if (outBatsman) {
@@ -276,7 +276,20 @@ export default function Scorecard() {
       });
     }
 
-    updateScore({ runs: runOutRuns || 0, isExtra: false, isNoBall: false, batsmanName: runOutBatsman || striker.name, bowlerName: currentBowler.name, isWicket: true, wicketType: wicketType as any, runOutBatsman, runOutRuns });
+    updateScore({ 
+      runs: runOutRuns || 0, 
+      isExtra: false, 
+      isNoBall: false, 
+      batsmanName: runOutBatsman || striker.name, 
+      batsmanId: runOutBatsmanId || striker.id, 
+      bowlerName: currentBowler.name, 
+      bowlerId: currentBowler.id, 
+      isWicket: true, 
+      wicketType: wicketType as any, 
+      runOutBatsman, 
+      runOutBatsmanId, 
+      runOutRuns 
+    });
     setShowWicketModal(false);
     
     // Only show selection if there are more batsmen to come in
@@ -286,7 +299,7 @@ export default function Scorecard() {
   };
 
   const selectNewBowler = (player: typeof currentBowler) => {
-    if (player?.name === currentBowler?.name) {
+    if (player?.id === currentBowler?.id) {
       Alert.alert('Error', 'Same bowler cannot bowl consecutive overs');
       return;
     }
@@ -301,7 +314,7 @@ export default function Scorecard() {
     const isReplacingNonStriker = batsmanToReplace === 'non-striker';
     const otherPlayer = isReplacingNonStriker ? striker : nonStriker;
 
-    if (player.name === otherPlayer?.name) {
+    if (player.id === otherPlayer?.id) {
       Alert.alert('Error', `This batsman is already at the ${isReplacingNonStriker ? 'striker' : 'non-striker'} end`);
       return;
     }
@@ -472,8 +485,8 @@ export default function Scorecard() {
             {[striker, nonStriker].map((player, idx) => (
               <View key={idx} style={[styles.playerRow, idx === 0 && styles.activePlayerBg]}>
                 <View style={styles.playerNameCol}>
-                  <Text style={[styles.playerLabel, player?.name === striker?.name && styles.strikerText]}>
-                    {player?.name || 'Batsman'} {player?.name === striker?.name ? '*' : ''}
+                  <Text style={[styles.playerLabel, player?.id === striker?.id && styles.strikerText]}>
+                    {player?.name || 'Batsman'} {player?.id === striker?.id ? '*' : ''}
                   </Text>
                 </View>
                 <View style={styles.playerRunsCol}>
@@ -609,14 +622,19 @@ export default function Scorecard() {
             <ScrollView style={styles.selectionList}>
               {bowlingTeamObj?.players.map((player, idx) => (
                 <TouchableOpacity
-                  key={idx}
-                  style={[styles.playerSelectItem, player.name === currentBowler?.name && styles.playerDisabled]}
+                  key={player.id}
+                  style={[styles.playerSelectItem, player.id === currentBowler?.id && styles.playerDisabled]}
                   onPress={() => selectNewBowler(player)}
-                  disabled={player.name === currentBowler?.name}
+                  disabled={player.id === currentBowler?.id}
                 >
-                  <UserCircle2 size={24} color={player.name === currentBowler?.name ? colors.disabled : colors.accent} />
+                  <UserCircle2 size={24} color={player.id === currentBowler?.id ? colors.disabled : colors.accent} />
                   <View style={styles.playerSelectNameContainer}>
-                    <Text style={styles.playerSelectName}>{player.name}</Text>
+                    <View>
+                      <Text style={styles.playerSelectName}>{player.name}</Text>
+                      <Text style={styles.bowlerOversMini}>
+                        {Math.floor(player.ballsBowled / 6)}.{player.ballsBowled % 6} Overs
+                      </Text>
+                    </View>
                     {player.isReserve ? (
                       <View style={[styles.miniStatusTag, styles.subTag]}>
                         <Text style={styles.miniStatusTagText}>SUB</Text>
@@ -627,7 +645,7 @@ export default function Scorecard() {
                       </View>
                     )}
                   </View>
-                  {player.name === currentBowler?.name && <Text style={styles.disabledTag}>Cannot bowl</Text>}
+                  {player.id === currentBowler?.id && <Text style={styles.disabledTag}>Cannot bowl</Text>}
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -640,7 +658,7 @@ export default function Scorecard() {
             <ScrollView style={styles.selectionList}>
               {getAvailableBatsmen().map((player, idx) => (
                 <TouchableOpacity
-                  key={idx}
+                  key={player.id}
                   style={styles.playerSelectItem}
                   onPress={() => selectNewBatsman(player)}
                 >
@@ -680,7 +698,9 @@ export default function Scorecard() {
           onClose={() => setShowWicketModal(false)}
           onConfirm={handleWicketConfirm}
           strikerName={striker.name}
+          strikerId={striker.id}
           nonStrikerName={nonStriker.name}
+          nonStrikerId={nonStriker.id}
           outBatsmen={battingTeamObj?.players.filter(p => p.isOut || p.status === 'out').map(p => p.name) || []}
         />
       )}
@@ -1102,6 +1122,11 @@ const styles = StyleSheet.create({
     marginLeft: 'auto',
     fontWeight: '700',
     textTransform: 'uppercase',
+  },
+  bowlerOversMini: {
+    fontSize: 10,
+    color: colors.textSecondary,
+    fontWeight: '500',
   },
   inningsEndSection: {
     padding: 20,

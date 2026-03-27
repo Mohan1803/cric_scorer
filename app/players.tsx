@@ -78,6 +78,7 @@ export default function PlayersEntry() {
       {
         ...teams[0],
         players: validTeam1.map((p, i) => ({
+          id: `t1-p-${i}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
           name: p.name.trim(),
           runs: 0,
           balls: 0,
@@ -94,6 +95,7 @@ export default function PlayersEntry() {
       {
         ...teams[1],
         players: validTeam2.map((p, i) => ({
+          id: `t2-p-${i}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
           name: p.name.trim(),
           runs: 0,
           balls: 0,

@@ -8,9 +8,11 @@ const { width } = Dimensions.get('window');
 interface WicketModalProps {
   visible: boolean;
   onClose: () => void;
-  onConfirm: (wicketType: string, runOutBatsman?: string, runOutRuns?: number) => void;
+  onConfirm: (wicketType: string, runOutBatsman?: string, runOutBatsmanId?: string, runOutRuns?: number) => void;
   strikerName: string;
+  strikerId: string;
   nonStrikerName: string;
+  nonStrikerId: string;
   outBatsmen: string[];
 }
 
@@ -19,16 +21,19 @@ export default function WicketModal({
   onClose,
   onConfirm,
   strikerName,
+  strikerId,
   nonStrikerName,
+  nonStrikerId,
   outBatsmen
 }: WicketModalProps) {
   const [wicketType, setWicketType] = useState('bowled');
-  const [runOutBatsman, setRunOutBatsman] = useState(strikerName);
+  const [runOutBatsmanId, setRunOutBatsmanId] = useState(strikerId);
   const [runOutRuns, setRunOutRuns] = useState(0);
 
   const handleConfirm = () => {
     if (wicketType === 'run-out') {
-      onConfirm(wicketType, runOutBatsman, runOutRuns);
+      const name = runOutBatsmanId === strikerId ? strikerName : nonStrikerName;
+      onConfirm(wicketType, name, runOutBatsmanId, runOutRuns);
     } else {
       onConfirm(wicketType);
     }
@@ -81,24 +86,27 @@ export default function WicketModal({
             <View style={styles.runOutSection}>
               <Text style={styles.sectionLabel}>Who got out?</Text>
               <View style={styles.batsmanSelectionRow}>
-                {[strikerName, nonStrikerName].map((name, idx) => (
+                {[
+                  { name: strikerName, id: strikerId, role: 'Striker' },
+                  { name: nonStrikerName, id: nonStrikerId, role: 'Non-Striker' }
+                ].map((player, idx) => (
                   <TouchableOpacity
-                    key={name}
+                    key={player.id}
                     style={[
                       styles.batsmanBtn,
-                      runOutBatsman === name && styles.batsmanBtnSelected
+                      runOutBatsmanId === player.id && styles.batsmanBtnSelected
                     ]}
-                    onPress={() => setRunOutBatsman(name)}
+                    onPress={() => setRunOutBatsmanId(player.id)}
                   >
-                    <User size={18} color={runOutBatsman === name ? colors.textDark : colors.textSecondary} />
+                    <User size={18} color={runOutBatsmanId === player.id ? colors.textDark : colors.textSecondary} />
                     <Text style={[
                       styles.batsmanBtnText,
-                      runOutBatsman === name && styles.batsmanBtnTextSelected
+                      runOutBatsmanId === player.id && styles.batsmanBtnTextSelected
                     ]}>
-                      {name}
+                      {player.name}
                     </Text>
                     <Text style={styles.batsmanRoleText}>
-                      {idx === 0 ? 'Striker' : 'Non-Striker'}
+                      {player.role}
                     </Text>
                   </TouchableOpacity>
                 ))}
