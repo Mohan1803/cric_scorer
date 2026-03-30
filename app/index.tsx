@@ -73,7 +73,7 @@ export default function SplashScreen() {
             <View style={styles.content}>
                 <Animated.View style={[styles.logoContainer, animatedLogoStyle]}>
                     <Image
-                        source={require('../assets/images/one_scorer_icon.png')}
+                        source={require('../assets/images/One_scorer_logo.png')}
                         style={styles.logo}
                         resizeMode="contain"
                     />
