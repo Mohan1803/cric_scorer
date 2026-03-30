@@ -14,6 +14,7 @@ export default function RootLayout() {
         initialRouteName="index"
         screenOptions={{
           headerShown: false,
+          contentStyle: { backgroundColor: '#0B0E14' }
         }}
       >
         <Stack.Screen name="index" />
@@ -110,7 +111,7 @@ export default function RootLayout() {
           }}
         />
       </Stack>
-      <StatusBar style="auto" />
+      <StatusBar style="light" />
     </>
   );
 }

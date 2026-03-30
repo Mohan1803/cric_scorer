@@ -8,6 +8,11 @@
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/one_scorer_icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B0E14"
+    },
     "android": {
       "package": "com.ededin.cricket",
       "adaptiveIcon": {
