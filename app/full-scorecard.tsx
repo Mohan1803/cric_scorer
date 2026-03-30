@@ -54,7 +54,10 @@ export default function FullScorecard() {
     const getTableRows = (players: any[], isBatting: boolean) =>
       players.map((p: any) =>
         `<tr>
-        <td>${p.name}${isBatting && p.isOut === false ? ' (not out)' : ''}</td>
+        <td>
+          ${p.name}${p.isCaptain ? ' (C)' : ''}${p.isWicketKeeper ? ' (WK)' : ''}${isBatting && p.isOut === false ? ' (not out)' : ''}
+          ${isBatting && p.isOut && p.dismissalDetail ? `<br/><small style="color: #94A3B8; font-size: 11px;">${p.dismissalDetail}</small>` : ''}
+        </td>
         ${isBatting
           ? `<td>${p.runs}</td><td>${p.balls}</td><td>${p.fours}</td><td>${p.sixes}</td><td>${p.balls > 0 ? ((p.runs / p.balls) * 100).toFixed(1) : '0.0'}</td>`
           : `<td>${Math.floor(p.ballsBowled / 6)}.${p.ballsBowled % 6}</td><td>${p.runsGiven}</td><td>${p.wickets}</td><td>${p.ballsBowled > 0 ? (p.runsGiven / (p.ballsBowled / 6)).toFixed(1) : '0.0'}</td>`}
@@ -65,35 +68,64 @@ export default function FullScorecard() {
       if (!battingTeam || !bowlingTeam || balls.length === 0) return '';
       const totalScore = balls.reduce((sum, ball) => sum + ball.runs + (ball.isExtra && (ball.extraType === 'wide' || ball.extraType === 'no-ball') ? 1 : 0), 0);
       const totalWickets = balls.filter(ball => ball.isWicket).length;
-      const legalBalls = balls.filter(ball => !ball.isExtra).length;
+      const legalBalls = balls.filter(ball => !ball.isExtra || (ball.isExtra && (ball.extraType === 'bye' || ball.extraType === 'lb' || ball.extraType === 'penalty'))).length;
       const totalOvers = Math.floor(legalBalls / 6);
       const currentBalls = legalBalls % 6;
 
-      let wides = 0, noBalls = 0, legByes = 0, byes = 0;
+      // Derive Batting Order
+      const battingOrderIds: string[] = [];
+      balls.forEach(b => {
+        if (b.batsmanId && !battingOrderIds.includes(b.batsmanId)) {
+          battingOrderIds.push(b.batsmanId);
+        }
+        if (b.nonStrikerId && !battingOrderIds.includes(b.nonStrikerId)) {
+          battingOrderIds.push(b.nonStrikerId);
+        }
+        if (b.runOutBatsmanId && !battingOrderIds.includes(b.runOutBatsmanId)) {
+          battingOrderIds.push(b.runOutBatsmanId);
+        }
+      });
+      const sortedBatters = battingOrderIds
+        .map(id => battingTeam.players.find((p: any) => p.id === id))
+        .filter((p): p is any => !!p);
+
+      // Derive Bowling Order
+      const bowlingOrderIds: string[] = [];
+      balls.forEach(b => {
+        if (b.bowlerId && !bowlingOrderIds.includes(b.bowlerId)) {
+          bowlingOrderIds.push(b.bowlerId);
+        }
+      });
+      const sortedBowlers = bowlingOrderIds
+        .map(id => bowlingTeam.players.find((p: any) => p.id === id))
+        .filter((p): p is any => !!p);
+
+      let wides = 0, noBalls = 0, legByes = 0, byes = 0, penalty = 0;
       balls.forEach(ball => {
         if (ball.extraType === 'wide') wides += (1 + ball.runs);
         if (ball.extraType === 'no-ball') noBalls += (1 + ball.runs);
         if (ball.extraType === 'leg bye' || ball.extraType === 'lb') legByes += ball.runs;
         if (ball.extraType === 'bye') byes += ball.runs;
+        if (ball.extraType === 'penalty') penalty += ball.runs;
       });
-      const extras = wides + noBalls + legByes + byes;
+      const extras = wides + noBalls + legByes + byes + penalty;
 
       const battingTable = `
         <table border="1" cellpadding="4" cellspacing="0">
           <tr><th>Batter</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th></tr>
-          ${getTableRows(battingTeam.players, true)}
+          ${getTableRows(sortedBatters, true)}
         </table>
       `;
 
       const bowlingTable = `
         <table border="1" cellpadding="4" cellspacing="0">
           <tr><th>Bowler</th><th>O</th><th>R</th><th>W</th><th>Econ</th></tr>
-          ${getTableRows(bowlingTeam.players.filter((p: any) => p.ballsBowled > 0), false)}
+          ${getTableRows(sortedBowlers, false)}
         </table>
       `;
 
       // Fall of Wickets (FOW)
-      type Wicket = { runs: number; number: number; batter: string; over: string };
+      type Wicket = { runs: number; number: number; batter: string; over: string; detail: string };
       const wickets: Wicket[] = balls.map((ball, i) => (ball.isWicket ? {
         runs: balls.slice(0, i + 1).reduce((sum, b) => sum + b.runs + (b.isExtra ? 1 : 0), 0),
         number: balls.filter((b, idx) => b.isWicket && idx <= i).length,
@@ -101,11 +133,12 @@ export default function FullScorecard() {
         over: (() => {
           const legalBalls = balls.slice(0, i + 1).filter(b => !b.isExtra).length;
           return `${Math.floor((legalBalls - 1) / 6)}.${(legalBalls - 1) % 6}`;
-        })()
+        })(),
+        detail: ball.dismissalDetail || ''
       } : null))
         .filter((w): w is Wicket => w !== null);
       const fowSection = `<h3>Fall of Wickets</h3><p>${wickets.length > 0
-        ? wickets.map(w => `${w.runs}/${w.number} (${w.batter}, ${w.over})`).join('; ')
+        ? wickets.map(w => `${w.runs}/${w.number} (${w.batter}${w.detail ? ', ' + w.detail : ''}, ${w.over})`).join('; ')
         : 'None'}</p>`;
 
       return `
@@ -114,7 +147,7 @@ export default function FullScorecard() {
       ${bowlingTable}
       ${fowSection}
       <h3>Extras</h3>
-      <p>Total: ${extras}${wides ? `, Wides: ${wides}` : ''}${noBalls ? `, No Balls: ${noBalls}` : ''}${legByes ? `, Leg Byes: ${legByes}` : ''}${byes ? `, Byes: ${byes}` : ''}</p>
+      <p>Total: ${extras}${wides ? `, Wides: ${wides}` : ''}${noBalls ? `, No Balls: ${noBalls}` : ''}${legByes ? `, Leg Byes: ${legByes}` : ''}${byes ? `, Byes: ${byes}` : ''}${penalty ? `, Penalty: ${penalty}` : ''}</p>
       <hr/>
     `;
     };
@@ -147,100 +180,113 @@ export default function FullScorecard() {
           body {
             font-family: 'Outfit', sans-serif;
             margin: 0;
-            padding: 20px;
-            background: #0A0E1A;
-            color: #FFFFFF;
+            padding: 40px;
+            background: #FFFFFF;
+            color: #1E293B;
           }
           .card {
-            background: #111827;
-            border-radius: 16px;
-            margin-bottom: 24px;
+            background: #FFFFFF;
+            border-radius: 0;
+            margin-bottom: 30px;
             overflow: hidden;
-            border: 1px solid rgba(6, 182, 212, 0.2);
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            border: 1px solid #E2E8F0;
           }
           .header {
-            background: linear-gradient(135deg, #06B6D4 0%, #0891B2 100%);
-            padding: 24px;
-            text-align: center;
+            border-bottom: 3px solid #EE2A34;
+            padding: 20px 0;
+            text-align: left;
+            margin-bottom: 30px;
           }
           .header h1 {
             margin: 0;
-            font-size: 28px;
-            color: #0A0E1A;
-            font-weight: 700;
+            font-size: 32px;
+            color: #EE2A34;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
           }
           .header p {
-            margin: 8px 0 0;
-            color: rgba(10, 14, 26, 0.8);
-            font-weight: 500;
+            margin: 5px 0 0;
+            color: #64748B;
+            font-size: 14px;
+            font-weight: 600;
           }
           .innings-title {
-            padding: 16px 24px;
-            background: rgba(6, 182, 212, 0.1);
-            border-bottom: 1px solid rgba(6, 182, 212, 0.2);
+            padding: 10px 15px;
+            background: #F1F5F9;
+            border-bottom: 2px solid #CBD5E1;
             display: flex;
             justify-content: space-between;
             align-items: center;
           }
           .innings-title h2 {
             margin: 0;
-            font-size: 20px;
-            color: #06B6D4;
+            font-size: 18px;
+            color: #0F172A;
+            font-weight: 700;
           }
           .score-label {
-            font-size: 22px;
-            font-weight: 700;
-            color: #FFFFFF;
+            font-size: 20px;
+            font-weight: 800;
+            color: #EE2A34;
           }
           table {
             width: 100%;
             border-collapse: collapse;
-            margin: 16px 0;
+            margin: 0;
           }
           th {
-            background: rgba(255, 255, 255, 0.05);
+            background: #F8FAFC;
             text-align: left;
-            padding: 12px 16px;
-            color: rgba(255, 255, 255, 0.6);
-            font-size: 12px;
+            padding: 10px 15px;
+            color: #475569;
+            font-size: 11px;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid #E2E8F0;
           }
           td {
-            padding: 12px 16px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            font-size: 14px;
+            padding: 10px 15px;
+            border-bottom: 1px solid #F1F5F9;
+            font-size: 13px;
+            color: #334155;
           }
           .fow, .extras {
-            padding: 16px 24px;
-            background: rgba(255, 255, 255, 0.02);
-            font-size: 13px;
-            color: rgba(255, 255, 255, 0.7);
-            line-height: 1.6;
+            padding: 15px;
+            background: #FFFFFF;
+            font-size: 12px;
+            color: #475569;
+            line-height: 1.5;
+            border-top: 1px solid #E2E8F0;
           }
           .section-label {
-            color: #06B6D4;
-            font-weight: 600;
-            margin-bottom: 4px;
+            color: #EE2A34;
+            font-weight: 700;
+            margin-bottom: 2px;
+            text-transform: uppercase;
+            font-size: 11px;
           }
           .footer {
             text-align: center;
-            margin-top: 40px;
+            margin-top: 50px;
             padding: 20px;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-            color: rgba(255, 255, 255, 0.4);
-            font-size: 12px;
+            border-top: 1px solid #E2E8F0;
+            color: #94A3B8;
+            font-size: 10px;
           }
           .winner-banner {
-            background: rgba(16, 185, 129, 0.1);
-            color: #10B981;
-            padding: 12px;
+            background: #F0FDF4;
+            color: #166534;
+            padding: 15px;
             text-align: center;
-            font-weight: 600;
-            border-radius: 8px;
-            margin-bottom: 24px;
-            border: 1px solid rgba(16, 185, 129, 0.3);
+            font-weight: 700;
+            font-size: 18px;
+            margin-bottom: 30px;
+            border: 2px solid #BCF0DA;
+            text-transform: uppercase;
+          }
+          small {
+            color: #64748B !important;
           }
         </style>
       </head>
@@ -329,6 +375,36 @@ export default function FullScorecard() {
       );
     }
 
+    // Derive Batting Order
+    const battingOrderIds: string[] = [];
+    inningsBallHistory.forEach(b => {
+      if (b.batsmanId && !battingOrderIds.includes(b.batsmanId)) {
+        battingOrderIds.push(b.batsmanId);
+      }
+      if (b.nonStrikerId && !battingOrderIds.includes(b.nonStrikerId)) {
+        battingOrderIds.push(b.nonStrikerId);
+      }
+      if (b.runOutBatsmanId && !battingOrderIds.includes(b.runOutBatsmanId)) {
+        battingOrderIds.push(b.runOutBatsmanId);
+      }
+    });
+
+    const participatingBatters = battingOrderIds
+      .map(id => battingTeamObj.players.find(p => p.id === id))
+      .filter((p): p is any => !!p);
+
+    // Derive Bowling Order
+    const bowlingOrderIds: string[] = [];
+    inningsBallHistory.forEach(b => {
+      if (b.bowlerId && !bowlingOrderIds.includes(b.bowlerId)) {
+        bowlingOrderIds.push(b.bowlerId);
+      }
+    });
+
+    const participatingBowlers = bowlingOrderIds
+      .map(id => bowlingTeamObj.players.find(p => p.id === id))
+      .filter((p): p is any => !!p);
+
     const totalScore = inningsBallHistory.reduce(
       (sum, ball) => sum + ball.runs + (ball.isExtra && (ball.extraType === 'wide' || ball.extraType === 'no-ball') ? 1 : 0),
       0
@@ -367,13 +443,20 @@ export default function FullScorecard() {
             <Text style={styles.cell}>SR</Text>
           </View>
           <FlatList
-            data={battingTeamObj.players}
+            data={participatingBatters}
             keyExtractor={(item) => item.id}
             renderItem={({ item: player }) => {
               const strikeRate = player.balls > 0 ? ((player.runs / player.balls) * 100).toFixed(1) : '0.0';
               return (
                 <View style={styles.tableRow}>
-                  <Text style={[styles.cell, styles.playerCell]}>{player.name}</Text>
+                  <View style={[styles.cell, styles.playerCell]}>
+                    <Text style={styles.playerCellName}>
+                      {player.name}{player.isCaptain ? ' (C)' : ''}{player.isWicketKeeper ? ' (WK)' : ''}
+                    </Text>
+                    {player.isOut && player.dismissalDetail && (
+                      <Text style={styles.dismissalText}>{player.dismissalDetail}</Text>
+                    )}
+                  </View>
                   <Text style={styles.cell}>{player.runs}</Text>
                   <Text style={styles.cell}>{player.balls}</Text>
                   <Text style={styles.cell}>{player.fours}</Text>
@@ -397,7 +480,7 @@ export default function FullScorecard() {
             <Text style={styles.cell}>Econ</Text>
           </View>
           <FlatList
-            data={bowlingTeamObj.players.filter(p => p.ballsBowled > 0)}
+            data={participatingBowlers}
             keyExtractor={(item) => item.id}
             renderItem={({ item: player }) => {
               const overs = Math.floor(player.ballsBowled / 6);
@@ -407,7 +490,9 @@ export default function FullScorecard() {
                 : '0.0';
               return (
                 <View style={styles.tableRow}>
-                  <Text style={[styles.cell, styles.playerCell]}>{player.name}</Text>
+                  <Text style={[styles.cell, styles.playerCell]}>
+                    {player.name}{player.isCaptain ? ' (C)' : ''}{player.isWicketKeeper ? ' (WK)' : ''}
+                  </Text>
                   <Text style={styles.cell}>{overs}.{balls}</Text>
                   <Text style={styles.cell}>{player.runsGiven}</Text>
                   <Text style={styles.cell}>{player.wickets}</Text>
@@ -429,6 +514,7 @@ export default function FullScorecard() {
                 runs: balls.slice(0, i + 1).reduce((sum, b) => sum + b.runs + (b.isExtra && (b.extraType === 'wide' || b.extraType === 'no-ball') ? 1 : 0), 0),
                 number: balls.filter((b, idx) => b.isWicket && idx <= i).length,
                 batter: ball.batsmanName || '',
+                detail: ball.dismissalDetail || '',
                 over: (() => {
                   const legalBalls = balls.slice(0, i + 1).filter(b => !b.isExtra).length;
                   return `${Math.floor((legalBalls - 1) / 6)}.${(legalBalls - 1) % 6}`;
@@ -436,7 +522,7 @@ export default function FullScorecard() {
               }) : null)
               .filter((w) => w !== null);
             return wickets.length > 0
-              ? wickets.map(w => w ? `${w.runs}/${w.number} (${w.batter}, ${w.over})` : '').filter(Boolean).join('; ')
+              ? wickets.map(w => w ? `${w.runs}/${w.number} (${w.batter}${w.detail ? ', ' + w.detail : ''}, ${w.over})` : '').filter(Boolean).join('; ')
               : 'None';
           })()}</Text>
         </View>
@@ -572,6 +658,17 @@ const styles = StyleSheet.create({
     textAlign: 'left',
     color: colors.textPrimary,
     fontWeight: '600',
+  },
+  playerCellName: {
+    color: colors.textPrimary,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  dismissalText: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    marginTop: 2,
+    fontStyle: 'italic',
   },
   buttonContainer: {
     padding: 16,

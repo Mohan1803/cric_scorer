@@ -24,8 +24,8 @@ export default function PlayersEntry() {
   const teams = useGameStore((state) => state.teams);
   const setTeams = useGameStore((state) => state.setTeams);
 
-  const defaultPlayers = Array.from({ length: 15 }, () => ({ name: '', role: 'both' }));
-  const defaultPlayers1 = Array.from({ length: 15 }, () => ({ name: '', role: 'both' }));
+  const defaultPlayers = Array.from({ length: 15 }, () => ({ name: '', role: 'both', isCaptain: false, isWicketKeeper: false }));
+  const defaultPlayers1 = Array.from({ length: 15 }, () => ({ name: '', role: 'both', isCaptain: false, isWicketKeeper: false }));
 
   const [activeTab, setActiveTab] = useState(0);
   const [team1Players, setTeam1Players] = useState(defaultPlayers);
@@ -65,6 +65,7 @@ export default function PlayersEntry() {
     teamIndex === 0 ? setTeam1Players(updated) : setTeam2Players(updated);
   };
 
+
   const handleContinue = () => {
     const validTeam1 = team1Players.filter(p => p.name.trim());
     const validTeam2 = team2Players.filter(p => p.name.trim());
@@ -77,7 +78,7 @@ export default function PlayersEntry() {
     const updatedTeams = [
       {
         ...teams[0],
-        players: validTeam1.map((p, i) => ({
+        players: validTeam1.map((p: any, i) => ({
           id: `t1-p-${i}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
           name: p.name.trim(),
           runs: 0,
@@ -88,13 +89,16 @@ export default function PlayersEntry() {
           wickets: 0,
           runsGiven: 0,
           role: p.role,
-          status: '',
-          isReserve: i >= 11
+          status: 'not_out' as const,
+          isOut: false,
+          isReserve: i >= 11,
+          isCaptain: p.isCaptain || false,
+          isWicketKeeper: p.isWicketKeeper || false,
         })),
       },
       {
         ...teams[1],
-        players: validTeam2.map((p, i) => ({
+        players: validTeam2.map((p: any, i) => ({
           id: `t2-p-${i}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
           name: p.name.trim(),
           runs: 0,
@@ -105,14 +109,17 @@ export default function PlayersEntry() {
           wickets: 0,
           runsGiven: 0,
           role: p.role,
-          status: '',
-          isReserve: i >= 11
+          status: 'not_out' as const,
+          isOut: false,
+          isReserve: i >= 11,
+          isCaptain: p.isCaptain || false,
+          isWicketKeeper: p.isWicketKeeper || false,
         })),
       },
     ];
 
     setTeams(updatedTeams);
-    router.push('/toss');
+    router.push('/role-selection');
   };
 
   const handleDelete = (teamIndex: number, index: number) => {
@@ -123,8 +130,8 @@ export default function PlayersEntry() {
 
   const handleAddPlayer = (teamIndex: number) => {
     const list = teamIndex === 0 ? team1Players : team2Players;
-    if (list.length < 11) {
-      const updated = [...list, { name: '', role: 'both' }];
+    if (list.length < 15) {
+      const updated = [...list, { name: '', role: 'both', isCaptain: false, isWicketKeeper: false }];
       teamIndex === 0 ? setTeam1Players(updated) : setTeam2Players(updated);
       setTimeout(() => focusInput(teamIndex, list.length), 100);
     }
@@ -158,7 +165,7 @@ export default function PlayersEntry() {
     );
   };
 
-  const renderPlayerRow = (p: { name: string; role: string }, i: number, teamIndex: number, isSub: boolean) => (
+  const renderPlayerRow = (p: any, i: number, teamIndex: number, isSub: boolean) => (
     <View key={i} style={[styles.playerCard, isSub ? styles.subCard : styles.activeCard]}>
       <View style={styles.cardHeader}>
         <Text style={styles.rankText}>{isSub ? `SUB ${i + 1}` : `PRO ${i + 1}`}</Text>
@@ -322,14 +329,12 @@ const styles = StyleSheet.create({
   },
   headerBackText: {
     color: colors.accent,
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 12,
     marginLeft: -4,
   },
   headerTitle: {
     color: colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '900',
+    fontSize: 14,
     textTransform: 'uppercase',
     letterSpacing: 2,
   },
@@ -362,13 +367,11 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
   },
   segmentText: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
     color: colors.textSecondary,
   },
   activeSegmentText: {
     color: colors.textPrimary,
-    fontWeight: '800',
   },
   formContent: {
     marginTop: 8,
@@ -388,8 +391,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   progressTitle: {
-    fontSize: 12,
-    fontWeight: '900',
+    fontSize: 10,
     color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 1.5,
@@ -401,8 +403,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   progressCount: {
-    fontSize: 14,
-    fontWeight: '900',
+    fontSize: 12,
     color: colors.accentSecondary,
   },
   progressTotal: {
@@ -426,8 +427,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   sectionTitle: {
-    fontSize: 13,
-    fontWeight: '900',
+    fontSize: 11,
     color: colors.textPrimary,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -464,7 +464,6 @@ const styles = StyleSheet.create({
   },
   rankText: {
     fontSize: 9,
-    fontWeight: '900',
     color: colors.textMuted,
     letterSpacing: 1,
   },
@@ -479,9 +478,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 15,
+    fontSize: 13,
     color: colors.textPrimary,
-    fontWeight: '700',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.03)',
   },
@@ -502,8 +500,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   addPlayerText: {
-    fontSize: 14,
-    fontWeight: '800',
+    fontSize: 12,
     color: colors.accentSecondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -515,14 +512,13 @@ const styles = StyleSheet.create({
     ...shadows.medium,
   },
   continueGradient: {
-    paddingVertical: 18,
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   continueText: {
     color: colors.textPrimary,
-    fontSize: 18,
-    fontWeight: '900',
+    fontSize: 16,
     letterSpacing: 1,
     textTransform: 'uppercase',
   },

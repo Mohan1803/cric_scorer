@@ -148,7 +148,8 @@ export default function SelectPlayersScreen() {
           {playersToDisplay?.map((player, index) => {
             const isSelected = currentSelectionId === player.id;
             const isDisabled = (roleTab === 'striker' && player.id === selectedNonStrikerId) ||
-                               (roleTab === 'nonStriker' && player.id === selectedStrikerId);
+                               (roleTab === 'nonStriker' && player.id === selectedStrikerId) ||
+                               (roleTab === 'bowler' && player.isWicketKeeper);
             
             return (
               <TouchableOpacity
@@ -166,10 +167,14 @@ export default function SelectPlayersScreen() {
                   {isSelected ? (
                     <CheckCircle2 size={24} color="#fff" />
                   ) : (
-                    <User size={28} color={colors.textSecondary} />
+                    <User size={28} color={isDisabled && roleTab === 'bowler' ? colors.disabled : colors.textSecondary} />
                   )}
                 </View>
-                {player.isReserve ? (
+                {player.isWicketKeeper ? (
+                  <View style={[styles.xiBadge, { backgroundColor: 'rgba(234, 179, 8, 0.1)', borderColor: 'rgba(234, 179, 8, 0.3)' }]}>
+                    <Text style={[styles.xiBadgeText, { color: colors.accentSecondary }]}>WK</Text>
+                  </View>
+                ) : player.isReserve ? (
                   <View style={styles.subBadge}>
                     <Text style={styles.subBadgeText}>SUB</Text>
                   </View>
@@ -182,8 +187,8 @@ export default function SelectPlayersScreen() {
                   {player.name}
                 </Text>
                 {roleTab === 'bowler' && (
-                  <Text style={styles.oversText}>
-                    {Math.floor(player.ballsBowled / 6)}.{player.ballsBowled % 6} Overs
+                  <Text style={[styles.oversText, player.isWicketKeeper && { color: colors.accentWarn }]}>
+                    {player.isWicketKeeper ? 'WK - Cannot Bowl' : `${Math.floor(player.ballsBowled / 6)}.${player.ballsBowled % 6} Overs`}
                   </Text>
                 )}
                 {isSelected && (
@@ -200,6 +205,7 @@ export default function SelectPlayersScreen() {
 
     <View style={styles.footer}>
         <SelectionSummary />
+        
         <TouchableOpacity 
           style={[styles.continueButton, (!selectedStrikerId || !selectedNonStrikerId || !selectedBowlerId) && styles.continueButtonDisabled]} 
           onPress={handleContinue}
@@ -464,4 +470,4 @@ const styles = StyleSheet.create({
     color: colors.textDark,
     marginRight: 8,
   },
-});
+});

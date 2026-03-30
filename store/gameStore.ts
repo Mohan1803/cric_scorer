@@ -13,32 +13,38 @@ export interface Player {
   ballsBowled: number;
   wickets: number;
   runsGiven: number;
-  isOut?: boolean;
-  // role: 'batsman' | 'bowler';
-  // status: 'active' | 'out';
-  role: string,
-  status: string,
-  isReserve?: boolean
+  isOut: boolean;
+  status: 'not_out' | 'out' | 'batting';
+  dismissalDetail?: string; // e.g., "c Fielder b Bowler"
+  role: string;
+  isReserve?: boolean;
+  isCaptain?: boolean;
+  isWicketKeeper?: boolean;
 }
 
 export interface BallRecord {
   runs: number;
   isExtra: boolean;
   isNoBall: boolean;
-  extraType?: 'wide' | 'no-ball' | 'lb' | 'bye';
+  extraType?: 'wide' | 'no-ball' | 'lb' | 'bye' | 'penalty';
   batsmanName: string;
   bowlerName: string;
   batsmanId: string;
   bowlerId: string;
   isWicket: boolean;
-  wicketType?: 'bowled' | 'caught' | 'stumped' | 'run-out';
+  wicketType?: 'bowled' | 'caught' | 'stumped' | 'run-out' | 'lbw' | 'hit-wicket' | 'caught-and-bowled' | 'caught-&-bowled';
   runOutBatsman?: string;
   runOutBatsmanId?: string;
   runOutRuns?: number;
+  fielderName?: string;
+  fielderId?: string;
   isFour?: boolean;
   isSix?: boolean;
   replacedBatsmanName?: string;
   replacedBatsmanId?: string;
+  dismissalDetail?: string;
+  nonStrikerId?: string;
+  nonStrikerName?: string;
 }
 
 export interface Team {
@@ -81,6 +87,8 @@ export interface GameState {
   oversData: OverData[];
   firstInningsOversData: OverData[];
   previousStriker: Player | null;
+  enableAnimations: boolean;
+  enableSounds: boolean;
 
   setTeams: (teams: Team[]) => void;
   setTossWinner: (team: string) => void;
@@ -94,6 +102,8 @@ export interface GameState {
   undoLastBall: () => void;
   swapBatsmen: () => void;
   startSecondInnings: () => void;
+  setEnableAnimations: (enabled: boolean) => void;
+  setEnableSounds: (enabled: boolean) => void;
   startNewMatch: () => void;
   checkDuplicateName: (teamIndex: number, name: string) => boolean;
   setSecondInningsOver: (overs: number) => void;
@@ -127,6 +137,8 @@ export const useGameStore = create<GameState>()(
       firstInningsBallHistory: [],
       totalOvers: 0,
       secondInningsOver: 0,
+      enableAnimations: true,
+      enableSounds: true,
 
       target: null,
       matchDate: new Date(),
@@ -162,6 +174,8 @@ export const useGameStore = create<GameState>()(
       setSecondInningsOver: (overs: number) => set({ secondInningsOver: overs }),
       setAwaitingSecondInningsStart: (flag: boolean) => set({ awaitingSecondInningsStart: flag }),
       setPreviousStriker: (player: Player | null) => set({ previousStriker: player }),
+      setEnableAnimations: (enabled: boolean) => set({ enableAnimations: enabled }),
+      setEnableSounds: (enabled: boolean) => set({ enableSounds: enabled }),
 
       batsmanToReplace: null,
       showBatsmanSelectModal: false,
@@ -237,8 +251,6 @@ export const useGameStore = create<GameState>()(
           oversData: [],
           firstInningsOversData: [],
           previousStriker: null,
-          batsmanToReplace: null,
-          showBatsmanSelectModal: false,
           undoStack: [],
         });
       },
@@ -255,158 +267,154 @@ export const useGameStore = create<GameState>()(
 
 
 
-      updateScore: (record: any) => {
+      updateScore: (record: BallRecord) => {
         const state = get();
-        if (state.matchCompleted || state.awaitingSecondInningsStart) {
-          console.log('Innings/Match already over. Blocking updateScore.');
-          return;
-        }
-        const newBallHistory = [...state.ballHistory, record];
-        const legalDeliveries = state.ballHistory.filter((b) =>
-          !b.isExtra || (b.extraType === 'bye' || b.extraType === 'lb')
-        ).length;
+        if (state.matchCompleted || state.awaitingSecondInningsStart) return;
 
-        // Calculate the current over number based on legal deliveries
+        // 1. Enrich history and overs data
+        const newBallHistory = [...state.ballHistory, {
+          ...record,
+          bowlerName: state.currentBowler?.name || record.bowlerName || '',
+          nonStrikerId: state.nonStriker?.id,
+          nonStrikerName: state.nonStriker?.name,
+          dismissalDetail: record.isWicket ? (() => {
+            switch (record.wicketType as any) {
+              case 'caught': return `c ${record.fielderName || 'Fielder'} b ${record.bowlerName}`;
+              case 'bowled': return `b ${record.bowlerName}`;
+              case 'lbw': return `lbw b ${record.bowlerName}`;
+              case 'stumped': return `st ${record.fielderName || 'Fielder'} b ${record.bowlerName}`;
+              case 'run-out': return `run out (${record.fielderName || ''})`;
+              case 'caught-and-bowled': return `c&b ${record.bowlerName}`;
+              case 'hit-wicket': return `hit wicket b ${record.bowlerName}`;
+              default: return `b ${record.bowlerName}`;
+            }
+          })() : undefined
+        }];
+
+        const legalDeliveries = state.ballHistory.filter(b => !b.isExtra || (b.extraType === 'bye' || b.extraType === 'lb' || b.extraType === 'penalty')).length;
         const currentOverNumber = Math.floor(legalDeliveries / 6);
-
-        // Track overs correctly
+        const enrichedRecord = newBallHistory[newBallHistory.length - 1];
         let updatedOversData = [...state.oversData];
         let lastOver = updatedOversData[updatedOversData.length - 1];
 
         if (!lastOver || lastOver.overNumber !== currentOverNumber) {
-          updatedOversData.push({ overNumber: currentOverNumber, deliveries: [record], innings: state.currentInningsNumber });
+          updatedOversData.push({ overNumber: currentOverNumber, deliveries: [enrichedRecord], innings: state.currentInningsNumber });
         } else {
-          lastOver.deliveries.push(record);
+          updatedOversData[updatedOversData.length - 1] = {
+            ...lastOver,
+            deliveries: [...lastOver.deliveries, enrichedRecord]
+          };
         }
 
-        const totalRuns = record.runs + (record.isExtra && (record.extraType === 'wide' || record.extraType === 'no-ball') ? 1 : 0);
-        const isFour = record.isFour ?? record.runs === 4;
-        const isSix = record.isSix ?? record.runs === 6;
+        const isLegal = !record.isExtra || (record.extraType === 'bye' || record.extraType === 'lb' || record.extraType === 'penalty');
+        const penaltyRuns = (record.isExtra && record.extraType === 'penalty') ? record.runs : 0;
 
         let tempStriker = state.striker;
         let tempNonStriker = state.nonStriker;
 
-        const updatedTeams = state.teams.map((team) => ({
-          ...team,
-          players: team.players.map((player) => {
-            const isBowler = player.id === record.bowlerId;
-            const isStriker = player.id === state.striker?.id;
-            const isNonStriker = player.id === state.nonStriker?.id;
+        // 2. Player Updates
+        const updatedTeams = state.teams.map((team) => {
+          const isBattingTeam = team.name === state.battingTeam;
+          const isBowlingTeam = team.name === state.bowlingTeam;
 
-            // Bowler updates
-            if (isBowler) {
-              return {
-                ...player,
-                ballsBowled: player.ballsBowled + (record.isExtra && (record.extraType === 'wide' || record.extraType === 'no-ball') ? 0 : 1),
-                runsGiven: player.runsGiven + totalRuns,
-                wickets: player.wickets + (record.isWicket && record.wicketType !== 'run-out' ? 1 : 0),
-              };
-            }
+          return {
+            ...team,
+            players: team.players.map((player) => {
+              const isBowler = isBowlingTeam && player.id === record.bowlerId;
+              const isStriker = isBattingTeam && player.id === state.striker?.id;
+              const isNonStriker = isBattingTeam && player.id === state.nonStriker?.id;
 
-            // Determine if this player is the one who got out
-            let isOut = record.isWicket && record.wicketType !== 'run-out' && isStriker;
-            if (record.isWicket && record.wicketType === 'run-out') {
-              if (
-                (record.runOutBatsmanId === player.id) ||
-                (record.runOutBatsman === 'striker' && isStriker) ||
-                (record.runOutBatsman === 'non-striker' && isNonStriker) ||
-                (record.runOutBatsman === state.striker?.name && isStriker) ||
-                (record.runOutBatsman === state.nonStriker?.name && isNonStriker)
-              ) {
-                isOut = true;
+              if (isBowler) {
+                return {
+                  ...player,
+                  ballsBowled: player.ballsBowled + (isLegal ? 1 : 0),
+                  runsGiven: player.runsGiven + (record.isExtra ? (record.extraType === 'wide' || record.extraType === 'no-ball' ? record.runs + 1 : (record.extraType === 'penalty' ? record.runs : 0)) : record.runs),
+                  wickets: player.wickets + (record.isWicket && record.wicketType !== 'run-out' ? 1 : 0),
+                };
               }
-            }
 
-            // Batsman updates
-            if (isStriker || isNonStriker) {
-              const addRuns = isStriker ? (record.isNoBall ? record.runs : (record.isExtra ? 0 : record.runs)) : 0;
-              const addBall = isStriker ? (record.isExtra && (record.extraType === 'wide') ? 0 : 1) : 0;
+              if (isStriker) {
+                let p = { ...player };
+                if (record.extraType !== 'wide' && record.extraType !== 'penalty') p.balls += 1;
+                if (!record.isExtra || record.extraType === 'no-ball') {
+                  if (record.extraType !== 'penalty') {
+                    p.runs += record.runs;
+                    if (record.runs === 4) p.fours += 1;
+                    if (record.runs === 6) p.sixes += 1;
+                  }
+                }
 
-              return {
-                ...player,
-                runs: player.runs + addRuns,
-                balls: player.balls + addBall,
-                fours: player.fours + (isStriker && record.extraType !== 'wide' && isFour ? 1 : 0),
-                sixes: player.sixes + (isStriker && isSix ? 1 : 0),
-                status: isOut ? 'out' : player.status,
-                isOut: isOut ? true : player.isOut,
-              };
-            }
+                let isOut = record.isWicket && record.wicketType !== 'run-out';
+                if (record.wicketType === 'run-out' && (record.runOutBatsman === 'striker' || record.runOutBatsmanId === player.id)) isOut = true;
 
-            return player;
-          }),
-        }));
+                if (isOut) {
+                  const calculatedDetail = (() => {
+                    switch (record.wicketType as any) {
+                      case 'caught': return `c ${record.fielderName || 'Fielder'} b ${record.bowlerName}`;
+                      case 'bowled': return `b ${record.bowlerName}`;
+                      case 'lbw': return `lbw b ${record.bowlerName}`;
+                      case 'stumped': return `st ${record.fielderName || 'Fielder'} b ${record.bowlerName}`;
+                      case 'run-out': return `run out (${record.fielderName || ''})`;
+                      case 'caught-&-bowled':
+                      case 'caught-and-bowled': return `c&b ${record.bowlerName}`;
+                      case 'hit-wicket': return `hit wicket b ${record.bowlerName}`;
+                      default: return `b ${record.bowlerName}`;
+                    }
+                  })();
+                  return { ...p, isOut: true, status: 'out' as const, dismissalDetail: calculatedDetail };
+                }
+                return p;
+              }
 
-        // Strike Rotation Logic
-        const isLegalDelivery = !record.isExtra || (record.extraType === 'bye' || record.extraType === 'lb');
-        const newLegalBalls = legalDeliveries + (isLegalDelivery ? 1 : 0);
-        const isLastLegalBall = isLegalDelivery && (newLegalBalls % 6 === 0);
+              if (isNonStriker) {
+                let p = { ...player };
+                const isOut = record.isWicket && record.wicketType === 'run-out' && (record.runOutBatsman === 'non-striker' || record.runOutBatsmanId === player.id);
+                if (isOut) {
+                  return { ...p, isOut: true, status: 'out' as const, dismissalDetail: `run out (${record.fielderName || ''})` };
+                }
+                return p;
+              }
 
-        let shouldSwap = false;
-        // Rule 1: Swap on odd runs
-        if (record.runs % 2 === 1) {
-          shouldSwap = !shouldSwap;
-        }
-        // Rule 2: Swap at end of over
-        if (isLastLegalBall) {
-          shouldSwap = !shouldSwap;
-        }
+              return player;
+            }),
+          };
+        });
+
+        // 3. Strike Rotation
+        const newLegalBalls = legalDeliveries + (isLegal ? 1 : 0);
+        const isOverEnd = isLegal && (newLegalBalls % 6 === 0);
+        let shouldSwap = (record.runs % 2 === 1 && record.extraType !== 'penalty');
+        if (isOverEnd) shouldSwap = !shouldSwap;
 
         if (shouldSwap) {
           [tempStriker, tempNonStriker] = [tempNonStriker, tempStriker];
         }
 
-        // Final updates object
         let finalUpdates: Partial<GameState> = {
           teams: updatedTeams,
           ballHistory: newBallHistory,
           oversData: updatedOversData,
           striker: tempStriker,
-          nonStriker: tempNonStriker
+          nonStriker: tempNonStriker,
         };
 
-        // Synchronize current players from updated teams
         const allPlayers = updatedTeams.flatMap(t => t.players);
-        if (tempStriker) {
-          finalUpdates.striker = allPlayers.find(p => p.id === tempStriker.id) || tempStriker;
-        }
-        if (tempNonStriker) {
-          finalUpdates.nonStriker = allPlayers.find(p => p.id === tempNonStriker.id) || tempNonStriker;
-        }
-        if (state.currentBowler) {
-          finalUpdates.currentBowler = allPlayers.find(p => p.id === state.currentBowler?.id) || state.currentBowler;
-        }
+        if (tempStriker) finalUpdates.striker = allPlayers.find(p => p.id === tempStriker?.id) || tempStriker;
+        if (tempNonStriker) finalUpdates.nonStriker = allPlayers.find(p => p.id === tempNonStriker?.id) || tempNonStriker;
+        if (state.currentBowler) finalUpdates.currentBowler = allPlayers.find(p => p.id === state.currentBowler?.id) || state.currentBowler;
 
-        // Handle Wicket State Updates
         if (record.isWicket) {
-          const prevStriker = state.striker ? { ...state.striker } : null;
-          const prevNonStriker = state.nonStriker ? { ...state.nonStriker } : null;
-          const prevTeams = JSON.parse(JSON.stringify(state.teams));
-
-          finalUpdates.undoStack = [
-            ...state.undoStack,
-            {
-              type: 'wicket_restore',
-              details: { striker: prevStriker, nonStriker: prevNonStriker, teams: prevTeams },
-            },
-          ];
-
-          // Determine which SLOT is now out (it might have swapped)
-          if (record.wicketType === 'run-out') {
-            const outId = record.runOutBatsmanId || (record.runOutBatsman === 'striker' ? state.striker?.id : (record.runOutBatsman === 'non-striker' ? state.nonStriker?.id : null));
-            finalUpdates.batsmanToReplace = tempStriker?.id === outId ? 'striker' : 'non-striker';
-          } else {
-            // Normal wicket: the batsman who was the striker at the START of the ball is out
-            finalUpdates.batsmanToReplace = tempStriker?.id === state.striker?.id ? 'striker' : 'non-striker';
-          }
           finalUpdates.showBatsmanSelectModal = true;
+          const outId = record.runOutBatsmanId || (record.runOutBatsman === 'striker' ? state.striker?.id : (record.runOutBatsman === 'non-striker' ? state.nonStriker?.id : null));
+          finalUpdates.batsmanToReplace = (record.wicketType === 'run-out' ? (tempStriker?.id === outId ? 'striker' : 'non-striker') : (tempStriker?.id === state.striker?.id ? 'striker' : 'non-striker'));
+          finalUpdates.undoStack = [...state.undoStack, { type: 'wicket_restore', details: { striker: state.striker, nonStriker: state.nonStriker, teams: state.teams } }];
         }
 
-        // Innings End / Match Complete
-        const score = newBallHistory.reduce((sum, b) => sum + b.runs + (b.isExtra && (b.extraType === 'wide' || b.extraType === 'no-ball') ? 1 : 0), 0);
-        const wickets = newBallHistory.filter((b) => b.isWicket).length;
-        const battingTeamPlayers = state.teams.find((t) => t.name === state.battingTeam)?.players || [];
-        const isAllOut = wickets >= (battingTeamPlayers.length - 1);
+        // 4. Inning Progress
+        const score = newBallHistory.reduce((sum, b) => sum + b.runs + (b.isExtra && (b.extraType === 'wide' || b.extraType === 'no-ball') ? 1 : 0) + (b.isExtra && b.extraType === 'penalty' ? b.runs : 0), 0);
+        const wicketsCount = newBallHistory.filter(b => b.isWicket).length;
+        const currentBattingTeamPlayers = updatedTeams.find(t => t.name === state.battingTeam)?.players || [];
+        const isAllOut = wicketsCount >= (currentBattingTeamPlayers.length - 1);
         const oversDone = Math.floor(newLegalBalls / 6) >= state.totalOvers;
 
         if (state.currentInningsNumber === 1 && (isAllOut || oversDone)) {
@@ -416,15 +424,10 @@ export const useGameStore = create<GameState>()(
         }
 
         if (state.currentInningsNumber === 2 && state.target !== null) {
-          const secondInningsOversDone = Math.floor(newLegalBalls / 6) >= state.totalOvers;
           const isTargetAchieved = score > state.target;
-          const isTied = score === state.target;
-          const isInningsComplete = isTargetAchieved || isAllOut || secondInningsOversDone;
-
-          if (isInningsComplete && !state.matchCompleted) {
+          if ((isTargetAchieved || isAllOut || oversDone) && !state.matchCompleted) {
             finalUpdates.matchCompleted = true;
-            const alertMessage = isTargetAchieved ? `${state.battingTeam} wins by ${10 - wickets} wicket(s)!` : (isTied ? `The match is tied!` : `${state.bowlingTeam} wins by ${state.target - score} run(s)!`);
-            alert(alertMessage);
+            alert(isTargetAchieved ? `${state.battingTeam} wins!` : (score === state.target ? "Match Tied!" : `${state.bowlingTeam} wins!`));
             router.push('/full-scorecard');
           }
         }
@@ -438,74 +441,50 @@ export const useGameStore = create<GameState>()(
 
         const lastBall = state.ballHistory[state.ballHistory.length - 1];
         const newBallHistory = state.ballHistory.slice(0, -1);
-        const wasLegal = !lastBall.isExtra || (lastBall.extraType === 'bye' || lastBall.extraType === 'lb');
+        const wasLegal = !lastBall.isExtra || (lastBall.extraType === 'bye' || lastBall.extraType === 'lb' || lastBall.extraType === 'penalty');
+        const legalBallsCount = newBallHistory.filter(b => !b.isExtra || (b.extraType === 'bye' || b.extraType === 'lb' || b.extraType === 'penalty')).length;
+        const totalRunsRemoved = (lastBall.isExtra && lastBall.extraType === 'penalty') ? lastBall.runs : (lastBall.runs + (lastBall.isExtra && (lastBall.extraType === 'wide' || lastBall.extraType === 'no-ball') ? 1 : 0));
 
-        const legalBallsCount = newBallHistory.filter(b => !b.isExtra || (b.extraType === 'bye' || b.extraType === 'lb')).length;
-        const totalRunsRemoved = lastBall.runs + (lastBall.isExtra && (lastBall.extraType === 'wide' || lastBall.extraType === 'no-ball') ? 1 : 0);
-        const isFour = lastBall.isFour ?? lastBall.runs === 4;
-        const isSix = lastBall.isSix ?? lastBall.runs === 6;
-        const isBatsmanScoringExtra = lastBall.isExtra && lastBall.extraType === 'no-ball';
-
-        // Update player stats (reverse them)
         const updatedTeams = state.teams.map(team => ({
           ...team,
           players: team.players.map(player => {
-            if (player.id === lastBall.batsmanId && (wasLegal || isBatsmanScoringExtra)) {
-              return {
-                ...player,
-                runs: player.runs - lastBall.runs,
-                balls: player.balls - 1,
-                fours: player.fours - (isFour ? 1 : 0),
-                sixes: player.sixes - (isSix ? 1 : 0),
-              };
+            const isBattingTeam = team.name === state.battingTeam;
+            const isBowlingTeam = team.name === state.bowlingTeam;
+
+            if (isBattingTeam && player.id === lastBall.batsmanId && (wasLegal || (lastBall.isExtra && lastBall.extraType === 'no-ball'))) {
+              return { ...player, runs: player.runs - lastBall.runs, balls: player.balls - 1, fours: player.fours - (lastBall.runs === 4 ? 1 : 0), sixes: player.sixes - (lastBall.runs === 6 ? 1 : 0) };
             }
-            if (player.id === lastBall.bowlerId) {
-              return {
-                ...player,
-                ballsBowled: player.ballsBowled - (lastBall.isExtra && (lastBall.extraType === 'wide' || lastBall.extraType === 'no-ball') ? 0 : 1),
-                runsGiven: player.runsGiven - totalRunsRemoved,
-                wickets: player.wickets - (lastBall.isWicket && lastBall.wicketType !== 'run-out' ? 1 : 0),
-              };
+            if (isBattingTeam && lastBall.isWicket && player.id === lastBall.batsmanId) {
+              return { ...player, isOut: false, status: 'not_out' as const, dismissalDetail: undefined };
+            }
+            if (isBowlingTeam && player.id === lastBall.bowlerId) {
+              return { ...player, ballsBowled: player.ballsBowled - (wasLegal ? 1 : 0), runsGiven: player.runsGiven - totalRunsRemoved, wickets: player.wickets - (lastBall.isWicket && lastBall.wicketType !== 'run-out' ? 1 : 0) };
             }
             return player;
           }),
         }));
 
-        // Reverse strike rotation
         let tempStriker = state.striker;
         let tempNonStriker = state.nonStriker;
-
         const isOverEndOfRemovedBall = wasLegal && (legalBallsCount + 1) % 6 === 0;
-        let shouldReverseSwap = false;
-        if (lastBall.runs % 2 === 1) shouldReverseSwap = !shouldReverseSwap;
+        let shouldReverseSwap = (lastBall.runs % 2 === 1);
         if (isOverEndOfRemovedBall) shouldReverseSwap = !shouldReverseSwap;
 
         if (shouldReverseSwap && !lastBall.isWicket) {
           [tempStriker, tempNonStriker] = [tempNonStriker, tempStriker];
         }
 
-        // OversData reversal
         const updatedOversData = [...state.oversData];
         const lastOverIndex = updatedOversData.length - 1;
         if (lastOverIndex >= 0) {
           const deliveries = [...updatedOversData[lastOverIndex].deliveries];
           deliveries.pop();
-          if (deliveries.length === 0) {
-            updatedOversData.pop();
-          } else {
-            updatedOversData[lastOverIndex] = { ...updatedOversData[lastOverIndex], deliveries };
-          }
+          if (deliveries.length === 0) updatedOversData.pop();
+          else updatedOversData[lastOverIndex] = { ...updatedOversData[lastOverIndex], deliveries };
         }
 
-        let finalUpdates: Partial<GameState> = {
-          teams: updatedTeams,
-          ballHistory: newBallHistory,
-          oversData: updatedOversData,
-          striker: tempStriker,
-          nonStriker: tempNonStriker,
-        };
+        let finalUpdates: Partial<GameState> = { teams: updatedTeams, ballHistory: newBallHistory, oversData: updatedOversData, striker: tempStriker, nonStriker: tempNonStriker };
 
-        // Restoration if last ball was a wicket
         if (lastBall.isWicket && state.undoStack.length > 0) {
           const lastUndo = state.undoStack[state.undoStack.length - 1];
           if (lastUndo.type === 'wicket_restore') {
@@ -516,28 +495,21 @@ export const useGameStore = create<GameState>()(
           }
         }
 
-        // Determine Bowler after undo
         const lastLegalBall = [...newBallHistory].reverse().find(b => !b.isExtra || (b.extraType === 'bye' || b.extraType === 'lb'));
         if (lastLegalBall) {
           const allPlayers = finalUpdates.teams?.flatMap(t => t.players) || updatedTeams.flatMap(t => t.players);
           finalUpdates.currentBowler = allPlayers.find(p => p.id === lastLegalBall.bowlerId) || null;
         }
 
-        // Edge case: Undo back to match start
         if (newBallHistory.length === 0) {
           finalUpdates.currentBowler = state.lastSelectedBowler;
           finalUpdates.striker = state.initialStriker;
           finalUpdates.nonStriker = state.initialNonStriker;
         }
 
-        // Reset awaitingSecondInningsStart if necessary
         const battingTeamPlayers = (finalUpdates.teams || updatedTeams).find(t => t.name === state.battingTeam)?.players || [];
-        const totalWickets = newBallHistory.filter(b => b.isWicket).length;
-        const totalLegalOvers = Math.floor(legalBallsCount / 6);
-        const stillComplete = totalLegalOvers >= state.totalOvers || totalWickets >= (battingTeamPlayers.length - 1);
-        if (!stillComplete) {
-          finalUpdates.awaitingSecondInningsStart = false;
-        }
+        const isComplete = (Math.floor(legalBallsCount / 6) >= state.totalOvers) || (newBallHistory.filter(b => b.isWicket).length >= (battingTeamPlayers.length - 1));
+        if (!isComplete) finalUpdates.awaitingSecondInningsStart = false;
 
         set(finalUpdates);
       },
