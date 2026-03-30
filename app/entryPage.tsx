@@ -367,7 +367,7 @@ export default function TeamEntry() {
           <TouchableOpacity
             activeOpacity={0.8}
             style={[styles.button, { marginTop: 0 }]}
-            onPress={() => router.push('/coming-soon' as any)}
+            onPress={() => router.push('/lbw-recorder' as any)}
           >
             <LinearGradient
               colors={[colors.accentAlt, '#7C3AED']}
