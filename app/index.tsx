@@ -77,7 +77,6 @@ export default function SplashScreen() {
                         style={styles.logo}
                         resizeMode="contain"
                     />
-                    <View style={styles.glowEffect} />
                 </Animated.View>
 
                 <Animated.View style={[styles.textContainer, animatedTextStyle]}>
@@ -122,14 +121,6 @@ const styles = StyleSheet.create({
         width: '100%',
         height: '100%',
         zIndex: 2,
-    },
-    glowEffect: {
-        position: 'absolute',
-        width: 220,
-        height: 220,
-        borderRadius: 110,
-        backgroundColor: 'rgba(249, 205, 5, 0.15)',
-        zIndex: 1,
     },
     textContainer: {
         alignItems: 'center',
