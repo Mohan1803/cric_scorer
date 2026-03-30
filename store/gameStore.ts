@@ -83,6 +83,7 @@ export interface GameState {
   target: number | null;
   matchDate: Date;
   matchCompleted: boolean;
+  matchResult: string | null;
   awaitingSecondInningsStart: boolean;
   oversData: OverData[];
   firstInningsOversData: OverData[];
@@ -105,6 +106,7 @@ export interface GameState {
   setEnableAnimations: (enabled: boolean) => void;
   setEnableSounds: (enabled: boolean) => void;
   startNewMatch: () => void;
+  clearMatchResult: () => void;
   checkDuplicateName: (teamIndex: number, name: string) => boolean;
   setSecondInningsOver: (overs: number) => void;
   setAwaitingSecondInningsStart: (flag: boolean) => void;
@@ -143,6 +145,7 @@ export const useGameStore = create<GameState>()(
       target: null,
       matchDate: new Date(),
       matchCompleted: false,
+      matchResult: null,
       awaitingSecondInningsStart: false,
       oversData: [],
       firstInningsOversData: [], // <-- Store first innings overs
@@ -247,6 +250,7 @@ export const useGameStore = create<GameState>()(
           target: null,
           matchDate: new Date(),
           matchCompleted: false,
+          matchResult: null,
           awaitingSecondInningsStart: false,
           oversData: [],
           firstInningsOversData: [],
@@ -255,7 +259,7 @@ export const useGameStore = create<GameState>()(
         });
       },
 
-
+      clearMatchResult: () => set({ matchResult: null }),
 
       checkDuplicateName: (teamIndex: any, name: any) => {
         const state: any = get();
@@ -427,7 +431,7 @@ export const useGameStore = create<GameState>()(
           const isTargetAchieved = score > state.target;
           if ((isTargetAchieved || isAllOut || oversDone) && !state.matchCompleted) {
             finalUpdates.matchCompleted = true;
-            alert(isTargetAchieved ? `${state.battingTeam} wins!` : (score === state.target ? "Match Tied!" : `${state.bowlingTeam} wins!`));
+            finalUpdates.matchResult = isTargetAchieved ? `${state.battingTeam} wins!` : (score === state.target ? 'Match Tied!' : `${state.bowlingTeam} wins!`);
             router.push('/full-scorecard');
           }
         }

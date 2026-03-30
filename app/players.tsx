@@ -168,7 +168,7 @@ export default function PlayersEntry() {
   const renderPlayerRow = (p: any, i: number, teamIndex: number, isSub: boolean) => (
     <View key={i} style={[styles.playerCard, isSub ? styles.subCard : styles.activeCard]}>
       <View style={styles.cardHeader}>
-        <Text style={styles.rankText}>{isSub ? `SUB ${i + 1}` : `PRO ${i + 1}`}</Text>
+        <Text style={styles.rankText}>{isSub ? `SUB ${i + 1}` : `PLAYER ${i + 1}`}</Text>
         {p.name.trim().length > 0 && <CheckCircle2 size={12} color={colors.success} />}
       </View>
       <View style={styles.cardMain}>

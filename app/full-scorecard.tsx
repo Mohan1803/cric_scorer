@@ -18,22 +18,25 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { router } from 'expo-router';
 import { colors } from './theme';
-import { ChevronLeft, Download } from 'lucide-react-native';
+import { ChevronLeft, Download, Trophy, Star, Award } from 'lucide-react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function FullScorecard() {
   // Defensive: fallback for missing teams or players
   const {
-  teams,
-  battingTeam,
-  bowlingTeam,
-  ballHistory,
-  firstInningsBallHistory,
-  startNewMatch,
-  matchCompleted,
-  currentInningsNumber,
-} = useGameStore();
+    teams,
+    battingTeam,
+    bowlingTeam,
+    ballHistory,
+    firstInningsBallHistory,
+    startNewMatch,
+    matchCompleted,
+    matchResult,
+    clearMatchResult,
+    currentInningsNumber,
+  } = useGameStore();
+  const [showVictoryModal, setShowVictoryModal] = useState(!!matchResult);
   if (!teams || teams.length < 2 || !teams[0]?.players || !teams[1]?.players) {
     return (
       <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
@@ -326,7 +329,7 @@ export default function FullScorecard() {
   };
 
   // Debug: log histories
-  
+
   console.log('[FullScorecard] ballHistory:', ballHistory);
   console.log('[FullScorecard] firstInningsBallHistory:', firstInningsBallHistory);
 
@@ -335,18 +338,11 @@ export default function FullScorecard() {
   const secondInningsBattingTeamName = currentInningsNumber === 2 ? battingTeam : bowlingTeam;
   const secondInningsBowlingTeamName = currentInningsNumber === 2 ? bowlingTeam : battingTeam;
 
-  const showNotice = (msg: string) => {
-    if (Platform.OS === 'android') {
-      ToastAndroid.show(msg, ToastAndroid.SHORT);
-    } else {
-      alert(msg);
-    }
-  };
-
+  const [showNewMatchModal, setShowNewMatchModal] = useState(false);
 
   const handleNewMatch = () => {
-    showNotice('Starting new match');
     startNewMatch();
+    setShowNewMatchModal(false);
     router.replace('/');
   };
 
@@ -533,8 +529,8 @@ export default function FullScorecard() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={styles.topHeader}>
-        <TouchableOpacity 
-          style={styles.headerBackButton} 
+        <TouchableOpacity
+          style={styles.headerBackButton}
           onPress={() => router.back()}
         >
           <ChevronLeft color={colors.accent} size={28} />
@@ -544,35 +540,482 @@ export default function FullScorecard() {
       </View>
       <ScrollView contentContainerStyle={styles.container}>
 
-      {/* Robust innings rendering: */}
-      {/* First Innings */}
-      {teams.length >= 2 && firstInningsBattingTeamName && firstInningsBowlingTeamName && renderInnings(
-        firstInningsBallHistory.length > 0 ? firstInningsBallHistory : ballHistory,
-        firstInningsBattingTeamName,
-        firstInningsBowlingTeamName,
-        'First Innings'
-      )}
-
-      {/* Second Innings */}
-      {teams.length >= 2 && firstInningsBallHistory.length > 0 && secondInningsBattingTeamName && secondInningsBowlingTeamName &&
-        renderInnings(
-          ballHistory,
-          secondInningsBattingTeamName,
-          secondInningsBowlingTeamName,
-          'Second Innings'
+        {/* Robust innings rendering: */}
+        {/* First Innings */}
+        {teams.length >= 2 && firstInningsBattingTeamName && firstInningsBowlingTeamName && renderInnings(
+          firstInningsBallHistory.length > 0 ? firstInningsBallHistory : ballHistory,
+          firstInningsBattingTeamName,
+          firstInningsBowlingTeamName,
+          'First Innings'
         )}
 
-      {matchCompleted && (
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.exportButton} onPress={handleDownloadScorecard}>
-            <Text style={styles.buttonText}>Download Scorecard</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+        {/* Second Innings */}
+        {teams.length >= 2 && firstInningsBallHistory.length > 0 && secondInningsBattingTeamName && secondInningsBowlingTeamName &&
+          renderInnings(
+            ballHistory,
+            secondInningsBattingTeamName,
+            secondInningsBowlingTeamName,
+            'Second Innings'
+          )}
+
+        {/* ====== MATCH AWARDS SECTION ====== */}
+        {matchCompleted && <MatchAwards
+          teams={teams}
+          firstInningsBallHistory={firstInningsBallHistory}
+          secondInningsBallHistory={ballHistory}
+          firstInningsBattingTeamName={firstInningsBattingTeamName}
+          firstInningsBowlingTeamName={firstInningsBowlingTeamName}
+          secondInningsBattingTeamName={secondInningsBattingTeamName}
+          secondInningsBowlingTeamName={secondInningsBowlingTeamName}
+        />}
+
+        {matchCompleted && (
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity style={styles.exportButton} onPress={handleDownloadScorecard}>
+              <Download color={colors.textDark} size={20} />
+              <Text style={styles.buttonText}>Download Scorecard</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.exportButton, { backgroundColor: colors.accentGold, marginTop: 12 }]} onPress={() => setShowNewMatchModal(true)}>
+              <Text style={styles.buttonText}>🏏  Start New Match</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
+
+      {/* ====== VICTORY MODAL ====== */}
+      <Modal
+        visible={showVictoryModal && !!matchResult}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowVictoryModal(false);
+          clearMatchResult();
+        }}
+      >
+        <View style={victoryStyles.overlay}>
+          <View style={victoryStyles.card}>
+            <LinearGradient
+              colors={['#152A55', '#0B0E14']}
+              style={victoryStyles.cardGradient}
+            >
+              {/* Confetti hint */}
+              <Text style={victoryStyles.confettiTop}>🎉  🏆  🎉</Text>
+
+              {/* Result heading */}
+              <Text style={victoryStyles.matchOverLabel}>MATCH OVER</Text>
+
+              <View style={victoryStyles.resultContainer}>
+                <LinearGradient
+                  colors={['#F9CD05', '#E11A22']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={victoryStyles.resultBadge}
+                >
+                  <Trophy size={28} color="#0B0E14" />
+                </LinearGradient>
+                <Text style={victoryStyles.resultText}>{matchResult}</Text>
+              </View>
+
+              {/* Decorative line */}
+              <View style={victoryStyles.divider}>
+                <LinearGradient
+                  colors={[colors.accentAlt, colors.accentGold, colors.accentAlt]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={StyleSheet.absoluteFill}
+                />
+              </View>
+
+              {/* CTA */}
+              <TouchableOpacity
+                style={victoryStyles.ctaButton}
+                onPress={() => {
+                  setShowVictoryModal(false);
+                  clearMatchResult();
+                }}
+              >
+                <LinearGradient
+                  colors={['#F9CD05', '#E11A22']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={victoryStyles.ctaGradient}
+                >
+                  <Text style={victoryStyles.ctaText}>VIEW SCORECARD</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </LinearGradient>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ====== NEW MATCH CONFIRMATION MODAL ====== */}
+      <Modal
+        visible={showNewMatchModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowNewMatchModal(false)}
+      >
+        <View style={victoryStyles.overlay}>
+          <View style={victoryStyles.card}>
+            <LinearGradient
+              colors={['#152A55', '#0B0E14']}
+              style={victoryStyles.cardGradient}
+            >
+              <Text style={{ fontSize: 48, marginBottom: 12 }}>⚠️</Text>
+              <Text style={victoryStyles.matchOverLabel}>NEW MATCH</Text>
+              <Text style={[victoryStyles.resultText, { fontSize: 20, marginBottom: 8 }]}>
+                Start a new match?
+              </Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: 'center', marginBottom: 24, lineHeight: 20 }}>
+                All current match data including scores, overs, and player stats will be permanently cleared.
+              </Text>
+
+              <View style={victoryStyles.divider}>
+                <LinearGradient
+                  colors={[colors.accentAlt, colors.accentGold, colors.accentAlt]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={StyleSheet.absoluteFill}
+                />
+              </View>
+
+              {/* Buttons */}
+              <View style={{ flexDirection: 'row', gap: 12, width: '100%' }}>
+                <TouchableOpacity
+                  style={{ flex: 1, borderRadius: 14, borderWidth: 1.5, borderColor: colors.textSecondary, paddingVertical: 14, alignItems: 'center' }}
+                  onPress={() => setShowNewMatchModal(false)}
+                >
+                  <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '700', letterSpacing: 1 }}>CANCEL</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 1, borderRadius: 14, overflow: 'hidden' }}
+                  onPress={handleNewMatch}
+                >
+                  <LinearGradient
+                    colors={['#E11A22', '#B91C1C']}
+                    style={{ paddingVertical: 14, alignItems: 'center' }}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '900', letterSpacing: 1 }}>CONFIRM</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+
+            </LinearGradient>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
+
+// ====== MATCH AWARDS COMPONENT ======
+function MatchAwards({ teams, firstInningsBallHistory, secondInningsBallHistory, firstInningsBattingTeamName, firstInningsBowlingTeamName, secondInningsBattingTeamName, secondInningsBowlingTeamName }: any) {
+  const awards = useMemo(() => {
+    // Collect all players from both teams
+    const allPlayers = teams.flatMap((t: any) => t.players.map((p: any) => ({ ...p, teamName: t.name })));
+
+    // --- BEST BATSMAN ---
+    // Highest runs, then highest SR as tiebreaker
+    const batsmen = allPlayers
+      .filter((p: any) => p.balls > 0 || p.runs > 0)
+      .sort((a: any, b: any) => {
+        if (b.runs !== a.runs) return b.runs - a.runs;
+        const srA = a.balls > 0 ? (a.runs / a.balls) * 100 : 0;
+        const srB = b.balls > 0 ? (b.runs / b.balls) * 100 : 0;
+        return srB - srA;
+      });
+    const bestBatsman = batsmen[0] || null;
+
+    // --- BEST BOWLER ---
+    // Most wickets, then best (lowest) economy as tiebreaker
+    const bowlers = allPlayers
+      .filter((p: any) => p.ballsBowled > 0)
+      .sort((a: any, b: any) => {
+        if (b.wickets !== a.wickets) return b.wickets - a.wickets;
+        const econA = a.ballsBowled > 0 ? a.runsGiven / (a.ballsBowled / 6) : 999;
+        const econB = b.ballsBowled > 0 ? b.runsGiven / (b.ballsBowled / 6) : 999;
+        return econA - econB; // lower economy is better
+      });
+    const bestBowler = bowlers[0] || null;
+
+    // --- PLAYER OF THE MATCH ---
+    // Weighted score: batting runs + (wickets * 25) + boundary bonus + SR bonus
+    const playerScores = allPlayers.map((p: any) => {
+      let score = 0;
+      // Batting contribution
+      score += p.runs * 1;
+      score += p.fours * 2; // boundary bonus
+      score += p.sixes * 4; // six bonus
+      if (p.balls > 0) {
+        const sr = (p.runs / p.balls) * 100;
+        if (sr > 150) score += 15;
+        else if (sr > 100) score += 8;
+      }
+      // Bowling contribution
+      score += p.wickets * 25;
+      if (p.ballsBowled > 0) {
+        const econ = p.runsGiven / (p.ballsBowled / 6);
+        if (econ < 4) score += 20;
+        else if (econ < 6) score += 10;
+      }
+      return { ...p, motmScore: score };
+    }).sort((a: any, b: any) => b.motmScore - a.motmScore);
+    const playerOfMatch = playerScores[0] || null;
+
+    return { bestBatsman, bestBowler, playerOfMatch };
+  }, [teams]);
+
+  if (!awards.bestBatsman && !awards.bestBowler) return null;
+
+  const { bestBatsman, bestBowler, playerOfMatch } = awards;
+
+  const AwardCard = ({ icon, title, player, stat, gradientColors }: { icon: React.ReactNode, title: string, player: any, stat: string, gradientColors: [string, string] }) => (
+    <View style={awardStyles.card}>
+      <LinearGradient
+        colors={gradientColors}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={awardStyles.cardGradient}
+      >
+        <View style={awardStyles.iconContainer}>{icon}</View>
+        <Text style={awardStyles.awardTitle}>{title}</Text>
+        <Text style={awardStyles.playerName}>{player?.name || 'N/A'}</Text>
+        <Text style={awardStyles.teamName}>{player?.teamName || ''}</Text>
+        <Text style={awardStyles.statLine}>{stat}</Text>
+      </LinearGradient>
+    </View>
+  );
+
+  return (
+    <View style={awardStyles.container}>
+      <Text style={awardStyles.sectionHeader}>🏆  MATCH AWARDS</Text>
+      <View style={awardStyles.cardsRow}>
+        {bestBatsman && (
+          <AwardCard
+            icon={<Star size={24} color="#F9CD05" />}
+            title="BEST BATSMAN"
+            player={bestBatsman}
+            stat={`${bestBatsman.runs} (${bestBatsman.balls}) • ${bestBatsman.fours}×4 ${bestBatsman.sixes}×6`}
+            gradientColors={['#1A2E5A', '#233867']}
+          />
+        )}
+        {bestBowler && (
+          <AwardCard
+            icon={<Award size={24} color="#E11A22" />}
+            title="BEST BOWLER"
+            player={bestBowler}
+            stat={`${bestBowler.wickets}/${bestBowler.runsGiven} (${Math.floor(bestBowler.ballsBowled / 6)}.${bestBowler.ballsBowled % 6})`}
+            gradientColors={['#1A2E5A', '#233867']}
+          />
+        )}
+      </View>
+      {playerOfMatch && (
+        <View style={awardStyles.motmCard}>
+          <LinearGradient
+            colors={['#F9CD05', '#E11A22']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={awardStyles.motmGradient}
+          >
+            <Trophy size={32} color="#0B0E14" />
+            <Text style={awardStyles.motmTitle}>PLAYER OF THE MATCH</Text>
+            <Text style={awardStyles.motmName}>{playerOfMatch.name}</Text>
+            <Text style={awardStyles.motmTeam}>{playerOfMatch.teamName}</Text>
+            <View style={awardStyles.motmStats}>
+              {playerOfMatch.runs > 0 && (
+                <Text style={awardStyles.motmStatText}>
+                  🏏 {playerOfMatch.runs}({playerOfMatch.balls})
+                </Text>
+              )}
+              {playerOfMatch.wickets > 0 && (
+                <Text style={awardStyles.motmStatText}>
+                  ⚾ {playerOfMatch.wickets}/{playerOfMatch.runsGiven}
+                </Text>
+              )}
+            </View>
+          </LinearGradient>
+        </View>
+      )}
+    </View>
+  );
+}
+
+const awardStyles = StyleSheet.create({
+  container: {
+    marginTop: 8,
+    marginBottom: 16,
+    paddingHorizontal: 0,
+  },
+  sectionHeader: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.accentGold,
+    textAlign: 'center',
+    marginBottom: 16,
+    letterSpacing: 2,
+  },
+  cardsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  card: {
+    flex: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(249, 205, 5, 0.2)',
+  },
+  cardGradient: {
+    padding: 16,
+    alignItems: 'center',
+    minHeight: 140,
+    justifyContent: 'center',
+  },
+  iconContainer: {
+    marginBottom: 8,
+  },
+  awardTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.accentGold,
+    letterSpacing: 1.5,
+    marginBottom: 6,
+  },
+  playerName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  teamName: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 2,
+    marginBottom: 6,
+  },
+  statLine: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+  motmCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: 'rgba(249, 205, 5, 0.4)',
+  },
+  motmGradient: {
+    padding: 24,
+    alignItems: 'center',
+  },
+  motmTitle: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#0B0E14',
+    letterSpacing: 2,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  motmName: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#0B0E14',
+    textAlign: 'center',
+  },
+  motmTeam: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(11, 14, 20, 0.6)',
+    marginTop: 2,
+    marginBottom: 8,
+  },
+  motmStats: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  motmStatText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0B0E14',
+  },
+});
+
+const victoryStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  card: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 24,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: 'rgba(249, 205, 5, 0.3)',
+  },
+  cardGradient: {
+    padding: 32,
+    alignItems: 'center',
+  },
+  confettiTop: {
+    fontSize: 36,
+    marginBottom: 16,
+  },
+  matchOverLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.textSecondary,
+    letterSpacing: 4,
+    marginBottom: 20,
+  },
+  resultContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  resultBadge: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  resultText: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    letterSpacing: 1,
+  },
+  divider: {
+    width: 120,
+    height: 3,
+    borderRadius: 1.5,
+    overflow: 'hidden',
+    marginBottom: 24,
+  },
+  ctaButton: {
+    width: '100%',
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  ctaGradient: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  ctaText: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#0B0E14',
+    letterSpacing: 2,
+  },
+});
 
 // === Styles ===
 const styles = StyleSheet.create({
