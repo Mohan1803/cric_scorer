@@ -13,13 +13,13 @@ export default function TeamEntry() {
   const [team1Name, setTeam1Name] = useState('');
   const [team2Name, setTeam2Name] = useState('');
   const [overs, setOvers] = useState('');
-  const { 
-    setTeams, 
-    setTotalOvers, 
-    enableAnimations, 
-    enableSounds, 
-    setEnableAnimations, 
-    setEnableSounds 
+  const {
+    setTeams,
+    setTotalOvers,
+    enableAnimations,
+    enableSounds,
+    setEnableAnimations,
+    setEnableSounds
   } = useGameStore();
 
   const downloadMatchPDF = (matchData: any, matchName: string) => {
@@ -327,16 +327,16 @@ export default function TeamEntry() {
           </View>
 
           <View style={styles.settingsRow}>
-            <TouchableOpacity 
-              style={[styles.settingItem, !enableAnimations && styles.settingDisabled]} 
+            <TouchableOpacity
+              style={[styles.settingItem, !enableAnimations && styles.settingDisabled]}
               onPress={() => setEnableAnimations(!enableAnimations)}
             >
               <Zap size={16} color={enableAnimations ? colors.accent : colors.textMuted} />
               <Text style={[styles.settingText, !enableAnimations && { color: colors.textMuted }]}>Animations</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={[styles.settingItem, !enableSounds && styles.settingDisabled]} 
+            <TouchableOpacity
+              style={[styles.settingItem, !enableSounds && styles.settingDisabled]}
               onPress={() => setEnableSounds(!enableSounds)}
             >
               <Shield size={16} color={enableSounds ? colors.accentSecondary : colors.textMuted} />
@@ -352,6 +352,30 @@ export default function TeamEntry() {
               style={styles.buttonGradient}
             >
               <Text style={styles.buttonText}>Continue to Players</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+
+        <View style={[styles.card, { marginTop: 24, borderLeftWidth: 4, borderLeftColor: colors.accentAlt }]}>
+          <View style={styles.cardHeader}>
+            <Zap size={20} color={colors.accentAlt} />
+            <Text style={styles.cardTitle}>LBW Visual Tracking</Text>
+          </View>
+          <Text style={{ color: colors.textSecondary, fontSize: 13, marginBottom: 16 }}>
+            Use DRS-style ball tracking to verify LBW decisions with video recording.
+          </Text>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={[styles.button, { marginTop: 0 }]}
+            onPress={() => router.push('/lbw-recorder' as any)}
+          >
+            <LinearGradient
+              colors={[colors.accentAlt, '#7C3AED']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.buttonGradient}
+            >
+              <Text style={styles.buttonText}>Record LBW Video</Text>
             </LinearGradient>
           </TouchableOpacity>
         </View>

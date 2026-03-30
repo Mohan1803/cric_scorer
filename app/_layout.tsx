@@ -92,17 +92,16 @@ export default function RootLayout() {
           options={{
             title: 'Full Scorecard',
             headerTitleAlign: 'center',
-            // headerLeft: () => {
-            //   const navigation = useNavigation();
-            //   return (
-            //     <TouchableOpacity
-            //       onPress={() => navigation.goBack()}
-            //       style={{ paddingHorizontal: 10 }}
-            //     >
-            //       <Text style={{ fontSize: 16, color: '#007AFF' }}>{'< Back'}</Text>
-            //     </TouchableOpacity>
-            //   );
-            // },
+          }}
+        />
+        <Stack.Screen name="lbw-recorder"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen name="lbw-tracking"
+          options={{
+            headerShown: false,
           }}
         />
       </Stack>
