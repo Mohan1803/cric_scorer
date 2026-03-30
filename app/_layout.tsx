@@ -104,6 +104,11 @@ export default function RootLayout() {
             headerShown: false,
           }}
         />
+        <Stack.Screen name="coming-soon"
+          options={{
+            headerShown: false,
+          }}
+        />
       </Stack>
       <StatusBar style="auto" />
     </>
