@@ -1,18 +1,18 @@
 {
   "expo": {
-    "name": "Cric Scorer",
+    "name": "One Scorer",
     "slug": "bolt-expo-nativewind",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/cric.png",
+    "icon": "./assets/images/one_scorer_icon.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "android": {
       "package": "com.ededin.cricket",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/cric.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/images/one_scorer_icon.png",
+        "backgroundColor": "#0B0E14"
       }
     },
     "ios": {
@@ -22,7 +22,7 @@
     "web": {
       "bundler": "metro",
       "output": "single",
-      "favicon": "./assets/images/cric.png"
+      "favicon": "./assets/images/one_scorer_icon.png"
     },
     "plugins": [
       "expo-router"
