@@ -55,7 +55,8 @@
     "react-native-webview": "13.12.5",
     "zustand": "^4.5.0",
     "@react-native-async-storage/async-storage": "1.23.1",
-    "expo-media-library": "~17.0.6"
+    "expo-media-library": "~17.0.6",
+    "expo-video-thumbnails": "~9.0.3"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
