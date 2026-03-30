@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Dimensions, Platform, Alert } from 'react-native';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { useLocalSearchParams, router } from 'expo-router';
-import { X, Play, RotateCcw, Check, ChevronRight, Info, Save } from 'lucide-react-native';
+import { X, Play, RotateCcw, Check, ChevronRight, Info, Save, Cpu, Layers, CheckCircle2, TrendingUp } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as MediaLibrary from 'expo-media-library';
 import Animated, { 
@@ -25,11 +25,12 @@ export default function LbwTracking() {
   const [status, setStatus] = useState<AVPlaybackStatus | null>(null);
   const videoRef = useRef<Video>(null);
   
-  const [step, setStep] = useState<'calibrate' | 'tracking' | 'decision'>('calibrate');
+  const [step, setStep] = useState<'calibrate' | 'processing' | 'tracking' | 'decision'>('calibrate');
   const [points, setPoints] = useState<Point[]>([]);
   const [currentCalibrationStep, setCurrentCalibrationStep] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [revealStep, setRevealStep] = useState(0); // 0: None, 1: Pitching, 2: Impact, 3: Wickets
   
   const calibrationLabels = [
     'Tap where the ball PITCHED',
@@ -43,6 +44,7 @@ export default function LbwTracking() {
   const ballY = useSharedValue(0);
   const ballScale = useSharedValue(1);
   const pathProgress = useSharedValue(0);
+  const scanLineY = useSharedValue(0);
   
   const [drsStatus, setDrsStatus] = useState({
     pitching: '',
@@ -63,58 +65,89 @@ export default function LbwTracking() {
     if (currentCalibrationStep < 2) {
       setCurrentCalibrationStep(currentCalibrationStep + 1);
     } else {
-      setStep('tracking');
-      processDecision(newPoints);
+      setStep('processing');
+      scanLineY.value = withSequence(
+        withTiming(1, { duration: 1000 }),
+        withTiming(0, { duration: 1000 }),
+        withTiming(1, { duration: 500 })
+      );
+      // Simulate trajectory calculation
+      setTimeout(() => {
+        setStep('tracking');
+        processDecision(newPoints);
+      }, 2500);
     }
   };
 
   const processDecision = (p: Point[]) => {
-    // Basic logic for simulation:
-    // In a real app, you'd compare X coords to pitch center
-    // Here we'll simulate some professional feedback
+    // Realistic DRS logic simulation
+    // 1. Pitching detection
+    const isPitchingInLine = Math.abs(p[0].x - SCREEN_WIDTH / 2) < 40;
+    
+    // 2. Impact detection (simulated)
+    const isImpactInLine = Math.abs(p[1].x - SCREEN_WIDTH / 2) < 30;
+    
+    // 3. Wickets prediction (simulated hitting stumps)
+    const isHittingWickets = p[2].y < SCREEN_HEIGHT / 2 + 100 && Math.abs(p[2].x - SCREEN_WIDTH / 2) < 25;
+    
+    // 4. Decision logic
+    const isOut = isPitchingInLine && isImpactInLine && isHittingWickets;
+
     setDrsStatus({
-      pitching: 'IN LINE',
-      impact: 'IN LINE',
-      wickets: 'HITTING',
-      decision: 'OUT'
+      pitching: isPitchingInLine ? 'IN LINE' : 'OUTSIDE LEG',
+      impact: isImpactInLine ? 'IN LINE' : 'OUTSIDE OFF',
+      wickets: isHittingWickets ? 'HITTING' : 'MISSING',
+      decision: isOut ? 'OUT' : 'NOT OUT'
     });
   };
 
   const startTrackingAnimation = () => {
     if (points.length < 3) return;
     
-    // Reset video and play
+    setRevealStep(0);
     videoRef.current?.setPositionAsync(0);
     videoRef.current?.playAsync();
 
-    // Reset ball
     ballOpacity.value = 0;
     ballX.value = points[0].x;
     ballY.value = points[0].y;
-    ballScale.value = 1.2;
+    ballScale.value = 1.4;
     
-    // Animation Sequence
-    ballOpacity.value = withTiming(1, { duration: 300 });
+    // 1. Reveal Pitching
+    ballOpacity.value = withTiming(1, { duration: 200 });
     
-    // Pitch to Impact
+    // Sequential Ball Path
     ballX.value = withSequence(
-      withTiming(points[1].x, { duration: 800, easing: Easing.bezier(0.25, 0.1, 0.25, 1) }),
-      withTiming(points[2].x, { duration: 600, easing: Easing.bezier(0.25, 0.1, 0.25, 1) })
+      // Pitch -> Impact
+      withTiming(points[1].x, { duration: 1200, easing: Easing.bezier(0.25, 0.1, 0.25, 1) }, (finished) => {
+        if (finished) runOnJS(setRevealStep)(2);
+      }),
+      // Impact -> Wickets
+      withDelay(800, withTiming(points[2].x, { duration: 1000, easing: Easing.out(Easing.exp) }, (finished) => {
+        if (finished) runOnJS(setRevealStep)(3);
+      }))
     );
     
     ballY.value = withSequence(
-      withTiming(points[1].y, { duration: 800, easing: Easing.bezier(0.25, 0.1, 0.25, 1) }),
-      withTiming(points[2].y, { duration: 600, easing: Easing.bezier(0.25, 0.1, 0.25, 1) })
+      withTiming(points[1].y, { duration: 1200, easing: Easing.bezier(0.25, 0.1, 0.25, 1) }, (finished) => {
+        if (finished) runOnJS(setRevealStep)(1);
+      }),
+      withDelay(800, withTiming(points[2].y, { duration: 1000, easing: Easing.out(Easing.exp) }))
     );
 
     ballScale.value = withSequence(
-        withTiming(1, { duration: 800 }),
-        withTiming(0.8, { duration: 600 })
+      withTiming(1, { duration: 1200 }),
+      withDelay(800, withTiming(0.7, { duration: 1000 }))
+    );
+
+    pathProgress.value = withSequence(
+      withTiming(1, { duration: 1200, easing: Easing.linear }),
+      withDelay(800, withTiming(2, { duration: 1000, easing: Easing.linear }))
     );
 
     setTimeout(() => {
         setStep('decision');
-    }, 1500);
+    }, 4500);
   };
 
   const animatedBallStyle = useAnimatedStyle(() => ({
@@ -125,6 +158,30 @@ export default function LbwTracking() {
       { scale: ballScale.value }
     ],
   }));
+
+  const getTrialStyle = (offset: number) => useAnimatedStyle(() => {
+    const progress = Math.max(0, pathProgress.value - offset);
+    if (progress <= 0 || progress >= 2) return { opacity: 0 };
+    
+    let tx, ty;
+    if (progress < 1) {
+      tx = points[0].x + (points[1].x - points[0].x) * progress;
+      ty = points[0].y + (points[1].y - points[0].y) * progress;
+    } else {
+      const p2 = progress - 1;
+      tx = points[1].x + (points[2].x - points[1].x) * p2;
+      ty = points[1].y + (points[2].y - points[1].y) * p2;
+    }
+
+    return {
+      opacity: (1 - offset * 5) * ballOpacity.value * 0.4,
+      transform: [
+        { translateX: tx - 10 },
+        { translateY: ty - 10 },
+        { scale: ballScale.value * 0.8 }
+      ],
+    };
+  });
 
   const resetCalibration = () => {
     setPoints([]);
@@ -202,26 +259,111 @@ export default function LbwTracking() {
         </TouchableOpacity>
       )}
 
+      {/* Processing Step */}
+      {step === 'processing' && (
+        <View style={styles.processingOverlay}>
+          <LinearGradient
+            colors={['rgba(15, 23, 42, 0.95)', 'rgba(30, 41, 59, 0.98)']}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.processingContent}>
+            <View style={styles.scanLineContainer}>
+              <Animated.View style={[styles.scanLine, useAnimatedStyle(() => ({
+                transform: [{ translateY: scanLineY.value * 300 }]
+              }))]} />
+            </View>
+            <View style={styles.processingIconBadge}>
+              <Cpu size={40} color={colors.accentAlt} />
+            </View>
+            <Text style={styles.processingTitle}>ANALYZING DELIVERY</Text>
+            <Text style={styles.processingSubtitle}>Running Hawk-Eye Predictive Simulation...</Text>
+            
+            <View style={styles.dataProcessingList}>
+              <View style={styles.dataItem}>
+                <TrendingUp size={14} color={colors.textMuted} />
+                <Text style={styles.dataText}>Calculating trajectory curvature...</Text>
+              </View>
+              <View style={styles.dataItem}>
+                <Layers size={14} color={colors.textMuted} />
+                <Text style={styles.dataText}>Triangulating impact point...</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* Tracking Animation and Dashboard */}
+      {step === 'tracking' && revealStep > 0 && (
+        <View style={styles.drsDashboard}>
+          <View style={styles.dashboardRow}>
+            <View style={[styles.dashboardItem, revealStep < 1 && styles.dimmed]}>
+              <Text style={styles.dashboardLabel}>PITCHING</Text>
+              <View style={[styles.dashboardValue, { borderColor: drsStatus.pitching.includes('IN') ? '#22c55e' : '#ef4444' }]}>
+                {revealStep >= 1 ? (
+                  <Text style={[styles.dashboardValueText, { color: drsStatus.pitching.includes('IN') ? '#22c55e' : '#ef4444' }]}>{drsStatus.pitching}</Text>
+                ) : (
+                  <View style={styles.dotLoader} />
+                )}
+              </View>
+            </View>
+
+            <View style={[styles.dashboardItem, revealStep < 2 && styles.dimmed]}>
+              <Text style={styles.dashboardLabel}>IMPACT</Text>
+              <View style={[styles.dashboardValue, { borderColor: drsStatus.impact.includes('IN') ? '#22c55e' : '#ef4444' }]}>
+                {revealStep >= 2 ? (
+                  <Text style={[styles.dashboardValueText, { color: drsStatus.impact.includes('IN') ? '#22c55e' : '#ef4444' }]}>{drsStatus.impact}</Text>
+                ) : (
+                  <View style={styles.dotLoader} />
+                )}
+              </View>
+            </View>
+
+            <View style={[styles.dashboardItem, revealStep < 3 && styles.dimmed]}>
+              <Text style={styles.dashboardLabel}>WICKETS</Text>
+              <View style={[styles.dashboardValue, { borderColor: drsStatus.wickets.includes('HITTING') ? '#22c55e' : '#ef4444' }]}>
+                {revealStep >= 3 ? (
+                  <Text style={[styles.dashboardValueText, { color: drsStatus.wickets.includes('HITTING') ? '#22c55e' : '#ef4444' }]}>{drsStatus.wickets}</Text>
+                ) : (
+                  <View style={styles.dotLoader} />
+                )}
+              </View>
+            </View>
+          </View>
+        </View>
+      )}
+
       {/* Tracking Animation */}
+      {[0.05, 0.1, 0.15].map((offset, i) => (
+        <Animated.View key={`trail-${i}`} style={[styles.ball, { backgroundColor: 'rgba(255,255,255,0.3)', borderColor: 'rgba(239, 68, 68, 0.3)' }, getTrialStyle(offset)]} />
+      ))}
       <Animated.View style={[styles.ball, animatedBallStyle]} />
 
       {/* Control UI */}
       <View style={styles.bottomControls}>
         <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.9)']}
+            colors={['transparent', 'rgba(0,0,0,0.95)']}
             style={styles.bottomGradient}
         />
         
         {step === 'tracking' && (
             <View style={styles.trackingPanel}>
+              {revealStep === 0 ? (
                 <TouchableOpacity style={styles.mainActionBtn} onPress={startTrackingAnimation}>
-                    <Play size={24} color="#fff" />
-                    <Text style={styles.mainActionText}>Start Decision Tracking</Text>
+                    <TrendingUp size={24} color="#fff" />
+                    <Text style={styles.mainActionText}>START DRS SEQUENCE</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.resetBtn} onPress={resetCalibration}>
-                    <RotateCcw size={18} color="#fff" />
-                    <Text style={styles.resetBtnText}>Recalibrate</Text>
-                </TouchableOpacity>
+              ) : (
+                <View style={styles.trackingProgressContainer}>
+                   <View style={[styles.progressBar, { width: `${(revealStep / 3) * 100}%` }]} />
+                   <Text style={styles.trackingProgressText}>
+                     {revealStep === 1 ? 'Ball Pitching...' : revealStep === 2 ? 'Impact Analysis...' : 'Projecting Path...'}
+                   </Text>
+                </View>
+              )}
+              <TouchableOpacity style={styles.resetBtn} onPress={resetCalibration}>
+                  <RotateCcw size={18} color="#fff" />
+                  <Text style={styles.resetBtnText}>Recalibrate</Text>
+              </TouchableOpacity>
             </View>
         )}
 
@@ -475,5 +617,145 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-  }
+  },
+  processingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  processingContent: {
+    alignItems: 'center',
+    width: '100%',
+    padding: 40,
+  },
+  scanLineContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    overflow: 'hidden',
+    opacity: 0.2,
+  },
+  scanLine: {
+    width: '100%',
+    height: 2,
+    backgroundColor: colors.accentAlt,
+    shadowColor: colors.accentAlt,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 10,
+    position: 'absolute',
+    top: '50%',
+  },
+  processingIconBadge: {
+    width: 80,
+    height: 80,
+    borderRadius: 24,
+    backgroundColor: 'rgba(124, 58, 237, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(124, 58, 237, 0.3)',
+  },
+  processingTitle: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: 4,
+    marginBottom: 8,
+  },
+  processingSubtitle: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '500',
+    marginBottom: 32,
+  },
+  dataProcessingList: {
+    width: '100%',
+    gap: 12,
+    maxWidth: 240,
+  },
+  dataItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    opacity: 0.7,
+  },
+  dataText: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  drsDashboard: {
+    position: 'absolute',
+    top: 120,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 20,
+    zIndex: 10,
+  },
+  dashboardRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  dashboardItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  dimmed: {
+    opacity: 0.3,
+  },
+  dashboardLabel: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 10,
+    fontWeight: '800',
+    marginBottom: 6,
+    letterSpacing: 1,
+  },
+  dashboardValue: {
+    width: '100%',
+    height: 36,
+    borderWidth: 1,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dashboardValueText: {
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  dotLoader: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.textMuted,
+    opacity: 0.5,
+  },
+  trackingProgressContainer: {
+    width: '100%',
+    height: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  progressBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    height: 4,
+    backgroundColor: colors.accentAlt,
+    borderRadius: 2,
+  },
+  trackingProgressText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+    fontStyle: 'italic',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
 });
