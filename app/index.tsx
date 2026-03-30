@@ -2,11 +2,12 @@ import React, { useEffect } from 'react';
 import { View, StyleSheet, Dimensions, Image, Text } from 'react-native';
 import { router } from 'expo-router';
 import { colors } from './theme';
-import Animated, { 
-    useSharedValue, 
-    useAnimatedStyle, 
-    withTiming, 
-    withSequence, 
+import * as SplashScreenNative from 'expo-splash-screen';
+import Animated, {
+    useSharedValue,
+    useAnimatedStyle,
+    withTiming,
+    withSequence,
     withDelay,
     Easing,
     interpolate,
@@ -24,6 +25,9 @@ export default function SplashScreen() {
     const bgOpacity = useSharedValue(1);
 
     useEffect(() => {
+        // Handover: Dismiss native splash specifically when this JS screen is fully mounted
+        SplashScreenNative.hideAsync().catch(() => { });
+
         // Start Animations
         logoOpacity.value = withTiming(1, { duration: 1000, easing: Easing.out(Easing.quad) });
         logoScale.value = withSequence(
@@ -65,10 +69,10 @@ export default function SplashScreen() {
                 colors={['#0B0E14', '#081126', '#000000']}
                 style={StyleSheet.absoluteFill}
             />
-            
+
             <View style={styles.content}>
                 <Animated.View style={[styles.logoContainer, animatedLogoStyle]}>
-                    <Image 
+                    <Image
                         source={require('../assets/images/one_scorer_icon.png')}
                         style={styles.logo}
                         resizeMode="contain"
@@ -91,7 +95,7 @@ export default function SplashScreen() {
             </View>
 
             <View style={styles.footer}>
-                <Text style={styles.footerText}>POWERED BY HAWK-EYE AI</Text>
+                <Text style={styles.footerText}>POWERED BY ONE SCORER</Text>
             </View>
         </Animated.View>
     );

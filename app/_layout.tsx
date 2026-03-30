@@ -1,12 +1,25 @@
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { Stack, useNavigation } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { TouchableOpacity, Text } from 'react-native';
+import { TouchableOpacity, Text, Platform } from 'react-native';
+import * as SystemUI from 'expo-system-ui';
+import * as SplashScreen from 'expo-splash-screen';
+
+// Instantly force the HTML body background to dark on Web to prevent flashes
+if (Platform.OS === 'web' && typeof document !== 'undefined') {
+    document.body.style.backgroundColor = '#0B0E14';
+    document.documentElement.style.backgroundColor = '#0B0E14';
+}
+
+// Keep the native splash screen visible while we initialize
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 
 export default function RootLayout() {
   useFrameworkReady();
 
+  // Set the root system background to match the dark theme natively
+  SystemUI.setBackgroundColorAsync('#0B0E14');
 
   return (
     <>

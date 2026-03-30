@@ -27,7 +27,8 @@
     "web": {
       "bundler": "metro",
       "output": "single",
-      "favicon": "./assets/images/one_scorer_icon.png"
+      "favicon": "./assets/images/one_scorer_icon.png",
+      "backgroundColor": "#0B0E14"
     },
     "plugins": [
       "expo-router"
