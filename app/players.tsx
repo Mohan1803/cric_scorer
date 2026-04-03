@@ -236,7 +236,13 @@ export default function PlayersEntry() {
       <View style={styles.topHeader}>
         <TouchableOpacity
           style={styles.headerBackButton}
-          onPress={() => router.back()}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/');
+            }
+          }}
         >
           <ChevronLeft color={colors.accent} size={24} />
           <Text style={styles.headerBackText}>Teams</Text>
