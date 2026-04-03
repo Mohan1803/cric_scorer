@@ -42,7 +42,11 @@ export default function LbwRecorder() {
 
   const startRecording = async () => {
     if (Platform.OS === 'web') {
-      Alert.alert('Web Limitation', 'Video recording is not supported on the web version. Please use a physical mobile device (Android or iOS) to use this feature.');
+      // For web demonstration purposes: navigate to tracking with a dummy URI
+      router.push({
+          pathname: '/lbw-tracking' as any,
+          params: { videoUri: 'demo' }
+      });
       return;
     }
 
@@ -111,7 +115,8 @@ export default function LbwRecorder() {
 
           <View style={styles.guideContainer}>
             <View style={styles.guideBox}>
-                <Text style={styles.guideText}>Keep the pitch and wickets in frame</Text>
+                <Text style={styles.guideText}>Record the full delivery</Text>
+                <Text style={styles.guideSubtext}>Keep the pitch and stumps in frame. The app will extract frames for ball tracking.</Text>
             </View>
           </View>
 
@@ -212,6 +217,14 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.8)',
     fontSize: 14,
     fontWeight: '500',
+  },
+  guideSubtext: {
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 12,
+    fontWeight: '400',
+    marginTop: 6,
+    textAlign: 'center',
+    lineHeight: 17,
   },
   bottomBar: {
     flexDirection: 'row',

@@ -368,7 +368,6 @@ export default function TeamEntry() {
             activeOpacity={0.8}
             style={[styles.button, { marginTop: 0 }]}
             onPress={() => router.push('/lbw-recorder' as any)}
-          // onPress={() => router.push('/coming-soon' as any)}
           >
             <LinearGradient
               colors={[colors.accentAlt, '#7C3AED']}
@@ -378,6 +377,16 @@ export default function TeamEntry() {
             >
               <Text style={styles.buttonText}>Record LBW Video</Text>
             </LinearGradient>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={[styles.button, { marginTop: 12, backgroundColor: 'rgba(124, 58, 237, 0.1)', borderWidth: 1, borderColor: 'rgba(124, 58, 237, 0.3)' }]}
+            onPress={() => router.push('/lbw-demo' as any)}
+          >
+            <View style={styles.buttonGradient}>
+              <Text style={[styles.buttonText, { color: colors.accentAlt }]}>View Animation Demo</Text>
+            </View>
           </TouchableOpacity>
         </View>
 
