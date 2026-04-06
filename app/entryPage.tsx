@@ -7,7 +7,9 @@ import { colors } from './theme';
 import { router } from 'expo-router';
 import { useGameStore } from '../store/gameStore';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Trophy, Users, Hash, Settings2, Shield, Calendar, Zap } from 'lucide-react-native';
+import { Trophy, Users, Hash, Settings2, Shield, Calendar, Zap, Search } from 'lucide-react-native';
+import { useTeamLibraryStore } from '../store/teamLibraryStore';
+import { Team } from '../store/gameStore';
 
 export default function TeamEntry() {
   const [team1Name, setTeam1Name] = useState('');
@@ -21,6 +23,12 @@ export default function TeamEntry() {
     setEnableAnimations,
     setEnableSounds
   } = useGameStore();
+
+  const { getTeamsByQuery } = useTeamLibraryStore();
+  const [team1Suggestions, setTeam1Suggestions] = useState<Team[]>([]);
+  const [team2Suggestions, setTeam2Suggestions] = useState<Team[]>([]);
+  const [team1Players, setTeam1Players] = useState<any[]>([]);
+  const [team2Players, setTeam2Players] = useState<any[]>([]);
 
   const downloadMatchPDF = (matchData: any, matchName: string) => {
     const formatDate = (date: Date) => {
@@ -230,8 +238,8 @@ export default function TeamEntry() {
     startNewMatch();
 
     setTeams([
-      { name: team1Name, players: [] },
-      { name: team2Name, players: [] },
+      { name: team1Name, players: team1Players },
+      { name: team2Name, players: team2Players },
     ]);
     setTotalOvers(numOvers);
 
@@ -288,11 +296,36 @@ export default function TeamEntry() {
             <TextInput
               style={styles.input}
               value={team1Name}
-              onChangeText={setTeam1Name}
+              onChangeText={(text) => {
+                setTeam1Name(text);
+                setTeam1Suggestions(getTeamsByQuery(text));
+              }}
+              onFocus={() => {
+                if (team1Name) setTeam1Suggestions(getTeamsByQuery(team1Name));
+              }}
               // placeholder="e.g. Royal Challengers"
               // placeholderTextColor="rgba(148, 163, 184, 0.4)"
               maxLength={30}
             />
+            {team1Suggestions.length > 0 && (
+              <View style={styles.suggestionsContainer}>
+                {team1Suggestions.map((team, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={styles.suggestionItem}
+                    onPress={() => {
+                      setTeam1Name(team.name);
+                      setTeam1Players(team.players);
+                      setTeam1Suggestions([]);
+                    }}
+                  >
+                    <Users size={14} color={colors.accent} />
+                    <Text style={styles.suggestionText}>{team.name}</Text>
+                    <Text style={styles.suggestionSubtext}>{team.players.length} players</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </View>
 
           <View style={styles.inputGroup}>
@@ -303,11 +336,36 @@ export default function TeamEntry() {
             <TextInput
               style={styles.input}
               value={team2Name}
-              onChangeText={setTeam2Name}
+              onChangeText={(text) => {
+                setTeam2Name(text);
+                setTeam2Suggestions(getTeamsByQuery(text));
+              }}
+              onFocus={() => {
+                if (team2Name) setTeam2Suggestions(getTeamsByQuery(team2Name));
+              }}
               // placeholder="e.g. Mumbai Indians"
               // placeholderTextColor="rgba(148, 163, 184, 0.4)"
               maxLength={30}
             />
+            {team2Suggestions.length > 0 && (
+              <View style={styles.suggestionsContainer}>
+                {team2Suggestions.map((team, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={styles.suggestionItem}
+                    onPress={() => {
+                      setTeam2Name(team.name);
+                      setTeam2Players(team.players);
+                      setTeam2Suggestions([]);
+                    }}
+                  >
+                    <Users size={14} color={colors.accent} />
+                    <Text style={styles.suggestionText}>{team.name}</Text>
+                    <Text style={styles.suggestionSubtext}>{team.players.length} players</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </View>
 
           <View style={styles.inputGroup}>
@@ -541,5 +599,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginLeft: 8,
     fontWeight: '500',
+  },
+  suggestionsContainer: {
+    backgroundColor: 'rgba(21, 42, 85, 0.95)',
+    borderRadius: 12,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    overflow: 'hidden',
+    zIndex: 1000,
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  suggestionText: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    marginLeft: 10,
+    flex: 1,
+  },
+  suggestionSubtext: {
+    color: colors.textSecondary,
+    fontSize: 10,
   },
 });

@@ -18,7 +18,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useGameStore } from '../store/gameStore';
 import { colors, shadows } from './theme';
 import { LinearGradient } from 'expo-linear-gradient';
-import { User, Users, Trash2, Plus, CheckCircle2, ChevronRight, ChevronLeft } from 'lucide-react-native';
+import { User, Users, Trash2, Plus, CheckCircle2, ChevronRight, ChevronLeft, Save } from 'lucide-react-native';
+import { useTeamLibraryStore } from '../store/teamLibraryStore';
 
 export default function PlayersEntry() {
   const teams = useGameStore((state) => state.teams);
@@ -28,8 +29,36 @@ export default function PlayersEntry() {
   const defaultPlayers1 = Array.from({ length: 15 }, () => ({ name: '', role: 'both', isCaptain: false, isWicketKeeper: false }));
 
   const [activeTab, setActiveTab] = useState(0);
-  const [team1Players, setTeam1Players] = useState(defaultPlayers);
-  const [team2Players, setTeam2Players] = useState(defaultPlayers1);
+  
+  const [team1Players, setTeam1Players] = useState(() => {
+    const existing = teams[0]?.players || [];
+    if (existing.length > 0) {
+      const mapped = existing.map(p => ({
+        name: p.name,
+        role: p.role || 'both',
+        isCaptain: p.isCaptain || false,
+        isWicketKeeper: p.isWicketKeeper || false
+      }));
+      while (mapped.length < 15) mapped.push({ name: '', role: 'both', isCaptain: false, isWicketKeeper: false });
+      return mapped;
+    }
+    return defaultPlayers;
+  });
+
+  const [team2Players, setTeam2Players] = useState(() => {
+    const existing = teams[1]?.players || [];
+    if (existing.length > 0) {
+      const mapped = existing.map(p => ({
+        name: p.name,
+        role: p.role || 'both',
+        isCaptain: p.isCaptain || false,
+        isWicketKeeper: p.isWicketKeeper || false
+      }));
+      while (mapped.length < 15) mapped.push({ name: '', role: 'both', isCaptain: false, isWicketKeeper: false });
+      return mapped;
+    }
+    return defaultPlayers1;
+  });
 
   const inputRefs = useRef<{ [key: number]: RNTextInput[] }>({ 0: [], 1: [] });
 
@@ -119,6 +148,12 @@ export default function PlayersEntry() {
     ];
 
     setTeams(updatedTeams);
+
+    // Save teams to local library for future use
+    const { saveTeam } = useTeamLibraryStore.getState();
+    saveTeam(updatedTeams[0]);
+    saveTeam(updatedTeams[1]);
+
     router.push('/role-selection');
   };
 
