@@ -4,19 +4,20 @@
     "slug": "bolt-expo-nativewind",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/one_scorer_icon.png",
+    "icon": "./assets/images/new_logo.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/one_scorer_icon.png",
+      "image": "./assets/images/new_logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#0B0E14"
     },
     "android": {
       "package": "com.ededin.cricket",
+      "versionCode": 10,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/one_scorer_icon.png",
+        "foregroundImage": "./assets/images/new_logo.png",
         "backgroundColor": "#0B0E14"
       }
     },
@@ -27,7 +28,7 @@
     "web": {
       "bundler": "metro",
       "output": "single",
-      "favicon": "./assets/images/one_scorer_icon.png",
+      "favicon": "./assets/images/new_logo.png",
       "backgroundColor": "#0B0E14"
     },
     "plugins": [

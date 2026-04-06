@@ -35,5 +35,23 @@ yarn-error.*
 
 key
 
-android
-ios
+# android
+android/.gradle
+android/build
+android/app/build
+android/local.properties
+android/.idea
+android/*.iml
+android/app/*.iml
+android/app/release/
+
+
+# ios
+ios/build
+ios/Pods
+ios/DerivedData
+ios/*.xcworkspace
+!ios/*.xcworkspace/contents.xcworkspacedata
+ios/user.pbxuser
+ios/xcuserdata
+ios/.symlinks
