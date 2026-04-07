@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { getMatchData } from './firebaseService';
 import * as Print from 'expo-print';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView } from 'react-native';
@@ -21,8 +21,39 @@ export default function TeamEntry() {
     enableAnimations,
     enableSounds,
     setEnableAnimations,
-    setEnableSounds
+    setEnableSounds,
+    hasHydrated,
+    matchCompleted,
+    teams,
+    startNewMatch
   } = useGameStore();
+
+  const [sessionPromptShown, setSessionPromptShown] = useState(false);
+
+  useEffect(() => {
+    if (hasHydrated && teams.length === 2 && !matchCompleted && !sessionPromptShown) {
+      setSessionPromptShown(true);
+      Alert.alert(
+        "Unfinished Match",
+        "You have an unfinished match. Would you like to continue?",
+        [
+          {
+            text: "No, Start New",
+            onPress: () => {
+              // Ensure we start fresh
+              startNewMatch();
+            },
+            style: "destructive"
+          },
+          {
+            text: "Yes, Continue",
+            onPress: () => router.push('/scorecard')
+          }
+        ],
+        { cancelable: false }
+      );
+    }
+  }, [hasHydrated]);
 
   const { getTeamsByQuery } = useTeamLibraryStore();
   const [team1Suggestions, setTeam1Suggestions] = useState<Team[]>([]);
@@ -234,7 +265,6 @@ export default function TeamEntry() {
       return;
     }
 
-    const startNewMatch = useGameStore.getState().startNewMatch;
     startNewMatch();
 
     setTeams([

@@ -119,6 +119,7 @@ export interface GameState {
 
   undoStack: UndoOperation[];
   clearUndoStack: () => void;
+  hasHydrated: boolean;
 }
 
 export const useGameStore = create<GameState>()(
@@ -150,6 +151,7 @@ export const useGameStore = create<GameState>()(
       oversData: [],
       firstInningsOversData: [], // <-- Store first innings overs
       previousStriker: null,
+      hasHydrated: false,
 
       setTeams: (teams: Team[]) => set({ teams }),
       setTossWinner: (team: string) => set({ tossWinner: team }),
@@ -522,9 +524,17 @@ export const useGameStore = create<GameState>()(
     storage: createJSONStorage(() => AsyncStorage),
     onRehydrateStorage: (state) => {
       return (state, error) => {
-        if (state && state.matchDate && typeof state.matchDate === 'string') {
-          state.matchDate = new Date(state.matchDate);
+        if (state) {
+          if (state.matchDate && typeof state.matchDate === 'string') {
+            state.matchDate = new Date(state.matchDate);
+          }
+          // Set hydration flag
+          useGameStore.setState({ hasHydrated: true });
         }
       };
+    },
+    partialize: (state) => {
+      const { hasHydrated, ...rest } = state;
+      return rest;
     },
   }));
