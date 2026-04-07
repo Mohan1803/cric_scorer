@@ -30,14 +30,17 @@ export default function CommentaryPage() {
     history.forEach((ball, index) => {
       const isLegal = !ball.isExtra || (ball.extraType === 'bye' || ball.extraType === 'lb' || ball.extraType === 'penalty');
       if (isLegal) legalBallCount++;
-      
+
       const overNum = Math.floor((legalBallCount - 1) / 6);
       const ballInOver = isLegal ? ((legalBallCount - 1) % 6) + 1 : (legalBallCount % 6);
 
-      let desc = ball.commentary || `${ball.batsmanName} scores ${ball.runs} runs off ${ball.bowlerName}`;
-      if (ball.isWicket) desc = `${ball.batsmanName} is OUT! ${ball.dismissalDetail || ''}`;
-      if (ball.isExtra) {
-        desc = `${ball.bowlerName} bowls a ${ball.extraType}. ${ball.runs > 0 ? ball.runs + ' runs taken' : ''}`;
+      let desc = ball.commentary;
+      if (!desc) {
+        desc = `${ball.batsmanName} scores ${ball.runs} runs off ${ball.bowlerName}`;
+        if (ball.isWicket) desc = `${ball.batsmanName} is OUT! ${ball.dismissalDetail || ''}`;
+        if (ball.isExtra) {
+          desc = `${ball.bowlerName} bowls a ${ball.extraType}. ${ball.runs > 0 ? ball.runs + ' runs taken' : ''}`;
+        }
       }
 
       items.push({

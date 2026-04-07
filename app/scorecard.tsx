@@ -259,7 +259,8 @@ export default function Scorecard() {
   const onShotSelect = (shot: string) => {
     if (currentBallData && striker && currentBowler) {
       const { runs, fieldPosition } = currentBallData;
-      const commentary = `${striker.name} hits it for ${runs} ${runs === 1 ? 'run' : 'runs'} in the ${fieldPosition?.toLowerCase()} through ${shot.toLowerCase()} shot`;
+      const displayField = fieldPosition || 'outfield';
+      const commentary = `${striker.name} hits it for ${runs} ${runs === 1 ? 'run' : 'runs'} in the ${displayField.toLowerCase()} through ${shot.toLowerCase()} shot`;
 
       updateScore({
         runs,
@@ -270,7 +271,7 @@ export default function Scorecard() {
         bowlerName: currentBowler.name,
         bowlerId: currentBowler.id,
         isWicket: false,
-        fieldPosition,
+        fieldPosition: displayField,
         shotType: shot,
         commentary
       });
@@ -803,6 +804,7 @@ export default function Scorecard() {
             onClose={() => setShowFieldMap(false)}
             onSelect={onFieldSelect}
             batsmanName={striker.name}
+            isLeftHanded={striker.battingHand === 'left'}
           />
           <ShotTypeModal
             visible={showShotType}

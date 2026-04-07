@@ -25,8 +25,8 @@ export default function PlayersEntry() {
   const teams = useGameStore((state) => state.teams);
   const setTeams = useGameStore((state) => state.setTeams);
 
-  const defaultPlayers = Array.from({ length: 15 }, () => ({ name: '', role: 'both', isCaptain: false, isWicketKeeper: false }));
-  const defaultPlayers1 = Array.from({ length: 15 }, () => ({ name: '', role: 'both', isCaptain: false, isWicketKeeper: false }));
+  const defaultPlayers = Array.from({ length: 15 }, () => ({ name: '', role: 'both', isCaptain: false, isWicketKeeper: false, battingHand: 'right' as const }));
+  const defaultPlayers1 = Array.from({ length: 15 }, () => ({ name: '', role: 'both', isCaptain: false, isWicketKeeper: false, battingHand: 'right' as const }));
 
   const [activeTab, setActiveTab] = useState(0);
   
@@ -37,9 +37,10 @@ export default function PlayersEntry() {
         name: p.name,
         role: p.role || 'both',
         isCaptain: p.isCaptain || false,
-        isWicketKeeper: p.isWicketKeeper || false
+        isWicketKeeper: p.isWicketKeeper || false,
+        battingHand: (p as any).battingHand || 'right'
       }));
-      while (mapped.length < 15) mapped.push({ name: '', role: 'both', isCaptain: false, isWicketKeeper: false });
+      while (mapped.length < 15) mapped.push({ name: '', role: 'both', isCaptain: false, isWicketKeeper: false, battingHand: 'right' });
       return mapped;
     }
     return defaultPlayers;
@@ -52,9 +53,10 @@ export default function PlayersEntry() {
         name: p.name,
         role: p.role || 'both',
         isCaptain: p.isCaptain || false,
-        isWicketKeeper: p.isWicketKeeper || false
+        isWicketKeeper: p.isWicketKeeper || false,
+        battingHand: (p as any).battingHand || 'right'
       }));
-      while (mapped.length < 15) mapped.push({ name: '', role: 'both', isCaptain: false, isWicketKeeper: false });
+      while (mapped.length < 15) mapped.push({ name: '', role: 'both', isCaptain: false, isWicketKeeper: false, battingHand: 'right' });
       return mapped;
     }
     return defaultPlayers1;
@@ -94,6 +96,13 @@ export default function PlayersEntry() {
     teamIndex === 0 ? setTeam1Players(updated) : setTeam2Players(updated);
   };
 
+  const updateBattingHand = (teamIndex: number, index: number, hand: 'right' | 'left') => {
+    const list = teamIndex === 0 ? team1Players : team2Players;
+    const updated = [...list];
+    updated[index] = { ...updated[index], battingHand: hand };
+    teamIndex === 0 ? setTeam1Players(updated) : setTeam2Players(updated);
+  };
+
 
   const handleContinue = () => {
     const validTeam1 = team1Players.filter(p => p.name.trim());
@@ -123,6 +132,7 @@ export default function PlayersEntry() {
           isReserve: i >= 11,
           isCaptain: p.isCaptain || false,
           isWicketKeeper: p.isWicketKeeper || false,
+          battingHand: p.battingHand || 'right',
         })),
       },
       {
@@ -143,6 +153,7 @@ export default function PlayersEntry() {
           isReserve: i >= 11,
           isCaptain: p.isCaptain || false,
           isWicketKeeper: p.isWicketKeeper || false,
+          battingHand: p.battingHand || 'right',
         })),
       },
     ];
@@ -166,7 +177,7 @@ export default function PlayersEntry() {
   const handleAddPlayer = (teamIndex: number) => {
     const list = teamIndex === 0 ? team1Players : team2Players;
     if (list.length < 15) {
-      const updated = [...list, { name: '', role: 'both', isCaptain: false, isWicketKeeper: false }];
+      const updated = [...list, { name: '', role: 'both', isCaptain: false, isWicketKeeper: false, battingHand: 'right' as const }];
       teamIndex === 0 ? setTeam1Players(updated) : setTeam2Players(updated);
       setTimeout(() => focusInput(teamIndex, list.length), 100);
     }
@@ -200,34 +211,52 @@ export default function PlayersEntry() {
     );
   };
 
-  const renderPlayerRow = (p: any, i: number, teamIndex: number, isSub: boolean) => (
-    <View key={i} style={[styles.playerCard, isSub ? styles.subCard : styles.activeCard]}>
-      <View style={styles.cardHeader}>
-        <Text style={styles.rankText}>{isSub ? `SUB ${i + 1}` : `PLAYER ${i + 1}`}</Text>
-        {p.name.trim().length > 0 && <CheckCircle2 size={12} color={colors.success} />}
+  const renderPlayerRow = (p: any, i: number, teamIndex: number, isSub: boolean) => {
+    const actualIndex = i + (isSub ? 11 : 0);
+    const isLeft = p.battingHand === 'left';
+    return (
+      <View key={i} style={[styles.playerCard, isSub ? styles.subCard : styles.activeCard]}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.rankText}>{isSub ? `SUB ${i + 1}` : `PLAYER ${i + 1}`}</Text>
+          {p.name.trim().length > 0 && <CheckCircle2 size={12} color={colors.success} />}
+        </View>
+        <View style={styles.cardMain}>
+          <TextInput
+            ref={(ref) => {
+              if (!inputRefs.current[teamIndex]) inputRefs.current[teamIndex] = [];
+              inputRefs.current[teamIndex][actualIndex] = ref!;
+            }}
+            placeholder="Enter Player Name"
+            style={styles.playerInput}
+            value={p.name}
+            onChangeText={(text) => updatePlayerName(teamIndex, actualIndex, text)}
+            returnKeyType="next"
+            placeholderTextColor="rgba(148, 163, 184, 0.4)"
+          />
+          <View style={styles.handToggle}>
+            <TouchableOpacity
+              style={[styles.handBtn, !isLeft && styles.handBtnActive]}
+              onPress={() => updateBattingHand(teamIndex, actualIndex, 'right')}
+            >
+              <Text style={[styles.handBtnText, !isLeft && styles.handBtnTextActive]}>R</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.handBtn, isLeft && styles.handBtnActive]}
+              onPress={() => updateBattingHand(teamIndex, actualIndex, 'left')}
+            >
+              <Text style={[styles.handBtnText, isLeft && styles.handBtnTextActive]}>L</Text>
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity
+            onPress={() => handleDelete(teamIndex, actualIndex)}
+            style={styles.deleteBtn}
+          >
+            <Trash2 size={16} color="rgba(239, 68, 68, 0.6)" />
+          </TouchableOpacity>
+        </View>
       </View>
-      <View style={styles.cardMain}>
-        <TextInput
-          ref={(ref) => {
-            if (!inputRefs.current[teamIndex]) inputRefs.current[teamIndex] = [];
-            inputRefs.current[teamIndex][i + (isSub ? 11 : 0)] = ref!;
-          }}
-          placeholder="Enter Player Name"
-          style={styles.playerInput}
-          value={p.name}
-          onChangeText={(text) => updatePlayerName(teamIndex, i + (isSub ? 11 : 0), text)}
-          returnKeyType="next"
-          placeholderTextColor="rgba(148, 163, 184, 0.4)"
-        />
-        <TouchableOpacity
-          onPress={() => handleDelete(teamIndex, i + (isSub ? 11 : 0))}
-          style={styles.deleteBtn}
-        >
-          <Trash2 size={16} color="rgba(239, 68, 68, 0.6)" />
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+    );
+  };
 
   const renderTeamForm = (teamIndex: number, players: typeof team1Players) => {
     const starters = players.slice(0, 11);
@@ -526,6 +555,29 @@ const styles = StyleSheet.create({
   },
   deleteBtn: {
     padding: 6,
+  },
+  handToggle: {
+    flexDirection: 'row',
+    borderRadius: 6,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  handBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+  },
+  handBtnActive: {
+    backgroundColor: colors.accent,
+  },
+  handBtnText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: 'rgba(255,255,255,0.3)',
+  },
+  handBtnTextActive: {
+    color: '#fff',
   },
   addPlayerBtn: {
     marginTop: 20,

@@ -20,6 +20,7 @@ export interface Player {
   isReserve?: boolean;
   isCaptain?: boolean;
   isWicketKeeper?: boolean;
+  battingHand?: 'right' | 'left';
 }
 
 export interface BallRecord {
