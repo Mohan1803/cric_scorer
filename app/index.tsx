@@ -14,6 +14,9 @@ import Animated, {
     Extrapolate
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useGameStore } from '../store/gameStore';
+import ResumeMatchModal from '../components/ResumeMatchModal';
+import { useState } from 'react';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -23,6 +26,45 @@ export default function SplashScreen() {
     const textOpacity = useSharedValue(0);
     const textY = useSharedValue(20);
     const bgOpacity = useSharedValue(1);
+    const [showResumeModal, setShowResumeModal] = useState(false);
+    
+    const { 
+        hasHydrated, 
+        teams, 
+        matchCompleted, 
+        ballHistory, 
+        matchDate, 
+        startNewMatch,
+        tossWinner,
+        striker
+    } = useGameStore();
+
+    const getMatchSummary = () => {
+        if (teams.length < 2) return { score: '0/0', overs: '0.0' };
+        const runs = ballHistory.reduce((sum, b) => sum + b.runs + (b.isExtra && (b.extraType === 'wide' || b.extraType === 'no-ball') ? 1 : 0), 0);
+        const wickets = ballHistory.filter(b => b.isWicket).length;
+        const legalBalls = ballHistory.filter(b => !b.isExtra || (b.isExtra && (b.extraType === 'bye' || b.extraType === 'lb' || b.extraType === 'penalty'))).length;
+        return {
+            score: `${runs}/${wickets}`,
+            overs: `${Math.floor(legalBalls / 6)}.${legalBalls % 6}`
+        };
+    };
+
+    const summary = getMatchSummary();
+
+    const animatedContainerStyle = useAnimatedStyle(() => ({
+        opacity: bgOpacity.value
+    }));
+
+    const animatedLogoStyle = useAnimatedStyle(() => ({
+        opacity: logoOpacity.value,
+        transform: [{ scale: logoScale.value }]
+    }));
+
+    const animatedTextStyle = useAnimatedStyle(() => ({
+        opacity: textOpacity.value,
+        transform: [{ translateY: textY.value }]
+    }));
 
     useEffect(() => {
         // Handover: Dismiss native splash specifically when this JS screen is fully mounted
@@ -37,31 +79,27 @@ export default function SplashScreen() {
 
         textOpacity.value = withDelay(1800, withTiming(1, { duration: 800 }));
         textY.value = withDelay(1800, withTiming(0, { duration: 800, easing: Easing.out(Easing.quad) }));
-
-        // Navigate after sequence
-        const timer = setTimeout(() => {
-            bgOpacity.value = withTiming(0, { duration: 500 });
-            setTimeout(() => {
-                router.replace('/entryPage');
-            }, 500);
-        }, 4000); // Shorter, punchier duration (4s total)
-
-        return () => clearTimeout(timer);
     }, []);
 
-    const animatedLogoStyle = useAnimatedStyle(() => ({
-        opacity: logoOpacity.value,
-        transform: [{ scale: logoScale.value }]
-    }));
+    useEffect(() => {
+        // Wait for both: minimum splash time (3.5s) AND hydration
+        if (!hasHydrated) return;
 
-    const animatedTextStyle = useAnimatedStyle(() => ({
-        opacity: textOpacity.value,
-        transform: [{ translateY: textY.value }]
-    }));
+        const timer = setTimeout(() => {
+            const hasActiveMatch = teams.length === 2 && !matchCompleted;
+            
+            if (hasActiveMatch) {
+                setShowResumeModal(true);
+            } else {
+                bgOpacity.value = withTiming(0, { duration: 500 });
+                setTimeout(() => {
+                    router.replace('/entryPage');
+                }, 500);
+            }
+        }, 3500);
 
-    const animatedContainerStyle = useAnimatedStyle(() => ({
-        opacity: bgOpacity.value
-    }));
+        return () => clearTimeout(timer);
+    }, [hasHydrated, teams.length, matchCompleted]);
 
     return (
         <Animated.View style={[styles.container, animatedContainerStyle]}>
@@ -96,6 +134,45 @@ export default function SplashScreen() {
             <View style={styles.footer}>
                 <Text style={styles.footerText}>POWERED BY ONE SCORER</Text>
             </View>
+
+            <ResumeMatchModal
+                visible={showResumeModal}
+                onResume={() => {
+                    setShowResumeModal(false);
+                    bgOpacity.value = withTiming(0, { duration: 500 });
+                    
+                    // Determine correct page to resume
+                    let targetRoute = '/scorecard';
+                    const hasMinimumPlayers = teams[0]?.players?.length >= 11 && teams[1]?.players?.length >= 11;
+                    
+                    if (!hasMinimumPlayers) {
+                        targetRoute = '/players';
+                    } else if (!tossWinner) {
+                        targetRoute = '/toss';
+                    } else if (!striker) {
+                        targetRoute = '/select-players';
+                    } else if (matchCompleted) {
+                        targetRoute = '/full-scorecard';
+                    }
+
+                    setTimeout(() => {
+                        router.replace(targetRoute as any);
+                    }, 500);
+                }}
+                onDiscard={() => {
+                    setShowResumeModal(false);
+                    startNewMatch();
+                    bgOpacity.value = withTiming(0, { duration: 500 });
+                    setTimeout(() => {
+                        router.replace('/entryPage');
+                    }, 500);
+                }}
+                team1Name={teams[0]?.name || 'Team 1'}
+                team2Name={teams[1]?.name || 'Team 2'}
+                score={summary.score}
+                overs={summary.overs}
+                matchDate={matchDate ? new Date(matchDate).toLocaleDateString() : undefined}
+            />
         </Animated.View>
     );
 }

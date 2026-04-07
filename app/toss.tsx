@@ -32,7 +32,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 const { width, height } = Dimensions.get('window');
-const COIN_SIZE = Math.min(width * 0.5, 200);
+const COIN_SIZE = Math.min(width * 0.45, 180);
 
 type TossPhase = 'ready' | 'flipping' | 'result' | 'choose';
 
@@ -119,19 +119,19 @@ export default function TossScreen() {
     // 2. Coin goes up with variable peak and "Cinematic Hang Time"
     coinTranslateY.value = withSequence(
       // Launch
-      withTiming(-height * peakHeightMultiplier, { 
-        duration: totalDuration * 0.35, 
-        easing: Easing.out(Easing.exp) 
+      withTiming(-height * peakHeightMultiplier, {
+        duration: totalDuration * 0.35,
+        easing: Easing.out(Easing.exp)
       }),
       // Slow-mo Hang Time
-      withTiming(-height * (peakHeightMultiplier - 0.02), { 
-        duration: totalDuration * 0.2, 
-        easing: Easing.inOut(Easing.linear) 
+      withTiming(-height * (peakHeightMultiplier - 0.02), {
+        duration: totalDuration * 0.2,
+        easing: Easing.inOut(Easing.linear)
       }),
       // Dramatic Fall
-      withTiming(0, { 
-        duration: totalDuration * 0.45, 
-        easing: Easing.bezier(0.3, 0, 1, 0.5) 
+      withTiming(0, {
+        duration: totalDuration * 0.45,
+        easing: Easing.bezier(0.3, 0, 1, 0.5)
       })
     );
 
@@ -166,7 +166,7 @@ export default function TossScreen() {
         withTiming(0.6, { duration: 100 }),
         withTiming(0, { duration: 500 })
       );
-      
+
       if (Platform.OS !== 'web') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
@@ -314,156 +314,129 @@ export default function TossScreen() {
           <ChevronLeft color={colors.accent} size={28} />
           <Text style={styles.headerBackText}>Back</Text>
         </TouchableOpacity>
-        
-        <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-          {(phase === 'result' || phase === 'choose') && (
-            <TouchableOpacity
-              style={styles.reflipButton}
-              onPress={handleReflip}
-            >
-              <RotateCcw color={colors.accentSecondary} size={20} />
-              <Text style={styles.reflipText}>Reflip</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+
+        <View style={{ width: 60 }} />
       </View>
 
       <Animated.View style={cameraStyle}>
         <View style={styles.container}>
-          {/* Main Toss Phase */}
-          {phase !== 'choose' && (
-            <View style={styles.coinPhaseContainer}>
-              <View style={styles.textOverlay}>
-                <Text style={styles.title}>
-                  {phase === 'ready' ? 'THE TOSS' : phase === 'flipping' ? 'FLIPPING...' : 'IT\'S ' + coinResult + '!'}
-                </Text>
-                <Text style={styles.subtitle}>
-                  {phase === 'ready'
-                    ? 'Tap the coin to flip'
-                    : phase === 'flipping'
-                    ? 'May the odds be in your favor'
-                    : 'Now choose the toss winner'}
-                </Text>
-              </View>
-
-              <View style={styles.coinTouchArea}>
-                <TouchableOpacity
-                  activeOpacity={phase === 'ready' ? 0.8 : 1}
-                  onPress={phase === 'ready' ? startFlip : undefined}
-                  style={StyleSheet.absoluteFill}
-                >
-                  {/* Coin Front - HEADS (Trophy Side) */}
-                  <Animated.View style={[styles.coin, styles.coinFront, coinFrontStyle]}>
-                    <LinearGradient
-                      colors={['#F59E0B', '#FDE047', '#B45309', '#F59E0B']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.coinGradient}
-                    >
-                      <View style={styles.milledEdge} />
-                      <View style={styles.coinInnerRing}>
-                        <LinearGradient
-                          colors={['rgba(251, 191, 36, 0.4)', 'rgba(180, 83, 9, 0.2)']}
-                          style={styles.coinCenterCircle}
-                        >
-                          <Trophy size={COIN_SIZE * 0.45} color="#78350F" strokeWidth={1.5} />
-                        </LinearGradient>
-                        <Text style={styles.coinLabel}>HEADS</Text>
-                      </View>
-                      
-                      <Animated.View style={[styles.shimmerContainer, shimmerStyle]}>
-                        <LinearGradient
-                          colors={['transparent', 'rgba(255, 255, 255, 0.6)', 'transparent']}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 0 }}
-                          style={StyleSheet.absoluteFill}
-                        />
-                      </Animated.View>
-                    </LinearGradient>
-                  </Animated.View>
-
-                  {/* Coin Back - TAILS (Ball Side) */}
-                  <Animated.View style={[styles.coin, styles.coinBack, coinBackStyle]}>
-                    <LinearGradient
-                      colors={['#94A3B8', '#F1F5F9', '#475569', '#94A3B8']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.coinGradientSilver}
-                    >
-                      <View style={styles.milledEdgeSilver} />
-                      <View style={styles.coinInnerRingSilver}>
-                        <LinearGradient
-                          colors={['rgba(203, 213, 225, 0.4)', 'rgba(71, 85, 105, 0.2)']}
-                          style={styles.coinCenterCircleSilver}
-                        >
-                          <CircleDot size={COIN_SIZE * 0.45} color="#334155" strokeWidth={1.5} />
-                        </LinearGradient>
-                        <Text style={styles.coinLabelSilver}>TAILS</Text>
-                      </View>
-                      
-                      <Animated.View style={[styles.shimmerContainer, shimmerStyle]}>
-                        <LinearGradient
-                          colors={['transparent', 'rgba(255, 255, 255, 0.4)', 'transparent']}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 0 }}
-                          style={StyleSheet.absoluteFill}
-                        />
-                      </Animated.View>
-                    </LinearGradient>
-                  </Animated.View>
-                </TouchableOpacity>
-              </View>
-
-              {phase === 'ready' && (
-                <View style={styles.tapHint}>
-                  <Text style={styles.tapText}>TAP TO FLIP</Text>
+            <View style={styles.contentContainer}>
+              {/* Top Section: Coin Flip */}
+              <View style={styles.coinSection}>
+                <View style={styles.textOverlay}>
+                  <Text style={styles.title}>
+                    {phase === 'ready' ? 'THE TOSS' : phase === 'flipping' ? 'FLIPPING...' : 'IT\'S ' + coinResult + '!'}
+                  </Text>
+                  <Text style={styles.subtitle}>
+                    {phase === 'ready' ? 'Tap the coin to flip' : 'May the odds be in your favor'}
+                  </Text>
                 </View>
-              )}
-            </View>
-          )}
 
-          {/* Choose Winner Phase */}
-          {phase === 'choose' && (
-            <View style={styles.chooseContainer}>
-              <Animated.View entering={FadeInDown.duration(400)} style={styles.chooseHeader}>
-                <View style={styles.resultBadge}>
-                  <Text style={styles.resultBadgeText}>{coinResult}</Text>
-                </View>
-                <Text style={styles.chooseTitle}>Who won the toss?</Text>
-                <Text style={styles.chooseSubtitle}>Select the team that called it right</Text>
-              </Animated.View>
-
-              <View style={styles.teamCardsContainer}>
-                {teams.map((team, index) => (
-                  <Animated.View
-                    key={index}
-                    entering={FadeInUp.delay(200 + index * 150).duration(500).springify()}
+                <View style={styles.coinContainer}>
+                  <TouchableOpacity
+                    activeOpacity={phase !== 'flipping' ? 0.8 : 1}
+                    onPress={phase !== 'flipping' ? startFlip : undefined}
+                    style={styles.coinTouchArea}
                   >
-                    <TouchableOpacity
-                      activeOpacity={0.85}
-                      onPress={() => handleTossWinner(team.name)}
-                      style={styles.teamCardWrapper}
-                    >
+                    {/* Coin Front - HEADS (Navy Enamel + Gold 'H') */}
+                    <Animated.View style={[styles.coin, styles.coinFront, coinFrontStyle]}>
                       <LinearGradient
-                        colors={index === 0 ? [colors.accent, colors.accentAlt] : [colors.accentPurple, '#6D28D9']}
+                        colors={['#FFD700', '#FDE047', '#B45309', '#F59E0B', '#B45309', '#FFD700']}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
-                        style={styles.teamCard}
+                        style={styles.coinGradientPremium}
                       >
-                        <View style={styles.teamInitialContainer}>
-                          <Text style={styles.teamInitial}>{team.name.charAt(0)}</Text>
+                        <View style={styles.milledEdgeSeam} />
+                        <View style={styles.coinEnamelNavy}>
+                          <LinearGradient
+                            colors={['#1E293B', '#0F172A', '#1E293B']}
+                            style={styles.coinCenterCircleEnamel}
+                          >
+                            <Text style={styles.coinLetterGold}>H</Text>
+                          </LinearGradient>
+                          <Text style={styles.coinLabelGold}>HEADS</Text>
                         </View>
-                        <Text style={styles.teamName}>{team.name}</Text>
-                        <View style={styles.selectBadge}>
-                          <Text style={styles.selectBadgeText}>TOSS WINNER</Text>
-                        </View>
+                        
+                        <Animated.View style={[styles.shimmerContainer, shimmerStyle]}>
+                          <LinearGradient
+                            colors={['transparent', 'rgba(255, 255, 255, 0.4)', 'transparent']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={StyleSheet.absoluteFill}
+                          />
+                        </Animated.View>
                       </LinearGradient>
-                    </TouchableOpacity>
-                  </Animated.View>
-                ))}
+                    </Animated.View>
+
+                    {/* Coin Back - TAILS (Red Enamel + Silver 'T') */}
+                    <Animated.View style={[styles.coin, styles.coinBack, coinBackStyle]}>
+                      <LinearGradient
+                        colors={['#E2E8F0', '#F8FAFC', '#94A3B8', '#F1F5F9', '#475569', '#E2E8F0']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.coinGradientSilverPremium}
+                      >
+                        <View style={styles.milledEdgeSeamSilver} />
+                        <View style={styles.coinEnamelRed}>
+                          <LinearGradient
+                            colors={['#991B1B', '#7F1D1D', '#991B1B']}
+                            style={styles.coinCenterCircleEnamel}
+                          >
+                            <Text style={styles.coinLetterSilver}>T</Text>
+                          </LinearGradient>
+                          <Text style={styles.coinLabelSilver}>TAILS</Text>
+                        </View>
+                        
+                        <Animated.View style={[styles.shimmerContainer, shimmerStyle]}>
+                          <LinearGradient
+                            colors={['transparent', 'rgba(255, 255, 255, 0.3)', 'transparent']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={StyleSheet.absoluteFill}
+                          />
+                        </Animated.View>
+                      </LinearGradient>
+                    </Animated.View>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Bottom Section: Winner Selection (Merged) */}
+              <View style={styles.chooseSection}>
+                <View style={styles.chooseHeader}>
+                   <Text style={styles.chooseTitle}>Who won the toss?</Text>
+                   <Text style={styles.chooseSubtitle}>Select the team that called it right</Text>
+                </View>
+
+                <View style={styles.teamCardsContainer}>
+                  {teams.map((team, index) => (
+                    <Animated.View
+                      key={index}
+                      entering={FadeInUp.delay(200 + index * 150).duration(500).springify()}
+                      style={{ flex: 1 }}
+                    >
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        onPress={() => handleTossWinner(team.name)}
+                        style={styles.teamCardWrapper}
+                      >
+                        <LinearGradient
+                          colors={index === 0 ? [colors.accent, colors.accentAlt] : [colors.accentPurple, '#6D28D9']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.teamCard}
+                        >
+                          <View style={styles.teamInitialContainer}>
+                            <Text style={styles.teamInitial}>{team.name.charAt(0)}</Text>
+                          </View>
+                          <Text style={styles.teamName}>{team.name}</Text>
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    </Animated.View>
+                  ))}
+                </View>
               </View>
             </View>
-          )}
         </View>
       </Animated.View>
     </SafeAreaView>
@@ -474,6 +447,30 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  contentContainer: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 20,
+  },
+  coinSection: {
+    height: height * 0.42,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 40,
+  },
+  coinContainer: {
+    width: COIN_SIZE,
+    height: COIN_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 80,
+  },
+  chooseSection: {
+    flex: 1,
+    justifyContent: 'flex-start',
+    paddingTop: 50,
   },
   topHeader: {
     flexDirection: 'row',
@@ -518,7 +515,7 @@ const styles = StyleSheet.create({
   },
   textOverlay: {
     position: 'absolute',
-    top: 40,
+    top: 20,
     alignItems: 'center',
     paddingHorizontal: 24,
   },
@@ -553,110 +550,112 @@ const styles = StyleSheet.create({
   },
   coinFront: {},
   coinBack: {},
-  coinGradient: {
+  coinGradientPremium: {
     flex: 1,
     borderRadius: COIN_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(251, 191, 36, 0.5)',
-    padding: 6,
+    borderWidth: 1.5,
+    borderColor: '#B45309',
+    padding: 8,
   },
-  coinGradientSilver: {
+  coinGradientSilverPremium: {
     flex: 1,
     borderRadius: COIN_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(203, 213, 225, 0.5)',
-    padding: 6,
+    borderWidth: 1.5,
+    borderColor: '#475569',
+    padding: 8,
   },
-  milledEdge: {
+  milledEdgeSeam: {
     position: 'absolute',
-    top: 2,
-    left: 2,
-    right: 2,
-    bottom: 2,
+    top: 3,
+    left: 3,
+    right: 3,
+    bottom: 3,
     borderRadius: COIN_SIZE / 2,
-    borderWidth: 8,
-    borderColor: 'rgba(180, 83, 9, 0.3)',
+    borderWidth: 6,
+    borderColor: 'rgba(180, 83, 9, 0.4)',
     borderStyle: 'dotted',
   },
-  milledEdgeSilver: {
+  milledEdgeSeamSilver: {
     position: 'absolute',
-    top: 2,
-    left: 2,
-    right: 2,
-    bottom: 2,
+    top: 3,
+    left: 3,
+    right: 3,
+    bottom: 3,
     borderRadius: COIN_SIZE / 2,
-    borderWidth: 8,
-    borderColor: 'rgba(71, 85, 105, 0.3)',
+    borderWidth: 6,
+    borderColor: 'rgba(71, 85, 105, 0.4)',
     borderStyle: 'dotted',
   },
-  coinInnerRing: {
+  coinEnamelNavy: {
     flex: 1,
     width: '100%',
     borderRadius: COIN_SIZE / 2,
-    borderWidth: 1,
-    borderColor: 'rgba(251, 191, 36, 0.4)',
+    backgroundColor: '#0F172A',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(251, 191, 36, 0.05)',
-    padding: 10,
+    borderWidth: 2,
+    borderColor: '#F59E0B',
+    overflow: 'hidden',
+    padding: 12,
   },
-  coinInnerRingSilver: {
+  coinEnamelRed: {
     flex: 1,
     width: '100%',
     borderRadius: COIN_SIZE / 2,
-    borderWidth: 1,
-    borderColor: 'rgba(203, 213, 225, 0.4)',
+    backgroundColor: '#7F1D1D',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(203, 213, 225, 0.05)',
-    padding: 10,
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+    padding: 12,
   },
-  coinCenterCircle: {
+  coinCenterCircleEnamel: {
     width: COIN_SIZE * 0.65,
     height: COIN_SIZE * 0.65,
     borderRadius: (COIN_SIZE * 0.65) / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(180, 83, 9, 0.2)',
-    shadowColor: '#B45309',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
   },
-  coinCenterCircleSilver: {
-    width: COIN_SIZE * 0.65,
-    height: COIN_SIZE * 0.65,
-    borderRadius: (COIN_SIZE * 0.65) / 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(71, 85, 105, 0.2)',
-    shadowColor: '#475569',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-  },
-  coinLabel: {
-    fontSize: 10,
+  coinLetterGold: {
+    fontSize: COIN_SIZE * 0.4,
     fontWeight: '900',
-    color: '#713F12',
-    letterSpacing: 2,
-    marginTop: 8,
-    opacity: 0.8,
+    color: '#F59E0B',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 1, height: 2 },
+    textShadowRadius: 4,
+    fontFamily: Platform.OS === 'ios' ? 'Bodoni 72' : 'serif',
+  },
+  coinLetterSilver: {
+    fontSize: COIN_SIZE * 0.4,
+    fontWeight: '900',
+    color: '#E2E8F0',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 1, height: 2 },
+    textShadowRadius: 4,
+    fontFamily: Platform.OS === 'ios' ? 'Bodoni 72' : 'serif',
+  },
+  coinLabelGold: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#F59E0B',
+    letterSpacing: 4,
+    marginTop: 2,
+    opacity: 0.9,
   },
   coinLabelSilver: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '900',
-    color: '#334155',
-    letterSpacing: 2,
-    marginTop: 8,
-    opacity: 0.8,
+    color: '#E2E8F0',
+    letterSpacing: 4,
+    marginTop: 2,
+    opacity: 0.9,
   },
+
 
   // Result text
   resultContainer: {
@@ -723,56 +722,50 @@ const styles = StyleSheet.create({
   chooseContainer: {
     flex: 1,
     paddingHorizontal: 24,
-    justifyContent: 'center',
-  },
-  chooseHeader: {
-    alignItems: 'center',
-    marginBottom: 40,
-  },
-  resultBadge: {
-    backgroundColor: 'rgba(249, 205, 5, 0.15)',
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(249, 205, 5, 0.3)',
-    marginBottom: 16,
-  },
-  resultBadgeText: {
-    color: colors.accentSecondary,
     fontSize: 13,
     fontWeight: '800',
     letterSpacing: 3,
   },
+  chooseHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
   chooseTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
     color: colors.textPrimary,
     textAlign: 'center',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   chooseSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: colors.textSecondary,
     textAlign: 'center',
+    marginBottom: 20,
   },
   teamCardsContainer: {
-    gap: 16,
+    flexDirection: 'row',
+    gap: 12,
   },
   teamCardWrapper: {
-    borderRadius: 20,
-    elevation: 8,
+    borderRadius: 18,
+    elevation: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
   },
   teamCard: {
-    padding: 28,
-    borderRadius: 20,
+    paddingVertical: 20,
+    paddingHorizontal: 12,
+    borderRadius: 18,
     alignItems: 'center',
     position: 'relative',
     overflow: 'hidden',
+    height: 110,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   teamInitialContainer: {
     position: 'absolute',

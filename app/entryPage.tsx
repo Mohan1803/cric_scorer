@@ -28,32 +28,9 @@ export default function TeamEntry() {
     startNewMatch
   } = useGameStore();
 
-  const [sessionPromptShown, setSessionPromptShown] = useState(false);
+  // Removed resume logic - now handled in index.tsx
 
-  useEffect(() => {
-    if (hasHydrated && teams.length === 2 && !matchCompleted && !sessionPromptShown) {
-      setSessionPromptShown(true);
-      Alert.alert(
-        "Unfinished Match",
-        "You have an unfinished match. Would you like to continue?",
-        [
-          {
-            text: "No, Start New",
-            onPress: () => {
-              // Ensure we start fresh
-              startNewMatch();
-            },
-            style: "destructive"
-          },
-          {
-            text: "Yes, Continue",
-            onPress: () => router.push('/scorecard')
-          }
-        ],
-        { cancelable: false }
-      );
-    }
-  }, [hasHydrated]);
+
 
   const { getTeamsByQuery } = useTeamLibraryStore();
   const [team1Suggestions, setTeam1Suggestions] = useState<Team[]>([]);
@@ -300,6 +277,7 @@ export default function TeamEntry() {
         colors={[colors.background, colors.surfaceDeeper, '#0F172A']}
         style={StyleSheet.absoluteFill}
       />
+
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <LinearGradient

@@ -63,12 +63,16 @@ export default function Scorecard() {
     setPreviousStriker,
     matchCompleted,
     batsmanToReplace,
+    showNewBowlerSelection,
+    showNewBatsmanSelection,
+    setShowNewBowlerSelection,
+    setShowNewBatsmanSelection,
     enableAnimations,
     enableSounds,
   } = useGameStore();
 
-  const [showNewBowlerSelection, setShowNewBowlerSelection] = useState(false);
-  const [showNewBatsmanSelection, setShowNewBatsmanSelection] = useState(false);
+  // Removed local selection states, now using store states
+
   const [showExtraRunsModal, setShowExtraRunsModal] = useState(false);
   const [showWicketModal, setShowWicketModal] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);

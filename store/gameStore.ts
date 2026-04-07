@@ -113,9 +113,11 @@ export interface GameState {
   setPreviousStriker: (player: Player | null) => void;
 
   batsmanToReplace: 'striker' | 'non-striker' | null;
-  showBatsmanSelectModal: boolean;
+  showNewBatsmanSelection: boolean;
+  showNewBowlerSelection: boolean;
   setBatsmanToReplace: (end: 'striker' | 'non-striker' | null) => void;
-  setShowBatsmanSelectModal: (show: boolean) => void;
+  setShowNewBatsmanSelection: (show: boolean) => void;
+  setShowNewBowlerSelection: (show: boolean) => void;
 
   undoStack: UndoOperation[];
   clearUndoStack: () => void;
@@ -183,10 +185,12 @@ export const useGameStore = create<GameState>()(
       setEnableSounds: (enabled: boolean) => set({ enableSounds: enabled }),
 
       batsmanToReplace: null,
-      showBatsmanSelectModal: false,
+      showNewBatsmanSelection: false,
+      showNewBowlerSelection: false,
 
       setBatsmanToReplace: (end: 'striker' | 'non-striker' | null) => set({ batsmanToReplace: end }),
-      setShowBatsmanSelectModal: (show: boolean) => set({ showBatsmanSelectModal: show }),
+      setShowNewBatsmanSelection: (show: boolean) => set({ showNewBatsmanSelection: show }),
+      setShowNewBowlerSelection: (show: boolean) => set({ showNewBowlerSelection: show }),
 
       // Undo stack and operations
       undoStack: [],
@@ -222,7 +226,8 @@ export const useGameStore = create<GameState>()(
           oversData: [], // <-- Reset oversData for second innings
           currentInningsNumber: 2, // <-- Ensure second innings logic works
           batsmanToReplace: null,
-          showBatsmanSelectModal: false,
+          showNewBatsmanSelection: false,
+          showNewBowlerSelection: false,
         });
         const after = get();
         console.log('AFTER second innings:', {
@@ -258,6 +263,8 @@ export const useGameStore = create<GameState>()(
           firstInningsOversData: [],
           previousStriker: null,
           undoStack: [],
+          showNewBatsmanSelection: false,
+          showNewBowlerSelection: false,
         });
       },
 
@@ -410,7 +417,7 @@ export const useGameStore = create<GameState>()(
         if (state.currentBowler) finalUpdates.currentBowler = allPlayers.find(p => p.id === state.currentBowler?.id) || state.currentBowler;
 
         if (record.isWicket) {
-          finalUpdates.showBatsmanSelectModal = true;
+          finalUpdates.showNewBatsmanSelection = true;
           const outId = record.runOutBatsmanId || (record.runOutBatsman === 'striker' ? state.striker?.id : (record.runOutBatsman === 'non-striker' ? state.nonStriker?.id : null));
           finalUpdates.batsmanToReplace = (record.wicketType === 'run-out' ? (tempStriker?.id === outId ? 'striker' : 'non-striker') : (tempStriker?.id === state.striker?.id ? 'striker' : 'non-striker'));
           finalUpdates.undoStack = [...state.undoStack, { type: 'wicket_restore', details: { striker: state.striker, nonStriker: state.nonStriker, teams: state.teams } }];
