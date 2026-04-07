@@ -45,6 +45,9 @@ export interface BallRecord {
   dismissalDetail?: string;
   nonStrikerId?: string;
   nonStrikerName?: string;
+  fieldPosition?: string;
+  shotType?: string;
+  commentary?: string;
 }
 
 export interface Team {
@@ -301,7 +304,10 @@ export const useGameStore = create<GameState>()(
               case 'hit-wicket': return `hit wicket b ${record.bowlerName}`;
               default: return `b ${record.bowlerName}`;
             }
-          })() : undefined
+          })() : undefined,
+          fieldPosition: record.fieldPosition,
+          shotType: record.shotType,
+          commentary: record.commentary
         }];
 
         const legalDeliveries = state.ballHistory.filter(b => !b.isExtra || (b.extraType === 'bye' || b.extraType === 'lb' || b.extraType === 'penalty')).length;

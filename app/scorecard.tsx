@@ -10,8 +10,10 @@ import { getCurrentPartnership } from '../store/partnershipUtils';
 import ExtraRunsModal from '../components/ExtraRunsModal';
 import WicketModal from '../components/WicketModal';
 import OversModal from '../components/OversModal';
+import FieldMapModal from '../components/FieldMapModal';
+import ShotTypeModal from '../components/ShotTypeModal';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronRight, RotateCcw, ArrowRightLeft, UserCircle2, Zap } from 'lucide-react-native';
+import { ChevronRight, RotateCcw, ArrowRightLeft, UserCircle2, Zap, MessageSquare } from 'lucide-react-native';
 import ConfettiCannon from 'react-native-confetti-cannon';
 
 const { width, height } = Dimensions.get('window');
@@ -82,6 +84,9 @@ export default function Scorecard() {
   const [scoreAnimation, setScoreAnimation] = useState<number | null>(null);
   const [wicketAnimation, setWicketAnimation] = useState<{ type: 'golden' | 'duck' | 'normal', score: number, name: string, dismissalDetail?: string } | null>(null);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  const [showFieldMap, setShowFieldMap] = useState(false);
+  const [showShotType, setShowShotType] = useState(false);
+  const [currentBallData, setCurrentBallData] = useState<{ runs: number, fieldPosition?: string, shotType?: string } | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -234,31 +239,70 @@ export default function Scorecard() {
 
   const handleRun = (runs: number) => {
     if (!striker || !currentBowler) return;
-    updateScore({ runs, isExtra: false, isNoBall: false, batsmanName: striker.name, batsmanId: striker.id, bowlerName: currentBowler.name, bowlerId: currentBowler.id, isWicket: false });
 
-    if (runs === 4 || runs === 6) {
-      setCelebrationText(runs === 6 ? 'MASSIVE SIX!' : 'FANTASTIC FOUR!');
+    if (runs > 0) {
+      setCurrentBallData({ runs });
+      setShowFieldMap(true);
+    } else {
+      updateScore({ runs, isExtra: false, isNoBall: false, batsmanName: striker.name, batsmanId: striker.id, bowlerName: currentBowler.name, bowlerId: currentBowler.id, isWicket: false });
+    }
+  };
 
-      if (enableAnimations) {
-        setShowConfetti(true);
-        playCelebrationSound(runs);
+  const onFieldSelect = (position: string) => {
+    if (currentBallData) {
+      setCurrentBallData({ ...currentBallData, fieldPosition: position });
+      setShowFieldMap(false);
+      setShowShotType(true);
+    }
+  };
 
-        Animated.sequence([
-          Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 50, friction: 3 }),
-          Animated.delay(2000),
-          Animated.timing(fadeAnim, { toValue: 0, duration: 500, useNativeDriver: true })
-        ]).start(() => {
-          setShowConfetti(false);
-          setCelebrationText('');
-          scaleAnim.setValue(0);
+  const onShotSelect = (shot: string) => {
+    if (currentBallData && striker && currentBowler) {
+      const { runs, fieldPosition } = currentBallData;
+      const commentary = `${striker.name} hits it for ${runs} ${runs === 1 ? 'run' : 'runs'} in the ${fieldPosition?.toLowerCase()} through ${shot.toLowerCase()} shot`;
+
+      updateScore({
+        runs,
+        isExtra: false,
+        isNoBall: false,
+        batsmanName: striker.name,
+        batsmanId: striker.id,
+        bowlerName: currentBowler.name,
+        bowlerId: currentBowler.id,
+        isWicket: false,
+        fieldPosition,
+        shotType: shot,
+        commentary
+      });
+
+      setShowShotType(false);
+      const runsValue = currentBallData.runs;
+      setCurrentBallData(null);
+
+      // Trigger celebration if 4 or 6
+      if (runsValue === 4 || runsValue === 6) {
+        setCelebrationText(runsValue === 6 ? 'MASSIVE SIX!' : 'FANTASTIC FOUR!');
+
+        if (enableAnimations) {
+          setShowConfetti(true);
+          playCelebrationSound(runsValue);
+
+          Animated.sequence([
+            Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 50, friction: 3 }),
+            Animated.delay(2000),
+            Animated.timing(fadeAnim, { toValue: 0, duration: 500, useNativeDriver: true })
+          ]).start(() => {
+            setShowConfetti(false);
+            setCelebrationText('');
+            scaleAnim.setValue(0);
+            fadeAnim.setValue(1);
+          });
           fadeAnim.setValue(1);
-        });
-        fadeAnim.setValue(1);
-      } else {
-        // Just show text briefly or skip
-        playCelebrationSound(runs);
-        setCelebrationText(runs === 6 ? 'MASSIVE SIX!' : 'FANTASTIC FOUR!');
-        setTimeout(() => setCelebrationText(''), 2000);
+        } else {
+          playCelebrationSound(runsValue);
+          setCelebrationText(runsValue === 6 ? 'MASSIVE SIX!' : 'FANTASTIC FOUR!');
+          setTimeout(() => setCelebrationText(''), 2000);
+        }
       }
     }
   };
@@ -640,10 +684,18 @@ export default function Scorecard() {
               </View>
             </View>
 
-            <TouchableOpacity style={styles.fullScorecardLink} onPress={() => router.push('/full-scorecard')}>
-              <Text style={styles.fullScorecardLinkText}>View Full Scorecard</Text>
-              <ChevronRight size={18} color={colors.accent} />
-            </TouchableOpacity>
+            <View style={styles.bottomLinks}>
+              <TouchableOpacity style={styles.fullScorecardLink} onPress={() => router.push('/commentary')}>
+                <MessageSquare size={18} color={colors.accent} style={{ marginRight: 8 }} />
+                <Text style={styles.fullScorecardLinkText}>View Commentary</Text>
+                <ChevronRight size={18} color={colors.accent} />
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.fullScorecardLink} onPress={() => router.push('/full-scorecard')}>
+                <Text style={styles.fullScorecardLinkText}>View Full Scorecard</Text>
+                <ChevronRight size={18} color={colors.accent} />
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -742,6 +794,23 @@ export default function Scorecard() {
           fielders={bowlingTeamObj?.players || []}
           wicketKeeper={bowlingTeamObj?.players.find(p => p.isWicketKeeper)}
         />
+      )}
+
+      {striker && (
+        <>
+          <FieldMapModal
+            visible={showFieldMap}
+            onClose={() => setShowFieldMap(false)}
+            onSelect={onFieldSelect}
+            batsmanName={striker.name}
+          />
+          <ShotTypeModal
+            visible={showShotType}
+            onClose={() => setShowShotType(false)}
+            onSelect={onShotSelect}
+            batsmanName={striker.name}
+          />
+        </>
       )}
 
       {renderAnimations()}
@@ -1094,13 +1163,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
+    padding: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    flex: 1,
   },
   fullScorecardLinkText: {
-    fontSize: 14,
+    fontSize: 13,
     color: colors.accent,
     fontWeight: '700',
     marginRight: 4,
+  },
+  bottomLinks: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 10,
+    paddingHorizontal: 4,
   },
   selectionOverlay: {
     margin: 12,
