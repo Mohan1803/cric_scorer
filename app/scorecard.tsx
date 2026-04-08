@@ -12,6 +12,7 @@ import WicketModal from '../components/WicketModal';
 import OversModal from '../components/OversModal';
 import FieldMapModal from '../components/FieldMapModal';
 import ShotTypeModal from '../components/ShotTypeModal';
+import BatsmanStatsModal from '../components/BatsmanStatsModal';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronRight, RotateCcw, ArrowRightLeft, UserCircle2, Zap, MessageSquare } from 'lucide-react-native';
 import ConfettiCannon from 'react-native-confetti-cannon';
@@ -86,6 +87,8 @@ export default function Scorecard() {
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const [showFieldMap, setShowFieldMap] = useState(false);
   const [showShotType, setShowShotType] = useState(false);
+  const [showStatsModal, setShowStatsModal] = useState(false);
+  const [selectedStatsPlayer, setSelectedStatsPlayer] = useState<any>(null);
   const [currentBallData, setCurrentBallData] = useState<{ runs: number, fieldPosition?: string, shotType?: string } | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
 
@@ -556,7 +559,16 @@ export default function Scorecard() {
         <View style={styles.matchStatsCard}>
           <View style={styles.statsBatting}>
             {[striker, nonStriker].map((player, idx) => (
-              <View key={idx} style={[styles.playerRow, idx === 0 && styles.activePlayerBg]}>
+              <TouchableOpacity
+                key={idx}
+                style={[styles.playerRow, idx === 0 && styles.activePlayerBg]}
+                onPress={() => {
+                  if (player) {
+                    setSelectedStatsPlayer(player);
+                    setShowStatsModal(true);
+                  }
+                }}
+              >
                 <View style={styles.playerNameCol}>
                   <Text style={[styles.playerLabel, player?.id === striker?.id && styles.strikerText]}>
                     {player?.name || 'Batsman'}{player?.isCaptain ? ' (C)' : ''}{player?.isWicketKeeper ? ' (WK)' : ''} {player?.id === striker?.id ? '*' : ''}
@@ -570,7 +582,7 @@ export default function Scorecard() {
                     {player?.runs || 0} <Text style={styles.playerBallsText}>({player?.balls || 0})</Text>
                   </Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             ))}
           </View>
 
@@ -814,6 +826,13 @@ export default function Scorecard() {
           />
         </>
       )}
+
+      <BatsmanStatsModal
+        visible={showStatsModal}
+        onClose={() => setShowStatsModal(false)}
+        player={selectedStatsPlayer}
+        ballHistory={currentInningsNumber === 1 ? ballHistory : [...useGameStore.getState().firstInningsBallHistory, ...ballHistory]}
+      />
 
       {renderAnimations()}
     </SafeAreaView>

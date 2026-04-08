@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, SectionList, TouchableOpacity, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, SectionList, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
 import { useGameStore } from '../store/gameStore';
 import { colors, shadows } from './theme';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -22,6 +22,7 @@ interface CommentaryItem {
 export default function CommentaryPage() {
   const router = useRouter();
   const { ballHistory, currentInningsNumber, firstInningsBallHistory } = useGameStore();
+  const [selectedFilter, setSelectedFilter] = React.useState<'all' | 'wicket' | 'four' | 'six'>('all');
 
   const processInnings = (history: any[]) => {
     let legalBallCount = 0;
@@ -57,9 +58,17 @@ export default function CommentaryPage() {
       });
     });
 
+    const filteredItems = items.filter(item => {
+      if (selectedFilter === 'all') return true;
+      if (selectedFilter === 'wicket') return item.isWicket;
+      if (selectedFilter === 'four') return item.runs === 4;
+      if (selectedFilter === 'six') return item.runs === 6;
+      return true;
+    });
+
     // Group by over and reverse for reverse chronological order
     const groups: { [key: number]: CommentaryItem[] } = {};
-    items.forEach(item => {
+    filteredItems.forEach(item => {
       if (!groups[item.over]) groups[item.over] = [];
       groups[item.over].unshift(item); // Latest ball first in over
     });
@@ -86,7 +95,7 @@ export default function CommentaryPage() {
       ];
     }
     return currentInnings;
-  }, [ballHistory, firstInningsBallHistory, currentInningsNumber]);
+  }, [ballHistory, firstInningsBallHistory, currentInningsNumber, selectedFilter]);
 
   const renderItem = ({ item }: { item: any }) => {
     if (item.isHeader) {
@@ -138,6 +147,34 @@ export default function CommentaryPage() {
           <Text style={styles.headerTitle}>Commentary</Text>
         </View>
         <View style={{ width: 40 }} />
+      </View>
+
+      <View style={styles.filterBarContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+          {[
+            { id: 'all', label: 'All', icon: <MessageSquare size={14} color="#fff" /> },
+            { id: 'wicket', label: 'Wickets', icon: <Zap size={14} color="#fff" /> },
+            { id: 'four', label: 'Fours', icon: <Text style={styles.chipEmoji}>4️⃣</Text> },
+            { id: 'six', label: 'Sixes', icon: <Text style={styles.chipEmoji}>6️⃣</Text> },
+          ].map((filter) => (
+            <TouchableOpacity
+              key={filter.id}
+              style={[
+                styles.filterChip,
+                selectedFilter === filter.id && styles.filterChipActive
+              ]}
+              onPress={() => setSelectedFilter(filter.id as any)}
+            >
+              <View style={styles.chipIcon}>{filter.icon}</View>
+              <Text style={[
+                styles.filterChipText,
+                selectedFilter === filter.id && styles.filterChipTextActive
+              ]}>
+                {filter.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
       <SectionList
@@ -323,5 +360,42 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textSecondary,
     marginTop: 16,
+  },
+  filterBarContainer: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  filterScroll: {
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  filterChipActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  chipIcon: {
+    marginRight: 6,
+  },
+  chipEmoji: {
+    fontSize: 12,
+  },
+  filterChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  filterChipTextActive: {
+    color: colors.textDark,
   },
 });

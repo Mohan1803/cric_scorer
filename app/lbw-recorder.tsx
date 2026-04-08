@@ -121,9 +121,12 @@ export default function LbwRecorder() {
           </View>
 
           <View style={styles.bottomBar}>
-            <TouchableOpacity style={styles.actionButton}>
-              <RotateCcw size={24} color="#fff" />
-            </TouchableOpacity>
+            <View style={styles.sideButtonContainer}>
+              <TouchableOpacity style={styles.actionButton}>
+                <RotateCcw size={24} color="#fff" />
+              </TouchableOpacity>
+              <Text style={styles.actionLabel}>RETRY</Text>
+            </View>
 
             <TouchableOpacity 
               activeOpacity={0.7}
@@ -133,11 +136,20 @@ export default function LbwRecorder() {
               <View style={[styles.recordButtonOuter, isRecording && styles.recordingOuter]}>
                 <View style={[styles.recordButtonInner, isRecording && styles.recordingInner]} />
               </View>
+              <Text style={[styles.recordLabel, isRecording && { color: '#ef4444' }]}>
+                {isRecording ? 'STOP' : 'RECORD'}
+              </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.actionButton}>
-              <Video size={24} color="#fff" />
-            </TouchableOpacity>
+            <View style={styles.sideButtonContainer}>
+              <TouchableOpacity 
+                style={[styles.actionButton, { backgroundColor: 'rgba(99,102,241,0.2)', borderColor: 'rgba(99,102,241,0.4)', borderWidth: 1 }]}
+                onPress={() => router.push({ pathname: '/lbw-tracking' as any, params: { videoUri: 'demo' } })}
+              >
+                <Video size={24} color="#818cf8" />
+              </TouchableOpacity>
+              <Text style={[styles.actionLabel, { color: '#818cf8' }]}>TRY DEMO</Text>
+            </View>
           </View>
         </View>
       </CameraView>
@@ -240,9 +252,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  sideButtonContainer: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  actionLabel: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
+  recordLabel: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginTop: 8,
+    letterSpacing: 1,
+  },
   recordButtonContainer: {
     width: 80,
-    height: 80,
+    height: 100,
     justifyContent: 'center',
     alignItems: 'center',
   },

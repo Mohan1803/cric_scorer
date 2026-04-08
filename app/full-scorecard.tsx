@@ -18,7 +18,8 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { router } from 'expo-router';
 import { colors } from './theme';
-import { ChevronLeft, Download, Trophy, Star, Award } from 'lucide-react-native';
+import { ChevronLeft, Download, Trophy, Star, Award, Target } from 'lucide-react-native';
+import BatsmanStatsModal from '../components/BatsmanStatsModal';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -37,6 +38,8 @@ export default function FullScorecard() {
     currentInningsNumber,
   } = useGameStore();
   const [showVictoryModal, setShowVictoryModal] = useState(!!matchResult);
+  const [showStatsModal, setShowStatsModal] = useState(false);
+  const [selectedStatsPlayer, setSelectedStatsPlayer] = useState<any>(null);
   if (!teams || teams.length < 2 || !teams[0]?.players || !teams[1]?.players) {
     return (
       <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
@@ -444,7 +447,13 @@ export default function FullScorecard() {
             renderItem={({ item: player }) => {
               const strikeRate = player.balls > 0 ? ((player.runs / player.balls) * 100).toFixed(1) : '0.0';
               return (
-                <View style={styles.tableRow}>
+                <TouchableOpacity
+                  style={styles.tableRow}
+                  onPress={() => {
+                    setSelectedStatsPlayer(player);
+                    setShowStatsModal(true);
+                  }}
+                >
                   <View style={[styles.cell, styles.playerCell]}>
                     <Text style={styles.playerCellName}>
                       {player.name}{player.isCaptain ? ' (C)' : ''}{player.isWicketKeeper ? ' (WK)' : ''}
@@ -458,7 +467,7 @@ export default function FullScorecard() {
                   <Text style={styles.cell}>{player.fours}</Text>
                   <Text style={styles.cell}>{player.sixes}</Text>
                   <Text style={styles.cell}>{strikeRate}</Text>
-                </View>
+                </TouchableOpacity>
               );
             }}
             ListEmptyComponent={<Text style={styles.emptyText}>No batting data.</Text>}
@@ -704,6 +713,13 @@ export default function FullScorecard() {
           </View>
         </View>
       </Modal>
+
+      <BatsmanStatsModal
+        visible={showStatsModal}
+        onClose={() => setShowStatsModal(false)}
+        player={selectedStatsPlayer}
+        ballHistory={[...firstInningsBallHistory, ...ballHistory]}
+      />
 
     </SafeAreaView>
   );

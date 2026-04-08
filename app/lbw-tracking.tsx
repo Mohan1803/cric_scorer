@@ -1,76 +1,32 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   StyleSheet, Text, View, TouchableOpacity, Dimensions,
-  Platform, Alert, Image, Pressable, FlatList, ActivityIndicator,
+  Platform, Alert, Image, Pressable, ActivityIndicator,
 } from 'react-native';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { useLocalSearchParams, router } from 'expo-router';
 import {
-  X, RotateCcw, Save, ChevronRight, ChevronLeft,
-  Target, Crosshair, Eye, Cpu, Check, Circle,
+  X, RotateCcw, Save, Cpu, Eye, Crosshair, Target, Circle as LucideCircle,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import * as MediaLibrary from 'expo-media-library';
+import * as FileSystem from 'expo-file-system';
+import Svg, { Path, Rect, Polygon, Circle, Text as SvgText, G, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withSequence,
-  withDelay,
-  withRepeat,
-  Easing,
-  runOnJS,
-  interpolateColor,
+  useSharedValue, useAnimatedStyle, withTiming,
+  withSequence, withDelay, withRepeat, Easing, runOnJS, interpolate,
 } from 'react-native-reanimated';
 import { colors } from './theme';
+import AutoBallDetector, {
+  type AutoBallDetectorRef, type DetectionResult, type DetectedPoint,
+} from '../components/AutoBallDetector';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 
 type Point = { x: number; y: number };
 
-// ─── Frame data ─────────────────────────────────
-type FrameData = {
-  uri: string;
-  timestamp: number; // ms
-};
-
-// ─── Stump zone definition (center of screen) ───
-const STUMP_ZONE = {
-  left: SW * 0.38,
-  right: SW * 0.62,
-  top: SH * 0.30,
-  bottom: SH * 0.55,
-};
-
-// ─── Marking steps ──────────────────────────────
-const MARKING_STEPS = [
-  {
-    key: 'release',
-    title: 'RELEASE POINT',
-    desc: 'Scrub to find when the bowler releases the ball, then tap the ball',
-    icon: Circle,
-    color: '#a78bfa',
-  },
-  {
-    key: 'pitch',
-    title: 'PITCHING POINT',
-    desc: 'Scrub to where the ball pitches on the surface, then tap it',
-    icon: Target,
-    color: '#3b82f6',
-  },
-  {
-    key: 'impact',
-    title: 'IMPACT POINT',
-    desc: 'Scrub to where the ball hits the pad, then tap it',
-    icon: Crosshair,
-    color: '#f59e0b',
-  },
-];
-
-// ═══════════════════════════════════════════════════
-//  BEZIER INTERPOLATION HELPERS
-// ═══════════════════════════════════════════════════
+// ─── Bezier helpers ─────────────────────────────
 function quadraticBezier(p0: Point, p1: Point, p2: Point, t: number): Point {
   const u = 1 - t;
   return {
@@ -89,13 +45,16 @@ function generateTrajectoryPoints(
   return pts;
 }
 
-function projectBeyondImpact(
-  pitch: Point, impact: Point, factor = 0.65
-): Point {
+function projectBeyondImpact(pitch: Point, impact: Point, factor = 0.65): Point {
   return {
     x: impact.x + (impact.x - pitch.x) * factor,
     y: impact.y + (impact.y - pitch.y) * 0.4,
   };
+}
+
+// ─── Scale detected coords to screen ────────────
+function scalePoint(pt: { x: number; y: number }, srcW: number, srcH: number): Point {
+  return { x: (pt.x / srcW) * SW, y: (pt.y / srcH) * SH };
 }
 
 // ═══════════════════════════════════════════════════
@@ -104,29 +63,32 @@ function projectBeyondImpact(
 export default function LbwTracking() {
   const { videoUri } = useLocalSearchParams<{ videoUri: string }>();
   const videoRef = useRef<Video>(null);
+  const detectorRef = useRef<AutoBallDetectorRef>(null);
+
+  // ── Flow state ──
+  type FlowStep = 'extracting' | 'detecting' | 'analyzing' | 'pitching' | 'impact' | 'wickets' | 'decision';
+  const [step, setStep] = useState<FlowStep>('extracting');
 
   // ── Frame extraction ──
-  const [frames, setFrames] = useState<FrameData[]>([]);
-  const [extracting, setExtracting] = useState(true);
   const [extractProgress, setExtractProgress] = useState(0);
+  const [detectProgress, setDetectProgress] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
 
-  // ── Current frame & scrubbing ──
-  const [currentFrameIdx, setCurrentFrameIdx] = useState(0);
-  const filmstripRef = useRef<FlatList>(null);
-
-  // ── Marking flow ──
-  const [markingStep, setMarkingStep] = useState(0); // 0=release, 1=pitch, 2=impact
-  const [markedPoints, setMarkedPoints] = useState<(Point | null)[]>([null, null, null]);
-  const [markedFrameIdx, setMarkedFrameIdx] = useState<(number | null)[]>([null, null, null]);
-
-  // ── Step flow ──
-  type FlowStep = 'extracting' | 'marking' | 'analyzing' | 'pitching' | 'impact' | 'wickets' | 'decision';
-  const [step, setStep] = useState<FlowStep>('extracting');
+  // ── Detection results ──
+  const [detection, setDetection] = useState<DetectionResult | null>(null);
+  const [scaledRelease, setScaledRelease] = useState<Point | null>(null);
+  const [scaledPitch, setScaledPitch] = useState<Point | null>(null);
+  const [scaledImpact, setScaledImpact] = useState<Point | null>(null);
+  const [stumpRect, setStumpRect] = useState<{
+    left: number; right: number; top: number; bottom: number;
+    widthPx: number; heightPx: number;
+    widthInches: number; heightInches: number;
+  } | null>(null);
 
   // ── DRS result ──
   const [drsResult, setDrsResult] = useState({
     pitching: '', impact: '', wickets: '', decision: '',
+    pitchDistInches: '', impactHeightInches: '',
   });
   const [isSaving, setIsSaving] = useState(false);
 
@@ -137,166 +99,247 @@ export default function LbwTracking() {
   const ballScale = useSharedValue(1.5);
   const glowPulse = useSharedValue(0);
   const scanProgress = useSharedValue(0);
-  const trajectoryOpacity = useSharedValue(0);
+  const virtualOpacity = useSharedValue(0); // For video-to-virtual fade
+  const stumpReveal = useSharedValue(0);   // For 3D stump animation
 
+  // ── src dimensions for coordinate scaling ──
+  const srcW = useRef(200);
+  const srcH = useRef(150);
+
+  const DEMO_VIDEO_URL = 'https://github.com/guurav18/LBW-DRS-IN-CRICKET/raw/main/lbw.mp4';
   const isDemo = !videoUri || videoUri === 'demo';
+  const activeVideoUri = isDemo ? DEMO_VIDEO_URL : videoUri;
 
   // ═══════════════════════════════════════════════
-  //  FRAME EXTRACTION
+  //  FRAME EXTRACTION + AUTO DETECTION
   // ═══════════════════════════════════════════════
-  useEffect(() => {
-    extractFrames();
-  }, []);
+  useEffect(() => { startAutoFlow(); }, []);
 
-  const extractFrames = async () => {
+  const startAutoFlow = async () => {
     setStep('extracting');
-    setExtracting(true);
 
     if (isDemo) {
-      // For demo mode: simulate frame extraction
       await new Promise(r => setTimeout(r, 1500));
-      const demoFrames: FrameData[] = Array.from({ length: 30 }, (_, i) => ({
-        uri: '', // empty for demo
-        timestamp: i * 100,
-      }));
-      setFrames(demoFrames);
-      setVideoDuration(3000);
-      setExtracting(false);
-      setStep('marking');
+      // Demo: simulate detection with pre-set points
+      const demoDetection: DetectionResult = {
+        stumps: {
+          offBase: { x: 85, y: 120 }, legBase: { x: 115, y: 120 },
+          bailTop: { x: 100, y: 55 }, widthPx: 30, heightPx: 65, centerX: 100,
+        },
+        ballPositions: [
+          { x: 100, y: 15, frame: 0 }, { x: 98, y: 40, frame: 3 },
+          { x: 95, y: 95, frame: 7 }, { x: 97, y: 80, frame: 10 },
+          { x: 99, y: 70, frame: 13 },
+        ],
+        releasePoint: { x: 100, y: 15, frame: 0 },
+        pitchPoint: { x: 95, y: 95, frame: 7 },
+        impactPoint: { x: 97, y: 80, frame: 10 },
+      };
+      srcW.current = 200; srcH.current = 150;
+      processDetectionResult(demoDetection);
       return;
     }
 
     try {
-      // First, get video duration by loading a status
-      const statusUpdate = (s: AVPlaybackStatus) => {
-        if (s.isLoaded && s.durationMillis) {
-          setVideoDuration(s.durationMillis);
-        }
-      };
+      // 1. Get video duration
+      let duration = 6000;
+      const targetUri = isDemo ? DEMO_VIDEO_URL : videoUri;
 
-      // Load the video to get duration
-      if (videoRef.current) {
-        const status = await videoRef.current.getStatusAsync();
-        if (status.isLoaded && status.durationMillis) {
-          setVideoDuration(status.durationMillis);
-          await extractFramesFromDuration(status.durationMillis);
-        } else {
-          // Wait a bit and retry
-          await new Promise(r => setTimeout(r, 1000));
-          const retryStatus = await videoRef.current.getStatusAsync();
-          if (retryStatus.isLoaded && retryStatus.durationMillis) {
-            setVideoDuration(retryStatus.durationMillis);
-            await extractFramesFromDuration(retryStatus.durationMillis);
-          } else {
-            // Fallback: assume 5 seconds
-            setVideoDuration(5000);
-            await extractFramesFromDuration(5000);
+      if (!isDemo && videoRef.current) {
+        await new Promise(r => setTimeout(r, 500));
+        try {
+          const status = await videoRef.current.getStatusAsync();
+          if (status.isLoaded && status.durationMillis) {
+            duration = status.durationMillis;
           }
+        } catch (e) { /* use fallback */ }
+      }
+      setVideoDuration(duration);
+
+      // 2. Extract frames
+      const FRAME_COUNT = 24;
+      const interval = Math.max(duration / FRAME_COUNT, 50);
+      const base64Frames: string[] = [];
+
+      for (let i = 0; i < FRAME_COUNT; i++) {
+        const time = Math.floor(i * interval);
+        try {
+          const thumb = await VideoThumbnails.getThumbnailAsync(targetUri, {
+            time,
+            quality: 0.4,
+          });
+          // Convert to base64
+          const b64 = await FileSystem.readAsStringAsync(thumb.uri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          base64Frames.push(b64);
+        } catch (e) {
+          console.warn(`Frame ${i} extraction failed`);
         }
+        setExtractProgress((i + 1) / FRAME_COUNT);
+      }
+
+      if (base64Frames.length < 5) {
+        Alert.alert('Error', 'Could not extract enough frames from video.');
+        router.back();
+        return;
+      }
+
+      // 3. Auto-detect ball and stumps
+      setStep('detecting');
+      setDetectProgress(0);
+
+      const result = await detectorRef.current?.processFrames(
+        base64Frames, 200, 150
+      );
+
+      if (result) {
+        processDetectionResult(result);
+      } else {
+        Alert.alert('Detection Failed', 'Could not detect ball or stumps. Please try again with a clearer video.');
+        router.back();
       }
     } catch (err) {
-      console.error('Frame extraction error:', err);
-      // Fallback
-      setVideoDuration(5000);
-      await extractFramesFromDuration(5000);
+      console.error('Auto-detection error:', err);
+      Alert.alert('Error', 'Ball tracking failed.');
+      router.back();
     }
   };
 
-  const extractFramesFromDuration = async (duration: number) => {
-    const FRAME_COUNT = 30;
-    const interval = Math.max(duration / FRAME_COUNT, 50);
-    const extracted: FrameData[] = [];
+  // ═══════════════════════════════════════════════
+  //  PROCESS DETECTION RESULTS
+  // ═══════════════════════════════════════════════
+  const processDetectionResult = (result: DetectionResult) => {
+    setDetection(result);
+    const sw = srcW.current;
+    const sh = srcH.current;
 
-    for (let i = 0; i < FRAME_COUNT; i++) {
-      const time = Math.floor(i * interval);
-      try {
-        const thumb = await VideoThumbnails.getThumbnailAsync(videoUri, {
-          time,
-          quality: 0.5,
-        });
-        extracted.push({ uri: thumb.uri, timestamp: time });
-      } catch (e) {
-        // Skip failed frames
-        console.warn(`Frame ${i} failed:`, e);
+    // Scale key points to screen coords
+    const release = result.releasePoint
+      ? scalePoint(result.releasePoint, sw, sh)
+      : { x: SW * 0.5, y: SH * 0.15 };
+    const pitch = result.pitchPoint
+      ? scalePoint(result.pitchPoint, sw, sh)
+      : { x: SW * 0.48, y: SH * 0.62 };
+    const impact = result.impactPoint
+      ? scalePoint(result.impactPoint, sw, sh)
+      : { x: SW * 0.5, y: SH * 0.52 };
+
+    setScaledRelease(release);
+    setScaledPitch(pitch);
+    setScaledImpact(impact);
+
+    // Build stump rectangle
+    let stump = {
+      left: SW * 0.38, right: SW * 0.62,
+      top: SH * 0.30, bottom: SH * 0.55,
+      widthPx: SW * 0.24, heightPx: SH * 0.25,
+      widthInches: 9, heightInches: 28,
+    };
+
+    if (result.stumps) {
+      const sOff = scalePoint(result.stumps.offBase, sw, sh);
+      const sLeg = scalePoint(result.stumps.legBase, sw, sh);
+      const sBail = scalePoint(result.stumps.bailTop, sw, sh);
+      const wPx = Math.abs(sLeg.x - sOff.x);
+      const hPx = Math.abs(sOff.y - sBail.y);
+      const pxPerInch = wPx / 9; // stump-to-stump = 9 inches
+
+      stump = {
+        left: Math.min(sOff.x, sLeg.x) - 5,
+        right: Math.max(sOff.x, sLeg.x) + 5,
+        top: sBail.y,
+        bottom: Math.max(sOff.y, sLeg.y),
+        widthPx: wPx,
+        heightPx: hPx,
+        widthInches: 9,
+        heightInches: Math.round(hPx / pxPerInch),
+      };
+    }
+    setStumpRect(stump);
+
+    // Compute DRS decision
+    computeDecision(release, pitch, impact, stump);
+  };
+
+  // ═══════════════════════════════════════════════
+  //  COMPUTE DRS DECISION
+  // ═══════════════════════════════════════════════
+  const computeDecision = (
+    release: Point, pitch: Point, impact: Point,
+    stump: typeof stumpRect extends infer T ? NonNullable<T> : never
+  ) => {
+    if (!stump) return;
+
+    const pxPerInch = stump.widthPx / 9;
+    const ballRadiusPx = (pxPerInch * 2.8) / 2; // Ball avg diameter ~2.8 inches
+    const sLeft = stump.left;
+    const sRight = stump.right;
+    const sTop = stump.top;
+    const sBottom = stump.bottom;
+
+    // 1. Pitching (No Umpire's Call for pitching)
+    const pitchInLine = pitch.x >= sLeft && pitch.x <= sRight;
+
+    // 2. Impact (Umpire's Call if < 50% ball width is in line)
+    // Distance from center of ball at impact to the edge of the stumps
+    const impactDistFromCenter = Math.min(Math.abs(impact.x - sLeft), Math.abs(impact.x - sRight));
+    let impactStatus = 'OUTSIDE';
+    if (impact.x >= sLeft && impact.x <= sRight) {
+       impactStatus = 'IN LINE';
+    } else if (impactDistFromCenter < ballRadiusPx) {
+       impactStatus = "UMPIRE'S CALL";
+    }
+
+    // 3. Wickets (Projected)
+    const projected = projectBeyondImpact(pitch, impact);
+    const hitX = projected.x >= sLeft && projected.x <= sRight;
+    const hitY = projected.y >= sTop && projected.y <= sBottom;
+    const hitWickets = hitX && hitY;
+    
+    // Hit percentage for widgets
+    const wicketsDistX = Math.min(Math.abs(projected.x - sLeft), Math.abs(projected.x - sRight));
+    const wicketsDistY = Math.min(Math.abs(projected.y - sTop), Math.abs(projected.y - sBottom));
+    
+    let wicketsStatus = 'MISSING';
+    if (hitWickets) {
+      if (wicketsDistX > ballRadiusPx && wicketsDistY > ballRadiusPx) {
+        wicketsStatus = 'HITTING';
+      } else {
+        wicketsStatus = "UMPIRE'S CALL";
       }
-      setExtractProgress((i + 1) / FRAME_COUNT);
-    }
-
-    setFrames(extracted);
-    setExtracting(false);
-    setStep('marking');
-  };
-
-  // ═══════════════════════════════════════════════
-  //  VIDEO SEEKING (when user scrubs filmstrip)
-  // ═══════════════════════════════════════════════
-  const seekToFrame = useCallback(async (idx: number) => {
-    setCurrentFrameIdx(idx);
-    if (!isDemo && videoRef.current && frames[idx]) {
-      try {
-        await videoRef.current.setPositionAsync(frames[idx].timestamp);
-      } catch (e) { /* ignore seek errors */ }
-    }
-  }, [frames, isDemo]);
-
-  // ═══════════════════════════════════════════════
-  //  TAP TO MARK BALL POSITION
-  // ═══════════════════════════════════════════════
-  const handleVideoTap = (evt: any) => {
-    if (step !== 'marking') return;
-    if (markingStep >= 3) return;
-
-    const x = evt.nativeEvent.locationX;
-    const y = evt.nativeEvent.locationY;
-
-    const newPoints = [...markedPoints];
-    newPoints[markingStep] = { x, y };
-    setMarkedPoints(newPoints);
-
-    const newFrameIdx = [...markedFrameIdx];
-    newFrameIdx[markingStep] = currentFrameIdx;
-    setMarkedFrameIdx(newFrameIdx);
-
-    if (markingStep < 2) {
-      setMarkingStep(markingStep + 1);
     } else {
-      // All 3 points marked! Compute trajectory
-      videoRef.current?.pauseAsync();
-      computeDecision(newPoints as Point[]);
+      // Check if it's clipping
+      if ((wicketsDistX < ballRadiusPx || projected.x >= sLeft && projected.x <= sRight) && 
+          (wicketsDistY < ballRadiusPx || projected.y >= sTop && projected.y <= sBottom)) {
+        wicketsStatus = "UMPIRE'S CALL";
+      }
     }
-  };
 
-  // ═══════════════════════════════════════════════
-  //  COMPUTE DRS DECISION FROM 3 POINTS
-  // ═══════════════════════════════════════════════
-  const computeDecision = (pts: Point[]) => {
-    const [releasePt, pitchPt, impactPt] = pts;
+    // 4. Final Decision
+    // In real DRS, it depends on the on-field call. Here we'll show the "Ideal" call.
+    let finalDecision = 'NOT OUT';
+    if (pitchInLine && impactStatus !== 'OUTSIDE' && wicketsStatus !== 'MISSING') {
+      if (impactStatus === "UMPIRE'S CALL" || wicketsStatus === "UMPIRE'S CALL") {
+        finalDecision = "UMPIRE'S CALL";
+      } else {
+        finalDecision = 'OUT';
+      }
+    }
 
-    // Pitching: Is pitch point within stump line (left-right)?
-    const pitchInLine =
-      pitchPt.x >= STUMP_ZONE.left && pitchPt.x <= STUMP_ZONE.right;
-
-    // Impact: Is it within stump line?
-    const impactInLine =
-      impactPt.x >= STUMP_ZONE.left && impactPt.x <= STUMP_ZONE.right;
-
-    // Project trajectory beyond impact to predict wicket hit
-    const projected = projectBeyondImpact(pitchPt, impactPt);
-    const hittingWickets =
-      projected.x >= STUMP_ZONE.left - 15 &&
-      projected.x <= STUMP_ZONE.right + 15 &&
-      projected.y <= STUMP_ZONE.bottom + 20;
-
-    const isOut = pitchInLine && impactInLine && hittingWickets;
+    const pitchDist = Math.abs(pitch.x - (sLeft + sRight) / 2) / pxPerInch;
+    const impactH = Math.abs(sBottom - impact.y) / pxPerInch;
 
     setDrsResult({
       pitching: pitchInLine ? 'IN LINE' : 'OUTSIDE',
-      impact: impactInLine ? 'IN LINE' : 'OUTSIDE',
-      wickets: hittingWickets ? 'HITTING' : 'MISSING',
-      decision: isOut ? 'OUT' : 'NOT OUT',
+      impact: impactStatus,
+      wickets: wicketsStatus,
+      decision: finalDecision,
+      pitchDistInches: pitchDist.toFixed(1),
+      impactHeightInches: impactH.toFixed(1),
     });
 
-    // Start DRS animation
+    // Begin DRS animation sequence
     setStep('analyzing');
     beginAnalysisPhase();
   };
@@ -305,108 +348,78 @@ export default function LbwTracking() {
   //  DRS ANIMATION SEQUENCE
   // ═══════════════════════════════════════════════
   const beginAnalysisPhase = () => {
+    // Start scan animation
     scanProgress.value = withRepeat(
       withSequence(
         withTiming(1, { duration: 1200 }),
         withTiming(0, { duration: 1200 })
       ), -1, false
     );
+
+    // Cinematic fade to virtual reconstruction
+    virtualOpacity.value = withDelay(1000, withTiming(1, { duration: 1500 }));
+    stumpReveal.value = withDelay(1500, withTiming(1, { duration: 1000, easing: Easing.out(Easing.back(1)) }));
+
     setTimeout(() => {
       setStep('pitching');
       startPitchingAnimation();
-    }, 2500);
-  };
-
-  const startPitchingAnimation = () => {
-    const pts = markedPoints as Point[];
-    if (!pts[0] || !pts[1]) return;
-
-    ballOpacity.value = 0;
-    ballX.value = pts[0].x; // Start from release point
-    ballY.value = pts[0].y;
-    ballScale.value = 0.6;
-    glowPulse.value = 0;
-    trajectoryOpacity.value = 0;
-
-    // Ball flies from release to pitch point
-    ballOpacity.value = withTiming(1, { duration: 200 });
-    trajectoryOpacity.value = withDelay(300, withTiming(0.7, { duration: 500 }));
-
-    ballX.value = withTiming(pts[1].x, {
-      duration: 1500, easing: Easing.bezier(0.2, 0, 0.4, 1),
-    });
-    ballY.value = withTiming(pts[1].y, {
-      duration: 1500, easing: Easing.bezier(0.2, 0, 0.4, 1),
-    });
-    ballScale.value = withTiming(1.3, { duration: 1500 });
-
-    // Flash at pitch point
-    glowPulse.value = withDelay(1500,
-      withSequence(
-        withTiming(1, { duration: 80 }),
-        withTiming(0, { duration: 400 })
-      )
-    );
-
-    setTimeout(() => {
-      setStep('impact');
-      startImpactAnimation();
     }, 2800);
   };
 
-  const startImpactAnimation = () => {
-    const pts = markedPoints as Point[];
-    if (!pts[2]) return;
+  const startPitchingAnimation = () => {
+    const rel = scaledRelease || { x: SW / 2, y: SH * 0.15 };
+    const pit = scaledPitch || { x: SW * 0.48, y: SH * 0.62 };
 
+    ballOpacity.value = 0;
+    ballX.value = rel.x;
+    ballY.value = rel.y;
+    ballScale.value = 0.5;
     glowPulse.value = 0;
 
-    // Ball moves from pitch to impact
-    ballX.value = withTiming(pts[2].x, {
-      duration: 1200, easing: Easing.bezier(0.25, 0.1, 0.25, 1),
-    });
-    ballY.value = withTiming(pts[2].y, {
-      duration: 1200, easing: Easing.out(Easing.quad),
-    });
-    ballScale.value = withTiming(1.5, { duration: 1200 });
+    ballOpacity.value = withTiming(1, { duration: 250 });
+    ballX.value = withTiming(pit.x, { duration: 1600, easing: Easing.bezier(0.2, 0, 0.4, 1) });
+    ballY.value = withTiming(pit.y, { duration: 1600, easing: Easing.bezier(0.2, 0, 0.4, 1) });
+    ballScale.value = withTiming(1.4, { duration: 1600 });
 
-    // Impact glow
-    glowPulse.value = withDelay(1200,
-      withSequence(
-        withTiming(1, { duration: 60 }),
-        withTiming(0.3, { duration: 500 })
-      )
+    glowPulse.value = withDelay(1600,
+      withSequence(withTiming(1, { duration: 80 }), withTiming(0, { duration: 400 }))
     );
 
-    setTimeout(() => {
-      setStep('wickets');
-      startWicketsAnimation();
-    }, 2500);
+    setTimeout(() => { setStep('impact'); startImpactAnimation(); }, 2800);
+  };
+
+  const startImpactAnimation = () => {
+    const imp = scaledImpact || { x: SW * 0.5, y: SH * 0.52 };
+    glowPulse.value = 0;
+
+    ballX.value = withTiming(imp.x, { duration: 1200, easing: Easing.bezier(0.25, 0.1, 0.25, 1) });
+    ballY.value = withTiming(imp.y, { duration: 1200, easing: Easing.out(Easing.quad) });
+    ballScale.value = withTiming(1.5, { duration: 1200 });
+
+    glowPulse.value = withDelay(1200,
+      withSequence(withTiming(1, { duration: 60 }), withTiming(0.3, { duration: 500 }))
+    );
+
+    setTimeout(() => { setStep('wickets'); startWicketsAnimation(); }, 2500);
   };
 
   const startWicketsAnimation = () => {
-    const pts = markedPoints as Point[];
-    if (!pts[1] || !pts[2]) return;
-
-    const projected = projectBeyondImpact(pts[1], pts[2]);
+    const pit = scaledPitch || { x: SW * 0.48, y: SH * 0.62 };
+    const imp = scaledImpact || { x: SW * 0.5, y: SH * 0.52 };
+    const projected = projectBeyondImpact(pit, imp);
 
     glowPulse.value = 0;
-    ballOpacity.value = withTiming(0.6, { duration: 200 }); // translucent = predicted
+    ballOpacity.value = withTiming(0.65, { duration: 200 });
 
-    ballX.value = withTiming(projected.x, {
-      duration: 1400, easing: Easing.bezier(0.25, 0.1, 0.25, 1),
-    });
-    ballY.value = withTiming(projected.y, {
-      duration: 1400, easing: Easing.bezier(0.25, 0.1, 0.25, 1),
-    });
+    ballX.value = withTiming(projected.x, { duration: 1400, easing: Easing.bezier(0.25, 0.1, 0.25, 1) });
+    ballY.value = withTiming(projected.y, { duration: 1400, easing: Easing.bezier(0.25, 0.1, 0.25, 1) });
     ballScale.value = withTiming(1, { duration: 1400 });
 
     if (drsResult.wickets === 'HITTING') {
       glowPulse.value = withDelay(1400,
         withSequence(
-          withTiming(1, { duration: 50 }),
-          withTiming(0.5, { duration: 150 }),
-          withTiming(1, { duration: 80 }),
-          withTiming(0.6, { duration: 600 })
+          withTiming(1, { duration: 50 }), withTiming(0.5, { duration: 150 }),
+          withTiming(1, { duration: 80 }), withTiming(0.6, { duration: 600 })
         )
       );
     }
@@ -416,30 +429,14 @@ export default function LbwTracking() {
 
   // ── Reset ──
   const resetAll = useCallback(() => {
-    setMarkedPoints([null, null, null]);
-    setMarkedFrameIdx([null, null, null]);
-    setMarkingStep(0);
-    setStep('marking');
-    setCurrentFrameIdx(0);
     ballOpacity.value = 0;
     glowPulse.value = 0;
-    trajectoryOpacity.value = 0;
-    videoRef.current?.setPositionAsync(0);
-    videoRef.current?.playAsync();
+    setStep('extracting');
+    setDetection(null);
+    setExtractProgress(0);
+    setDetectProgress(0);
+    setTimeout(() => startAutoFlow(), 300);
   }, []);
-
-  // ── Undo last mark ──
-  const undoLastMark = useCallback(() => {
-    if (markingStep === 0) return;
-    const newStep = markingStep - 1;
-    const newPoints = [...markedPoints];
-    newPoints[newStep] = null;
-    setMarkedPoints(newPoints);
-    const newFrameIdxs = [...markedFrameIdx];
-    newFrameIdxs[newStep] = null;
-    setMarkedFrameIdx(newFrameIdxs);
-    setMarkingStep(newStep);
-  }, [markingStep, markedPoints, markedFrameIdx]);
 
   // ── Save video ──
   const handleSave = async () => {
@@ -447,40 +444,32 @@ export default function LbwTracking() {
     try {
       setIsSaving(true);
       const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission denied', 'Gallery access needed.');
-        return;
-      }
+      if (status !== 'granted') { Alert.alert('Permission denied'); return; }
       await MediaLibrary.saveToLibraryAsync(videoUri);
       Alert.alert('Saved', 'Delivery video saved to gallery!');
-    } catch (e) {
-      Alert.alert('Error', 'Failed to save video.');
-    } finally {
-      setIsSaving(false);
-    }
+    } catch (e) { Alert.alert('Error', 'Failed to save.'); }
+    finally { setIsSaving(false); }
   };
 
   // ═══════════════════════════════════════════════
-  //  TRAJECTORY POINTS (for drawing the path)
+  //  TRAJECTORY POINTS
   // ═══════════════════════════════════════════════
   const trajectoryPoints = useMemo(() => {
-    const pts = markedPoints as (Point | null)[];
-    if (!pts[0] || !pts[1] || !pts[2]) return [];
-    return generateTrajectoryPoints(pts[0], pts[1], pts[2], 40);
-  }, [markedPoints]);
+    if (!scaledRelease || !scaledPitch || !scaledImpact) return [];
+    return generateTrajectoryPoints(scaledRelease, scaledPitch, scaledImpact, 40);
+  }, [scaledRelease, scaledPitch, scaledImpact]);
 
   const projectedPoint = useMemo(() => {
-    const pts = markedPoints as (Point | null)[];
-    if (!pts[1] || !pts[2]) return null;
-    return projectBeyondImpact(pts[1], pts[2]);
-  }, [markedPoints]);
+    if (!scaledPitch || !scaledImpact) return null;
+    return projectBeyondImpact(scaledPitch, scaledImpact);
+  }, [scaledPitch, scaledImpact]);
 
   // ═══════════════════════════════════════════════
-  //  ANIMATED STYLES
+  //  ANIMATED STYLES & TRACKING STATE
   // ═══════════════════════════════════════════════
   const isTracking = ['pitching', 'impact', 'wickets'].includes(step);
   const ballColor = step === 'wickets'
-    ? (drsResult.wickets === 'HITTING' ? '#ef4444' : '#3b82f6')
+    ? (drsResult.wickets === 'HITTING' ? '#ef4444' : drsResult.wickets === "UMPIRE'S CALL" ? '#f97316' : '#3b82f6')
     : '#3b82f6';
 
   const animBall = useAnimatedStyle(() => ({
@@ -505,284 +494,253 @@ export default function LbwTracking() {
     transform: [{ translateY: scanProgress.value * (SH * 0.35) }],
   }));
 
+  const getStatusColor = (status: string) => {
+    if (status === 'IN LINE' || status === 'HITTING' || status === 'OUT') return '#22c55e';
+    if (status === "UMPIRE'S CALL") return '#f97316';
+    return '#ef4444';
+  };
+
   // ═══════════════════════════════════════════════
-  //  RENDER HELPERS
+  //  CINEMATIC VISUALS (SVG)
   // ═══════════════════════════════════════════════
-  const renderFrameThumb = useCallback(({ item, index }: { item: FrameData; index: number }) => {
-    const isActive = index === currentFrameIdx;
-    const isMarked = markedFrameIdx.includes(index);
-    const markIdx = markedFrameIdx.indexOf(index);
+  const HawkEyeVisuals = () => {
+    if (!isTracking || !stumpRect) return null;
+
+    const { left, right, top, bottom } = stumpRect;
+    const centerX = (left + right) / 2;
+    const width = right - left;
+    
+    // Perspective Pitch calculation (Virtual)
+    const pitchWidthTop = width * 2;
+    const pitchWidthBottom = SW * 1.5;
+    const pitchTop = top - 100;
+    const pitchBottom = SH;
+
+    // 3D Stump reconstruction
+    const render3DStump = (x: number, isHit: boolean) => {
+      const sWidth = width / 6;
+      const sHeight = bottom - top;
+      return (
+        <G key={`stump-${x}`}>
+          <Defs>
+            <SvgGradient id={`stumpGrad-${x}`} x1="0%" y1="0%" x2="100%" y2="0%">
+              <Stop offset="0%" stopColor="rgba(255,255,255,0.1)" />
+              <Stop offset="50%" stopColor="rgba(255,255,255,0.3)" />
+              <Stop offset="100%" stopColor="rgba(255,255,255,0.1)" />
+            </SvgGradient>
+          </Defs>
+          {/* Main Stump Cylinder */}
+          <Rect
+            x={x - sWidth / 2}
+            y={top}
+            width={sWidth}
+            height={sHeight}
+            rx={2}
+            fill="rgba(148, 163, 184, 0.4)"
+            stroke={isHit ? "#EF4444" : "rgba(255,255,255,0.2)"}
+            strokeWidth={1}
+          />
+          <Rect
+            x={x - sWidth / 2}
+            y={top}
+            width={sWidth}
+            height={sHeight}
+            rx={2}
+            fill={`url(#stumpGrad-${x})`}
+          />
+        </G>
+      );
+    };
+
+    // Path tracing (Ribbon Style)
+    const renderRibbon = (points: Point[], color: string, glowColor: string, isDashed = false) => {
+      if (points.length < 2) return null;
+      let d = `M ${points[0].x} ${points[0].y}`;
+      for (let i = 1; i < points.length; i++) {
+        d += ` L ${points[i].x} ${points[i].y}`;
+      }
+      return (
+        <G>
+          <Path
+            d={d}
+            stroke={glowColor}
+            strokeWidth={12}
+            fill="none"
+            opacity={0.15}
+            strokeLinecap="round"
+          />
+          <Path
+            d={d}
+            stroke={color}
+            strokeWidth={5}
+            fill="none"
+            strokeDasharray={isDashed ? "8,8" : "0"}
+            strokeLinecap="round"
+            opacity={0.9}
+          />
+        </G>
+      );
+    };
 
     return (
-      <TouchableOpacity
-        activeOpacity={0.7}
-        onPress={() => seekToFrame(index)}
-        style={[
-          styles.frameThumb,
-          isActive && styles.frameThumbActive,
-          isMarked && styles.frameThumbMarked,
-        ]}
-      >
-        {item.uri ? (
-          <Image source={{ uri: item.uri }} style={styles.frameImage} resizeMode="cover" />
-        ) : (
-          <View style={styles.framePlaceholder}>
-            <Text style={styles.framePlaceholderText}>{index + 1}</Text>
-          </View>
-        )}
-        {isMarked && (
-          <View style={[styles.frameMarkBadge, {
-            backgroundColor: MARKING_STEPS[markIdx]?.color || '#fff',
-          }]}>
-            <Check size={8} color="#fff" />
-          </View>
-        )}
-        {isActive && <View style={styles.frameActiveLine} />}
-      </TouchableOpacity>
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <Svg style={StyleSheet.absoluteFill}>
+          <Defs>
+            <SvgGradient id="virtualPitchGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <Stop offset="0%" stopColor="rgba(15, 23, 42, 0)" />
+              <Stop offset="50%" stopColor="rgba(30, 41, 59, 0.8)" />
+              <Stop offset="100%" stopColor="rgba(15, 23, 42, 1)" />
+            </SvgGradient>
+            <SvgGradient id="trailBlue" x1="0%" y1="0%" x2="100%" y2="0%">
+              <Stop offset="0%" stopColor="#38BDF8" />
+              <Stop offset="100%" stopColor="#818CF8" />
+            </SvgGradient>
+            <SvgGradient id="trailRed" x1="0%" y1="0%" x2="100%" y2="0%">
+              <Stop offset="0%" stopColor="#EF4444" />
+              <Stop offset="100%" stopColor="#F87171" />
+            </SvgGradient>
+          </Defs>
+
+          {/* Virtual Stadium Perspective Grid */}
+          <Polygon
+            points={`${centerX - pitchWidthTop / 2},${pitchTop} ${centerX + pitchWidthTop / 2},${pitchTop} ${centerX + pitchWidthBottom / 2},${pitchBottom} ${centerX - pitchWidthBottom / 2},${pitchBottom}`}
+            fill="url(#virtualPitchGrad)"
+            opacity={0.8}
+          />
+
+          {/* In-Line Mat */}
+          <Polygon
+            points={`${left},${top} ${right},${top} ${right + 80},${SH} ${left - 80},${SH}`}
+            fill={drsResult.pitching === 'IN LINE' ? "rgba(34, 197, 94, 0.15)" : "rgba(239, 68, 68, 0.1)"}
+            opacity={0.4}
+          />
+
+          {/* Trajectory Ribbons */}
+          {renderRibbon(trajectoryPoints, '#38BDF8', '#818CF8')}
+          
+          {step === 'wickets' && projectedPoint && scaledImpact && (
+            renderRibbon([scaledImpact, projectedPoint], '#EF4444', '#F87171', true)
+          )}
+
+          {/* 3D Stumps */}
+          <G opacity={0.6}>
+            {render3DStump(left + (right - left) * 0.15, step === 'wickets' && drsResult.wickets === 'HITTING')}
+            {render3DStump(centerX, step === 'wickets' && drsResult.wickets === 'HITTING')}
+            {render3DStump(right - (right - left) * 0.15, step === 'wickets' && drsResult.wickets === 'HITTING')}
+          </G>
+
+          {/* Event Markers (Glows) */}
+          {scaledPitch && <Circle cx={scaledPitch.x} cy={scaledPitch.y} r={10} fill="#38BDF8" opacity={0.3} />}
+          {scaledImpact && <Circle cx={scaledImpact.x} cy={scaledImpact.y} r={12} fill="#EF4444" opacity={0.4} />}
+
+          {/* International Broadcast Labels */}
+          {scaledPitch && (step === 'pitching' || step === 'impact' || step === 'wickets') && (
+            <G transform={`translate(${scaledPitch.x}, ${scaledPitch.y - 30})`}>
+              <Rect x={-40} y={-15} width={80} height={20} rx={4} fill="rgba(0,0,0,0.85)" stroke="#38BDF8" strokeWidth={1} />
+              <SvgText fill="#38BDF8" fontSize="10" fontWeight="bold" fontStyle="italic" x={0} y={0} textAnchor="middle">PITCHING</SvgText>
+            </G>
+          )}
+
+          {scaledImpact && (step === 'impact' || step === 'wickets') && (
+            <G transform={`translate(${scaledImpact.x}, ${scaledImpact.y - 40})`}>
+              <Rect x={-35} y={-15} width={70} height={20} rx={4} fill="rgba(0,0,0,0.85)" stroke="#EF4444" strokeWidth={1} />
+              <SvgText fill="#EF4444" fontSize="10" fontWeight="bold" fontStyle="italic" x={0} y={0} textAnchor="middle">IMPACT</SvgText>
+            </G>
+          )}
+
+          {step === 'wickets' && projectedPoint && (
+            <G transform={`translate(${projectedPoint.x}, ${projectedPoint.y - 50})`}>
+              <Rect x={-40} y={-15} width={80} height={20} rx={4} fill="rgba(0,0,0,0.85)" stroke={getStatusColor(drsResult.wickets)} strokeWidth={1} />
+              <SvgText fill={getStatusColor(drsResult.wickets)} fontSize="10" fontWeight="bold" fontStyle="italic" x={0} y={0} textAnchor="middle">WICKETS</SvgText>
+            </G>
+          )}
+        </Svg>
+      </View>
     );
-  }, [currentFrameIdx, markedFrameIdx, seekToFrame]);
+  };
 
   // ═══════════════════════════════════════════════
   //  RENDER
   // ═══════════════════════════════════════════════
+  const videoAnimStyle = useAnimatedStyle(() => ({
+    opacity: 1 - virtualOpacity.value,
+    transform: [{ scale: 1 + virtualOpacity.value * 0.1 }],
+  }));
 
   return (
     <View style={styles.container}>
-      {/* ── Video / Demo Background ── */}
-      {!isDemo ? (
-        <Pressable style={StyleSheet.absoluteFill} onPress={handleVideoTap}>
-          <Video
-            ref={videoRef}
-            style={styles.video}
-            source={{ uri: videoUri }}
-            useNativeControls={false}
-            resizeMode={ResizeMode.COVER}
-            isLooping={step === 'marking'}
-            shouldPlay={false}
-            onPlaybackStatusUpdate={s => {
-              if (s.isLoaded && s.durationMillis && videoDuration === 0) {
-                setVideoDuration(s.durationMillis);
-              }
-            }}
-          />
-        </Pressable>
-      ) : (
-        <Pressable style={[styles.video, styles.demoBackground]} onPress={handleVideoTap}>
-          <Image
-            source={require('../assets/images/drs_bg.png')}
-            style={StyleSheet.absoluteFill}
-            resizeMode="cover"
-          />
-          <LinearGradient
-            colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.1)', 'rgba(0,0,0,0.5)']}
-            style={StyleSheet.absoluteFill}
-          />
-        </Pressable>
-      )}
+      {/* Hidden auto-detection engine */}
+      <AutoBallDetector ref={detectorRef} />
 
-      {/* ══════════ EXTRACTION LOADING ══════════ */}
+      {/* ── Virtual stadium (Revealed during tracking) ── */}
+      <View style={[StyleSheet.absoluteFill, styles.demoBackground]} />
+
+      {/* ── Video / Demo Background ── */}
+      <Animated.View style={[styles.video, videoAnimStyle]}>
+        <Video
+          ref={videoRef}
+          style={StyleSheet.absoluteFill}
+          source={{ uri: activeVideoUri }}
+          useNativeControls={false}
+          resizeMode={ResizeMode.COVER}
+          shouldPlay={false}
+        />
+        
+        {isDemo && step === 'extracting' && (
+          <View style={StyleSheet.absoluteFill}>
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }]} />
+            <LinearGradient
+              colors={['rgba(0,0,0,0.5)', 'transparent', 'rgba(0,0,0,0.7)']}
+              style={StyleSheet.absoluteFill}
+            />
+          </View>
+        )}
+      </Animated.View>
+
+      {/* ── Hawk-Eye Overlay ── */}
+      <HawkEyeVisuals />
+
+      {/* ══════════ EXTRACTING FRAMES ══════════ */}
       {step === 'extracting' && (
-        <View style={styles.extractingOverlay}>
+        <View style={styles.processingOverlay}>
           <LinearGradient
             colors={['rgba(11,14,20,0.97)', 'rgba(11,14,20,0.99)']}
             style={StyleSheet.absoluteFill}
           />
-          <View style={styles.extractingContent}>
-            <View style={styles.extractingIconWrap}>
+          <View style={styles.processingContent}>
+            <View style={styles.processingIconWrap}>
               <Cpu size={44} color="#818cf8" />
             </View>
-            <Text style={styles.extractingTitle}>EXTRACTING FRAMES</Text>
-            <Text style={styles.extractingSub}>
-              Analyzing video footage...
-            </Text>
-            {/* Progress bar */}
+            <Text style={styles.processingTitle}>EXTRACTING FRAMES</Text>
+            <Text style={styles.processingSub}>Preparing video for analysis...</Text>
             <View style={styles.progressBar}>
               <View style={[styles.progressFill, { width: `${extractProgress * 100}%` }]} />
             </View>
-            <Text style={styles.progressText}>
-              {Math.round(extractProgress * 100)}%
-            </Text>
+            <Text style={styles.progressText}>{Math.round(extractProgress * 100)}%</Text>
           </View>
         </View>
       )}
 
-      {/* ══════════ MARKED POINT INDICATORS ══════════ */}
-      {step === 'marking' && markedPoints.map((pt, idx) => {
-        if (!pt) return null;
-        return (
-          <View key={idx} style={[styles.marker, { left: pt.x - 18, top: pt.y - 18 }]}>
-            <View style={[styles.markerInner, {
-              backgroundColor: `${MARKING_STEPS[idx].color}30`,
-              borderColor: `${MARKING_STEPS[idx].color}60`,
-            }]}>
-              <View style={[styles.markerDot, {
-                backgroundColor: MARKING_STEPS[idx].color,
-              }]} />
-            </View>
-            <Text style={[styles.markerLabel, { color: MARKING_STEPS[idx].color }]}>
-              {MARKING_STEPS[idx].key.toUpperCase()}
-            </Text>
-          </View>
-        );
-      })}
-
-      {/* ── Trajectory path (drawn after all 3 points) ── */}
-      {step === 'marking' && trajectoryPoints.length > 0 && (
-        <>
-          {trajectoryPoints.map((pt, idx) => {
-            if (idx === 0) return null;
-            return (
-              <View
-                key={`traj-${idx}`}
-                style={[styles.trajectoryDot, {
-                  left: pt.x - 2,
-                  top: pt.y - 2,
-                  opacity: 0.3 + (idx / trajectoryPoints.length) * 0.5,
-                  backgroundColor: '#3b82f6',
-                }]}
-              />
-            );
-          })}
-          {/* Projected path to stumps */}
-          {projectedPoint && markedPoints[2] && (
-            <>
-              {Array.from({ length: 10 }, (_, i) => {
-                const t = (i + 1) / 11;
-                const ix = markedPoints[2]!.x + (projectedPoint.x - markedPoints[2]!.x) * t;
-                const iy = markedPoints[2]!.y + (projectedPoint.y - markedPoints[2]!.y) * t;
-                return (
-                  <View
-                    key={`proj-${i}`}
-                    style={[styles.trajectoryDot, {
-                      left: ix - 2,
-                      top: iy - 2,
-                      opacity: 0.5 - (i * 0.04),
-                      backgroundColor: '#ef4444',
-                      width: 3,
-                      height: 3,
-                      borderRadius: 1.5,
-                    }]}
-                  />
-                );
-              })}
-            </>
-          )}
-        </>
-      )}
-
-      {/* ── Stump zone indicator (during marking) ── */}
-      {step === 'marking' && (
-        <View style={[styles.stumpZone, {
-          left: STUMP_ZONE.left,
-          top: STUMP_ZONE.top,
-          width: STUMP_ZONE.right - STUMP_ZONE.left,
-          height: STUMP_ZONE.bottom - STUMP_ZONE.top,
-        }]}>
-          <Text style={styles.stumpZoneLabel}>STUMP LINE</Text>
-        </View>
-      )}
-
-      {/* ══════════ MARKING UI (Header Card) ══════════ */}
-      {step === 'marking' && markingStep < 3 && (
-        <View style={styles.markingHeader}>
+      {/* ══════════ AUTO-DETECTING ══════════ */}
+      {step === 'detecting' && (
+        <View style={styles.processingOverlay}>
           <LinearGradient
-            colors={['rgba(0,0,0,0.9)', 'rgba(0,0,0,0.4)', 'transparent']}
-            style={styles.markingHeaderGrad}
+            colors={['rgba(11,14,20,0.97)', 'rgba(11,14,20,0.99)']}
+            style={StyleSheet.absoluteFill}
           />
-          <View style={styles.markingCard}>
-            <View style={styles.markingCardTop}>
-              <View style={styles.markingIconRow}>
-                {React.createElement(MARKING_STEPS[markingStep].icon, {
-                  size: 20,
-                  color: MARKING_STEPS[markingStep].color,
-                })}
-                <Text style={[styles.markingStepTitle, { color: MARKING_STEPS[markingStep].color }]}>
-                  {MARKING_STEPS[markingStep].title}
-                </Text>
-              </View>
-              <View style={styles.stepCounter}>
-                <Text style={styles.stepCounterText}>{markingStep + 1}/3</Text>
-              </View>
+          <View style={styles.processingContent}>
+            <View style={styles.scanArea}>
+              <Animated.View style={[styles.scanLine, animScan]} />
             </View>
-            <Text style={styles.markingDesc}>
-              {MARKING_STEPS[markingStep].desc}
-            </Text>
-
-            {/* Step indicator dots */}
-            <View style={styles.stepDots}>
-              {MARKING_STEPS.map((s, idx) => (
-                <View key={idx} style={[
-                  styles.stepDot,
-                  idx < markingStep && { backgroundColor: s.color },
-                  idx === markingStep && { backgroundColor: s.color, width: 20 },
-                  idx > markingStep && { backgroundColor: 'rgba(255,255,255,0.15)' },
-                ]} />
-              ))}
+            <View style={styles.processingIconWrap}>
+              <Eye size={44} color="#818cf8" />
             </View>
-          </View>
-
-          {/* Undo button */}
-          {markingStep > 0 && (
-            <TouchableOpacity style={styles.undoBtn} onPress={undoLastMark}>
-              <RotateCcw size={14} color="#fff" />
-              <Text style={styles.undoBtnText}>UNDO</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
-
-      {/* ══════════ FILMSTRIP SCRUBBER ══════════ */}
-      {step === 'marking' && frames.length > 0 && (
-        <View style={styles.filmstripContainer}>
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.95)']}
-            style={styles.filmstripGrad}
-          />
-          <View style={styles.filmstripInner}>
-            {/* Time indicator */}
-            <View style={styles.timeIndicator}>
-              <Text style={styles.timeText}>
-                {frames[currentFrameIdx]
-                  ? `${(frames[currentFrameIdx].timestamp / 1000).toFixed(1)}s`
-                  : '0.0s'}
-              </Text>
-              <Text style={styles.frameCountText}>
-                Frame {currentFrameIdx + 1}/{frames.length}
-              </Text>
-            </View>
-
-            {/* Filmstrip */}
-            <FlatList
-              ref={filmstripRef}
-              data={frames}
-              renderItem={renderFrameThumb}
-              keyExtractor={(_, i) => `frame-${i}`}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.filmstripList}
-              getItemLayout={(_, idx) => ({ length: 52, offset: 52 * idx, index: idx })}
-            />
-
-            {/* Scrub buttons */}
-            <View style={styles.scrubRow}>
-              <TouchableOpacity
-                style={styles.scrubBtn}
-                onPress={() => seekToFrame(Math.max(0, currentFrameIdx - 1))}
-                disabled={currentFrameIdx === 0}
-              >
-                <ChevronLeft size={18} color={currentFrameIdx === 0 ? 'rgba(255,255,255,0.2)' : '#fff'} />
-              </TouchableOpacity>
-              <Text style={styles.scrubLabel}>SCRUB FRAMES</Text>
-              <TouchableOpacity
-                style={styles.scrubBtn}
-                onPress={() => seekToFrame(Math.min(frames.length - 1, currentFrameIdx + 1))}
-                disabled={currentFrameIdx === frames.length - 1}
-              >
-                <ChevronRight
-                  size={18}
-                  color={currentFrameIdx === frames.length - 1 ? 'rgba(255,255,255,0.2)' : '#fff'}
-                />
-              </TouchableOpacity>
+            <Text style={styles.processingTitle}>DETECTING</Text>
+            <Text style={styles.processingSub}>Finding ball and stumps automatically...</Text>
+            <View style={styles.dataList}>
+              <Text style={styles.dataItem}>▸ Scanning for stump positions</Text>
+              <Text style={styles.dataItem}>▸ Tracking ball movement</Text>
+              <Text style={styles.dataItem}>▸ Computing stump dimensions</Text>
             </View>
           </View>
         </View>
@@ -790,116 +748,73 @@ export default function LbwTracking() {
 
       {/* ══════════ ANALYZING OVERLAY ══════════ */}
       {step === 'analyzing' && (
-        <View style={styles.analyzingOverlay}>
+        <View style={styles.processingOverlay}>
           <LinearGradient
             colors={['rgba(15,23,42,0.95)', 'rgba(15,23,42,0.98)']}
             style={StyleSheet.absoluteFill}
           />
-          <View style={styles.analyzingContent}>
+          <View style={styles.processingContent}>
             <View style={styles.scanArea}>
               <Animated.View style={[styles.scanLine, animScan]} />
             </View>
-            <View style={styles.analyzingIcon}>
+            <View style={styles.processingIconWrap}>
               <Cpu size={40} color="#818cf8" />
             </View>
-            <Text style={styles.analyzingTitle}>TRACKING BALL</Text>
-            <Text style={styles.analyzingSub}>
-              Computing trajectory prediction...
-            </Text>
-            <View style={styles.analysisDataList}>
-              <Text style={styles.analysisDataItem}>▸ Release → Pitch: analyzing</Text>
-              <Text style={styles.analysisDataItem}>▸ Pitch → Impact: computing</Text>
-              <Text style={styles.analysisDataItem}>▸ Impact → Stumps: projecting</Text>
+            <Text style={styles.processingTitle}>BALL TRACKING</Text>
+            <Text style={styles.processingSub}>Computing trajectory prediction...</Text>
+            <View style={styles.dataList}>
+              <Text style={styles.dataItem}>▸ Stump-to-stump: {stumpRect ? `${stumpRect.widthInches}"` : '—'}</Text>
+              <Text style={styles.dataItem}>▸ Stump height: {stumpRect ? `${stumpRect.heightInches}"` : '—'}</Text>
+              <Text style={styles.dataItem}>▸ Ball pitch: {drsResult.pitchDistInches ? `${drsResult.pitchDistInches}" from center` : '—'}</Text>
+              <Text style={styles.dataItem}>▸ Impact height: {drsResult.impactHeightInches ? `${drsResult.impactHeightInches}" above ground` : '—'}</Text>
             </View>
           </View>
         </View>
       )}
 
-      {/* ══════════ DRS DASHBOARD (during tracking phases) ══════════ */}
+      {/* ══════════ DRS DASHBOARD (tracking phases) ══════════ */}
       {isTracking && (
         <View style={styles.drsHeader}>
-          <LinearGradient
-            colors={['rgba(0,0,0,0.9)', 'transparent']}
-            style={styles.drsHeaderGrad}
-          />
+          <LinearGradient colors={['rgba(15,23,42,0.9)', 'rgba(15,23,42,0.4)']} style={styles.drsHeaderGrad} />
           <View style={styles.drsRow}>
             <View style={[styles.drsBox, step === 'pitching' && styles.drsBoxActive]}>
               <Text style={styles.drsLabel}>PITCHING</Text>
-              <Text style={[styles.drsValue,
-                drsResult.pitching === 'IN LINE' ? { color: '#22c55e' } : { color: '#ef4444' }
-              ]}>
+              <Text style={[styles.drsValue, { color: getStatusColor(drsResult.pitching) }]}>
                 {['pitching', 'impact', 'wickets'].includes(step) ? drsResult.pitching : '—'}
               </Text>
             </View>
             <View style={[styles.drsBox, step === 'impact' && styles.drsBoxActive]}>
               <Text style={styles.drsLabel}>IMPACT</Text>
-              <Text style={[styles.drsValue,
-                drsResult.impact === 'IN LINE' ? { color: '#22c55e' } : { color: '#ef4444' }
-              ]}>
+              <Text style={[styles.drsValue, { color: getStatusColor(drsResult.impact) }]}>
                 {['impact', 'wickets'].includes(step) ? drsResult.impact : '—'}
               </Text>
             </View>
             <View style={[styles.drsBox, step === 'wickets' && styles.drsBoxActive]}>
               <Text style={styles.drsLabel}>WICKETS</Text>
-              <Text style={[styles.drsValue,
-                drsResult.wickets === 'HITTING' ? { color: '#ef4444' } : { color: '#22c55e' }
-              ]}>
+              <Text style={[styles.drsValue, { color: getStatusColor(drsResult.wickets) }]}>
                 {step === 'wickets' ? drsResult.wickets : '—'}
               </Text>
             </View>
           </View>
 
-          <View style={styles.phaseBadge}>
-            <View style={[styles.phaseDot, { backgroundColor: ballColor }]} />
-            <Text style={styles.phaseText}>
-              {step === 'pitching' ? 'PITCHING' : step === 'impact' ? 'IMPACT' : 'WICKETS'}
-            </Text>
+          {/* Measurements bar */}
+          <View style={styles.measureBar}>
+            <View style={styles.measureItem}>
+              <Text style={styles.measureLabel}>STUMP WIDTH</Text>
+              <Text style={styles.measureValue}>{stumpRect?.widthInches || 9}"</Text>
+            </View>
+            <View style={styles.measureDivider} />
+            <View style={styles.measureItem}>
+              <Text style={styles.measureLabel}>STUMP HEIGHT</Text>
+              <Text style={styles.measureValue}>{stumpRect?.heightInches || 28}"</Text>
+            </View>
+            <View style={styles.measureDivider} />
+            <View style={styles.measureItem}>
+              <Text style={styles.measureLabel}>IMPACT HEIGHT</Text>
+              <Text style={styles.measureValue}>{drsResult.impactHeightInches || '—'}"</Text>
+            </View>
           </View>
         </View>
-      )}
-
-      {/* ══════════ TRAJECTORY OVERLAY (during tracking) ══════════ */}
-      {isTracking && trajectoryPoints.length > 0 && (
-        <>
-          {trajectoryPoints.map((pt, idx) => {
-            if (idx === 0 || idx % 2 !== 0) return null;
-            return (
-              <View
-                key={`track-traj-${idx}`}
-                style={[styles.trajectoryDot, {
-                  left: pt.x - 2.5,
-                  top: pt.y - 2.5,
-                  width: 5,
-                  height: 5,
-                  borderRadius: 2.5,
-                  opacity: 0.4,
-                  backgroundColor: '#3b82f6',
-                }]}
-              />
-            );
-          })}
-          {/* Projected path dots */}
-          {projectedPoint && markedPoints[2] && (
-            <>
-              {Array.from({ length: 8 }, (_, i) => {
-                const t = (i + 1) / 9;
-                const ix = markedPoints[2]!.x + (projectedPoint.x - markedPoints[2]!.x) * t;
-                const iy = markedPoints[2]!.y + (projectedPoint.y - markedPoints[2]!.y) * t;
-                return (
-                  <View
-                    key={`track-proj-${i}`}
-                    style={[styles.trajectoryDot, {
-                      left: ix - 2,
-                      top: iy - 2,
-                      opacity: 0.3,
-                      backgroundColor: '#ef4444',
-                    }]}
-                  />
-                );
-              })}
-            </>
-          )}
-        </>
       )}
 
       {/* ══════════ BALL + EFFECTS ══════════ */}
@@ -907,7 +822,7 @@ export default function LbwTracking() {
         <>
           <Animated.View style={[
             styles.impactGlow,
-            { backgroundColor: step === 'wickets' ? 'rgba(239,68,68,0.4)' : 'rgba(59,130,246,0.3)' },
+            { backgroundColor: ballColor + '50' },
             animGlow,
           ]} />
           <Animated.View style={[
@@ -915,10 +830,7 @@ export default function LbwTracking() {
             { borderColor: ballColor, shadowColor: ballColor },
             animBall,
           ]}>
-            <View style={[styles.ballInner, {
-              backgroundColor: step === 'wickets' && drsResult.wickets === 'HITTING'
-                ? '#fee2e2' : '#dbeafe'
-            }]} />
+            <View style={[styles.ballInner, { backgroundColor: ballColor + '30' }]} />
           </Animated.View>
         </>
       )}
@@ -927,7 +839,7 @@ export default function LbwTracking() {
       {step === 'decision' && (
         <View style={styles.decisionOverlay}>
           <LinearGradient
-            colors={['rgba(0,0,0,0.3)', 'rgba(15,23,42,0.98)']}
+            colors={['rgba(15,23,42,0.6)', 'rgba(2,6,23,0.98)']}
             style={StyleSheet.absoluteFill}
           />
           <View style={styles.decisionContent}>
@@ -935,67 +847,59 @@ export default function LbwTracking() {
               <View style={styles.summaryItem}>
                 <Text style={styles.summaryLabel}>PITCHING</Text>
                 <View style={[styles.summaryPill, {
-                  borderColor: drsResult.pitching === 'IN LINE' ? '#22c55e' : '#ef4444',
-                  backgroundColor: drsResult.pitching === 'IN LINE'
-                    ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)',
+                  borderColor: getStatusColor(drsResult.pitching),
+                  backgroundColor: getStatusColor(drsResult.pitching) + '15'
                 }]}>
-                  <Text style={[styles.summaryValue, {
-                    color: drsResult.pitching === 'IN LINE' ? '#22c55e' : '#ef4444'
-                  }]}>{drsResult.pitching}</Text>
+                  <Text style={[styles.summaryValue, { color: getStatusColor(drsResult.pitching) }]}>{drsResult.pitching}</Text>
                 </View>
               </View>
               <View style={styles.summaryItem}>
                 <Text style={styles.summaryLabel}>IMPACT</Text>
                 <View style={[styles.summaryPill, {
-                  borderColor: drsResult.impact === 'IN LINE' ? '#22c55e' : '#ef4444',
-                  backgroundColor: drsResult.impact === 'IN LINE'
-                    ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)',
+                  borderColor: getStatusColor(drsResult.impact),
+                  backgroundColor: getStatusColor(drsResult.impact) + '15'
                 }]}>
-                  <Text style={[styles.summaryValue, {
-                    color: drsResult.impact === 'IN LINE' ? '#22c55e' : '#ef4444'
-                  }]}>{drsResult.impact}</Text>
+                  <Text style={[styles.summaryValue, { color: getStatusColor(drsResult.impact) }]}>{drsResult.impact}</Text>
                 </View>
               </View>
               <View style={styles.summaryItem}>
                 <Text style={styles.summaryLabel}>WICKETS</Text>
                 <View style={[styles.summaryPill, {
-                  borderColor: drsResult.wickets === 'HITTING' ? '#ef4444' : '#22c55e',
-                  backgroundColor: drsResult.wickets === 'HITTING'
-                    ? 'rgba(239,68,68,0.12)' : 'rgba(34,197,94,0.12)',
+                  borderColor: getStatusColor(drsResult.wickets),
+                  backgroundColor: getStatusColor(drsResult.wickets) + '15'
                 }]}>
-                  <Text style={[styles.summaryValue, {
-                    color: drsResult.wickets === 'HITTING' ? '#ef4444' : '#22c55e'
-                  }]}>{drsResult.wickets}</Text>
+                  <Text style={[styles.summaryValue, { color: getStatusColor(drsResult.wickets) }]}>{drsResult.wickets}</Text>
                 </View>
               </View>
             </View>
 
-            <Text style={styles.decisionLabel}>UMPIRE'S CALL</Text>
+            {/* Measurements row */}
+            <View style={styles.measureSummaryRow}>
+              <View style={styles.measureSummaryItem}>
+                <Text style={styles.measureSummaryLabel}>STUMP-TO-STUMP</Text>
+                <Text style={styles.measureSummaryValue}>{stumpRect?.widthInches || 9} inches</Text>
+              </View>
+              <View style={styles.measureSummaryItem}>
+                <Text style={styles.measureSummaryLabel}>STUMP HEIGHT</Text>
+                <Text style={styles.measureSummaryValue}>{stumpRect?.heightInches || 28} inches</Text>
+              </View>
+            </View>
+
+            <Text style={styles.decisionLabel}>FINAL DECISION</Text>
             <Text style={[styles.decisionValue, {
-              color: drsResult.decision === 'OUT' ? '#ef4444' : '#22c55e',
-              textShadowColor: drsResult.decision === 'OUT'
-                ? 'rgba(239,68,68,0.4)' : 'rgba(34,197,94,0.4)',
+              color: getStatusColor(drsResult.decision),
+              textShadowColor: getStatusColor(drsResult.decision) + '40'
             }]}>
               {drsResult.decision}
             </Text>
 
             <View style={styles.actionRow}>
               <TouchableOpacity style={styles.replayBtn} onPress={resetAll}>
-                <RotateCcw size={16} color="#fff" />
-                <Text style={styles.replayText}>RETRY</Text>
+                <RotateCcw size={16} color="#94a3b8" />
+                <Text style={styles.replayText}>RE-PROCESS</Text>
               </TouchableOpacity>
-              {!isDemo && (
-                <TouchableOpacity
-                  style={styles.saveBtn}
-                  onPress={handleSave}
-                  disabled={isSaving}
-                >
-                  <Save size={16} color="#fff" />
-                  <Text style={styles.saveText}>{isSaving ? 'SAVING...' : 'SAVE'}</Text>
-                </TouchableOpacity>
-              )}
               <TouchableOpacity style={styles.doneBtn} onPress={() => router.back()}>
-                <Text style={styles.doneText}>DONE</Text>
+                <Text style={styles.doneText}>COMMIT RECORD</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1021,24 +925,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
 
-  // ── Extraction loading ──
-  extractingOverlay: {
+  // ── Processing overlays ──
+  processingOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center', alignItems: 'center', zIndex: 100,
   },
-  extractingContent: { alignItems: 'center', padding: 40, width: '80%' },
-  extractingIconWrap: {
+  processingContent: { alignItems: 'center', padding: 40, width: '85%' },
+  processingIconWrap: {
     width: 88, height: 88, borderRadius: 28,
     backgroundColor: 'rgba(99,102,241,0.08)',
     justifyContent: 'center', alignItems: 'center',
     marginBottom: 28,
     borderWidth: 1, borderColor: 'rgba(99,102,241,0.2)',
   },
-  extractingTitle: {
+  processingTitle: {
     color: '#fff', fontSize: 20, fontWeight: '900',
     letterSpacing: 5, marginBottom: 8,
   },
-  extractingSub: {
+  processingSub: {
     color: 'rgba(255,255,255,0.4)', fontSize: 13,
     fontWeight: '500', marginBottom: 32,
   },
@@ -1048,183 +952,12 @@ const styles = StyleSheet.create({
     overflow: 'hidden', marginBottom: 12,
   },
   progressFill: {
-    height: '100%', borderRadius: 3,
-    backgroundColor: '#818cf8',
+    height: '100%', borderRadius: 3, backgroundColor: '#818cf8',
   },
   progressText: {
     color: 'rgba(255,255,255,0.5)', fontSize: 13,
     fontWeight: '700', letterSpacing: 1,
   },
-
-  // ── Marking Header ──
-  markingHeader: {
-    position: 'absolute', top: 0, left: 0, right: 0,
-    paddingTop: 56, paddingHorizontal: 16, zIndex: 30,
-  },
-  markingHeaderGrad: {
-    ...StyleSheet.absoluteFillObject, height: 240,
-  },
-  markingCard: {
-    backgroundColor: 'rgba(15,23,42,0.92)',
-    borderRadius: 16, padding: 16,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
-  },
-  markingCardTop: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', marginBottom: 8,
-  },
-  markingIconRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-  },
-  markingStepTitle: {
-    fontSize: 16, fontWeight: '900', letterSpacing: 2,
-  },
-  stepCounter: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10,
-  },
-  stepCounterText: {
-    color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: '700',
-  },
-  markingDesc: {
-    color: 'rgba(255,255,255,0.5)', fontSize: 13,
-    fontWeight: '500', marginBottom: 12, lineHeight: 18,
-  },
-  stepDots: {
-    flexDirection: 'row', gap: 6, alignSelf: 'center',
-  },
-  stepDot: {
-    height: 4, width: 12, borderRadius: 2,
-  },
-  undoBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    alignSelf: 'flex-start', marginTop: 10,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
-  },
-  undoBtnText: {
-    color: 'rgba(255,255,255,0.7)', fontSize: 11,
-    fontWeight: '700', letterSpacing: 1,
-  },
-
-  // ── Stump zone ──
-  stumpZone: {
-    position: 'absolute', borderWidth: 1.5,
-    borderColor: 'rgba(239,68,68,0.2)', borderStyle: 'dashed',
-    borderRadius: 4, justifyContent: 'flex-end', alignItems: 'center',
-    paddingBottom: 4,
-  },
-  stumpZoneLabel: {
-    color: 'rgba(239,68,68,0.35)', fontSize: 8,
-    fontWeight: '800', letterSpacing: 2,
-  },
-
-  // ── Markers ──
-  marker: {
-    position: 'absolute', alignItems: 'center', zIndex: 25,
-  },
-  markerInner: {
-    width: 36, height: 36, borderRadius: 18,
-    justifyContent: 'center', alignItems: 'center',
-    borderWidth: 2,
-  },
-  markerDot: {
-    width: 10, height: 10, borderRadius: 5,
-  },
-  markerLabel: {
-    fontSize: 8, fontWeight: '900',
-    letterSpacing: 1.5, marginTop: 3,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
-  },
-
-  // ── Trajectory dots ──
-  trajectoryDot: {
-    position: 'absolute', width: 4, height: 4,
-    borderRadius: 2, zIndex: 20,
-  },
-
-  // ── Filmstrip ──
-  filmstripContainer: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    zIndex: 30,
-  },
-  filmstripGrad: {
-    ...StyleSheet.absoluteFillObject, height: 200,
-    bottom: 0,
-  },
-  filmstripInner: {
-    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
-    paddingHorizontal: 12,
-  },
-  timeIndicator: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', marginBottom: 8,
-    paddingHorizontal: 4,
-  },
-  timeText: {
-    color: '#818cf8', fontSize: 14, fontWeight: '800',
-    fontVariant: ['tabular-nums'],
-  },
-  frameCountText: {
-    color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '600',
-  },
-  filmstripList: {
-    gap: 4, paddingVertical: 4,
-  },
-  frameThumb: {
-    width: 48, height: 36, borderRadius: 6,
-    overflow: 'hidden', borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  frameThumbActive: {
-    borderColor: '#818cf8', borderWidth: 2,
-    transform: [{ scale: 1.1 }],
-  },
-  frameThumbMarked: {
-    borderColor: '#22c55e',
-  },
-  frameImage: {
-    width: '100%', height: '100%',
-  },
-  framePlaceholder: {
-    flex: 1, backgroundColor: 'rgba(255,255,255,0.04)',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  framePlaceholderText: {
-    color: 'rgba(255,255,255,0.2)', fontSize: 9, fontWeight: '700',
-  },
-  frameMarkBadge: {
-    position: 'absolute', top: 2, right: 2,
-    width: 14, height: 14, borderRadius: 7,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  frameActiveLine: {
-    position: 'absolute', bottom: -4, left: '25%', right: '25%',
-    height: 2, backgroundColor: '#818cf8', borderRadius: 1,
-  },
-  scrubRow: {
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'center', gap: 20, marginTop: 10,
-  },
-  scrubBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
-  },
-  scrubLabel: {
-    color: 'rgba(255,255,255,0.3)', fontSize: 10,
-    fontWeight: '700', letterSpacing: 2,
-  },
-
-  // ── Analyzing ──
-  analyzingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center', alignItems: 'center', zIndex: 100,
-  },
-  analyzingContent: { alignItems: 'center', padding: 40 },
   scanArea: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     overflow: 'hidden', opacity: 0.15,
@@ -1234,23 +967,9 @@ const styles = StyleSheet.create({
     shadowColor: '#818cf8', shadowOpacity: 1, shadowRadius: 12,
     position: 'absolute', top: '30%',
   },
-  analyzingIcon: {
-    width: 80, height: 80, borderRadius: 24,
-    backgroundColor: 'rgba(99,102,241,0.08)',
-    justifyContent: 'center', alignItems: 'center',
-    marginBottom: 24, borderWidth: 1, borderColor: 'rgba(99,102,241,0.2)',
-  },
-  analyzingTitle: {
-    color: '#fff', fontSize: 20, fontWeight: '900',
-    letterSpacing: 5, marginBottom: 8,
-  },
-  analyzingSub: {
-    color: 'rgba(255,255,255,0.4)', fontSize: 12,
-    fontWeight: '500', marginBottom: 24,
-  },
-  analysisDataList: { gap: 8, alignItems: 'flex-start' },
-  analysisDataItem: {
-    color: 'rgba(255,255,255,0.3)', fontSize: 11,
+  dataList: { gap: 8, alignItems: 'flex-start' },
+  dataItem: {
+    color: 'rgba(255,255,255,0.35)', fontSize: 11,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     letterSpacing: 0.5,
   },
@@ -1260,8 +979,8 @@ const styles = StyleSheet.create({
     position: 'absolute', top: 0, left: 0, right: 0,
     paddingTop: 55, paddingHorizontal: 14, zIndex: 20,
   },
-  drsHeaderGrad: { ...StyleSheet.absoluteFillObject, height: 200 },
-  drsRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+  drsHeaderGrad: { ...StyleSheet.absoluteFillObject, height: 220 },
+  drsRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
   drsBox: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: 10, padding: 10, alignItems: 'center',
@@ -1278,6 +997,24 @@ const styles = StyleSheet.create({
   drsValue: {
     color: 'rgba(255,255,255,0.25)', fontSize: 12, fontWeight: '900',
   },
+
+  // ── Measurements bar ──
+  measureBar: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 10, padding: 8, marginBottom: 8,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)',
+  },
+  measureItem: { flex: 1, alignItems: 'center' },
+  measureLabel: {
+    color: 'rgba(255,255,255,0.3)', fontSize: 7,
+    fontWeight: '800', letterSpacing: 1, marginBottom: 2,
+  },
+  measureValue: { color: '#818cf8', fontSize: 11, fontWeight: '900' },
+  measureDivider: {
+    width: 1, height: 20, backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+
   phaseBadge: {
     flexDirection: 'row', alignItems: 'center',
     alignSelf: 'center', gap: 8,
@@ -1287,6 +1024,40 @@ const styles = StyleSheet.create({
   phaseDot: { width: 8, height: 8, borderRadius: 4 },
   phaseText: {
     color: '#fff', fontSize: 11, fontWeight: '800', letterSpacing: 2,
+  },
+
+  // ── Stump zone ──
+  stumpZone: {
+    position: 'absolute', borderWidth: 1.5,
+    borderColor: 'rgba(239,68,68,0.25)', borderStyle: 'dashed',
+    borderRadius: 4, justifyContent: 'flex-end', alignItems: 'center',
+    paddingBottom: 4, zIndex: 10,
+  },
+  stumpsRow: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    flexDirection: 'row', justifyContent: 'space-evenly',
+    height: '100%', paddingHorizontal: 4,
+  },
+  stumpLine: {
+    width: 2, height: '100%',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 1,
+  },
+  bailLine: {
+    position: 'absolute', top: 0, left: 2, right: 2,
+    height: 3, backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 1.5,
+  },
+  stumpZoneLabel: {
+    color: 'rgba(239,68,68,0.4)', fontSize: 8,
+    fontWeight: '800', letterSpacing: 2,
+    position: 'absolute', bottom: -14,
+  },
+
+  // ── Trajectory dots ──
+  trajectoryDot: {
+    position: 'absolute', width: 4, height: 4,
+    borderRadius: 2, zIndex: 20,
   },
 
   // ── Ball + Effects ──
@@ -1312,7 +1083,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 28, borderTopRightRadius: 28,
     borderTopWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
   },
-  summaryRow: { flexDirection: 'row', gap: 8, marginBottom: 24 },
+  summaryRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
   summaryItem: { flex: 1, alignItems: 'center' },
   summaryLabel: {
     color: 'rgba(255,255,255,0.35)', fontSize: 9,
@@ -1323,6 +1094,23 @@ const styles = StyleSheet.create({
     alignItems: 'center', borderWidth: 1,
   },
   summaryValue: { fontSize: 11, fontWeight: '900' },
+
+  // ── Measurement summary ──
+  measureSummaryRow: {
+    flexDirection: 'row', gap: 8, marginBottom: 20,
+  },
+  measureSummaryItem: {
+    flex: 1, alignItems: 'center',
+    backgroundColor: 'rgba(99,102,241,0.08)',
+    padding: 10, borderRadius: 10,
+    borderWidth: 1, borderColor: 'rgba(99,102,241,0.15)',
+  },
+  measureSummaryLabel: {
+    color: 'rgba(255,255,255,0.3)', fontSize: 8,
+    fontWeight: '800', letterSpacing: 1, marginBottom: 4,
+  },
+  measureSummaryValue: { color: '#818cf8', fontSize: 13, fontWeight: '900' },
+
   decisionLabel: {
     color: 'rgba(255,255,255,0.35)', fontSize: 11,
     fontWeight: '800', letterSpacing: 4,
