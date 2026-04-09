@@ -32,7 +32,11 @@
       "backgroundColor": "#0B0E14"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "@react-native-firebase/app",
+      "@react-native-firebase/firestore",
+      "expo-font",
+      "expo-video-thumbnails"
     ],
     "experiments": {
       "typedRoutes": true
