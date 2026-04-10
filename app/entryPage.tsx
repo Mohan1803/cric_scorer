@@ -445,15 +445,23 @@ export default function TeamEntry() {
             </LinearGradient>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={[styles.button, { marginTop: 12, backgroundColor: 'rgba(124, 58, 237, 0.1)', borderWidth: 1, borderColor: 'rgba(124, 58, 237, 0.3)' }]}
-            onPress={() => router.push('/lbw-demo' as any)}
-          >
-            <View style={styles.buttonGradient}>
-              <Text style={[styles.buttonText, { color: colors.accentAlt }]}>View Animation Demo</Text>
-            </View>
-          </TouchableOpacity>
+          <View style={styles.demoRow}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={[styles.demoButton, { backgroundColor: 'rgba(34, 197, 94, 0.1)', borderColor: 'rgba(34, 197, 94, 0.3)' }]}
+              onPress={() => router.push({ pathname: '/lbw-tracking' as any, params: { videoUri: 'demo_out' } })}
+            >
+              <Text style={[styles.demoButtonText, { color: '#22c55e' }]}>Out Demo</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={[styles.demoButton, { backgroundColor: 'rgba(239, 68, 68, 0.1)', borderColor: 'rgba(239, 68, 68, 0.3)' }]}
+              onPress={() => router.push({ pathname: '/lbw-tracking' as any, params: { videoUri: 'demo_not_out' } })}
+            >
+              <Text style={[styles.demoButtonText, { color: '#ef4444' }]}>Not Out Demo</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.footerInfo}>
@@ -633,5 +641,23 @@ const styles = StyleSheet.create({
   suggestionSubtext: {
     color: colors.textSecondary,
     fontSize: 10,
+  },
+  demoRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+  },
+  demoButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  demoButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
 });

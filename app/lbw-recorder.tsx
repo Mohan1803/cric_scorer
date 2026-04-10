@@ -144,7 +144,7 @@ export default function LbwRecorder() {
             <View style={styles.sideButtonContainer}>
               <TouchableOpacity 
                 style={[styles.actionButton, { backgroundColor: 'rgba(99,102,241,0.2)', borderColor: 'rgba(99,102,241,0.4)', borderWidth: 1 }]}
-                onPress={() => router.push({ pathname: '/lbw-tracking' as any, params: { videoUri: 'demo' } })}
+                onPress={() => router.push({ pathname: '/lbw-tracking' as any, params: { videoUri: 'demo_out' } })}
               >
                 <Video size={24} color="#818cf8" />
               </TouchableOpacity>

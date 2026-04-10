@@ -12,10 +12,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 const VideoThumbnails = Platform.OS !== 'web' ? require('expo-video-thumbnails') : null;
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system';
-import Svg, { Path, Rect, Polygon, Circle, Text as SvgText, G, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
+import Svg, { Path, Rect, Polygon, Circle, Text as SvgText, G, Defs, LinearGradient as SvgGradient, Stop, Line } from 'react-native-svg';
 import Animated, {
-  useSharedValue, useAnimatedStyle, withTiming,
-  withSequence, withDelay, withRepeat, Easing, runOnJS, interpolate,
+  useSharedValue, useAnimatedStyle, useAnimatedProps, withTiming,
+  withSequence, withDelay, withRepeat, withSpring, Easing, runOnJS, interpolate,
 } from 'react-native-reanimated';
 import { colors } from './theme';
 import AutoBallDetector, {
@@ -23,6 +23,7 @@ import AutoBallDetector, {
 } from '../components/AutoBallDetector';
 
 const { width: SW, height: SH } = Dimensions.get('window');
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 type Point = { x: number; y: number };
 
@@ -99,16 +100,46 @@ export default function LbwTracking() {
   const ballScale = useSharedValue(1.5);
   const glowPulse = useSharedValue(0);
   const scanProgress = useSharedValue(0);
-  const virtualOpacity = useSharedValue(0); // For video-to-virtual fade
-  const stumpReveal = useSharedValue(0);   // For 3D stump animation
+  const trailProgress = useSharedValue(0);    // Used to animate path drawing
+  const impactFlash = useSharedValue(0);     // For dramatic flash on hitting stumps
+  const shadowOpacity = useSharedValue(0);   // Ball shadow on ground
+  const pitchMarkScale = useSharedValue(0);  // Pitching hotspot scale
+  const impactMarkScale = useSharedValue(0); // Impact hotspot scale
+  const stumpGlow = useSharedValue(0);        // Stump zone highlight pulse
+  const scrimOpacity = useSharedValue(0);     // Dark scrim over video for contrast
 
   // ── src dimensions for coordinate scaling ──
   const srcW = useRef(200);
   const srcH = useRef(150);
 
-  const DEMO_VIDEO_URL = 'https://github.com/guurav18/LBW-DRS-IN-CRICKET/raw/main/lbw.mp4';
-  const isDemo = !videoUri || videoUri === 'demo';
-  const activeVideoUri = isDemo ? DEMO_VIDEO_URL : videoUri;
+  const DEMO_OUT_URL = 'https://github.com/guurav18/LBW-DRS-IN-CRICKET/raw/main/lbw.mp4';
+  const DEMO_NOT_OUT_URL = 'https://github.com/guurav18/LBW-DRS-IN-CRICKET/raw/main/none.mp4';
+
+  const isDemo = videoUri?.startsWith('demo');
+  const demoType = videoUri === 'demo_not_out' ? 'not_out' : 'out';
+  const activeVideoUri = isDemo
+    ? (demoType === 'not_out' ? DEMO_NOT_OUT_URL : DEMO_OUT_URL)
+    : videoUri;
+
+  // ═══════════════════════════════════════════════
+  //  VIDEO PLAYBACK CONTROL
+  // ═══════════════════════════════════════════════
+  const playVideoLoop = useCallback(async () => {
+    if (!videoRef.current) return;
+    try {
+      await videoRef.current.setPositionAsync(0);
+      await videoRef.current.playAsync();
+      await videoRef.current.setIsLoopingAsync(true);
+      await videoRef.current.setRateAsync(0.6, true);
+    } catch (e) { /* ignore */ }
+  }, []);
+
+  const pauseVideo = useCallback(async () => {
+    if (!videoRef.current) return;
+    try {
+      await videoRef.current.pauseAsync();
+    } catch (e) { /* ignore */ }
+  }, []);
 
   // ═══════════════════════════════════════════════
   //  FRAME EXTRACTION + AUTO DETECTION
@@ -121,20 +152,25 @@ export default function LbwTracking() {
     if (isDemo) {
       await new Promise(r => setTimeout(r, 1500));
       // Demo: simulate detection with pre-set points
+      const isNotOut = demoType === 'not_out';
+
       const demoDetection: DetectionResult = {
         stumps: {
-          offBase: { x: 85, y: 120 }, legBase: { x: 115, y: 120 },
-          bailTop: { x: 100, y: 55 }, widthPx: 30, heightPx: 65, centerX: 100,
+          offBase: { x: 82, y: 125 }, legBase: { x: 118, y: 125 },
+          bailTop: { x: 100, y: 58 }, widthPx: 36, heightPx: 67, centerX: 100,
         },
         ballPositions: [
-          { x: 100, y: 15, frame: 0 }, { x: 98, y: 40, frame: 3 },
-          { x: 95, y: 95, frame: 7 }, { x: 97, y: 80, frame: 10 },
-          { x: 99, y: 70, frame: 13 },
+          { x: 100, y: 15, frame: 0 },
+          { x: 98, y: 40, frame: 3 },
+          { x: isNotOut ? 122 : 95, y: 95, frame: 7 },   // Missing leg side if not out
+          { x: isNotOut ? 135 : 97, y: 75, frame: 10 },
+          { x: isNotOut ? 145 : 99, y: 65, frame: 13 },
         ],
         releasePoint: { x: 100, y: 15, frame: 0 },
-        pitchPoint: { x: 95, y: 95, frame: 7 },
-        impactPoint: { x: 97, y: 80, frame: 10 },
+        pitchPoint: { x: isNotOut ? 122 : 95, y: 95, frame: 7 },
+        impactPoint: { x: isNotOut ? 135 : 97, y: 75, frame: 10 },
       };
+
       srcW.current = 200; srcH.current = 150;
       processDetectionResult(demoDetection);
       return;
@@ -143,7 +179,7 @@ export default function LbwTracking() {
     try {
       // 1. Get video duration
       let duration = 6000;
-      const targetUri = isDemo ? DEMO_VIDEO_URL : videoUri;
+      const targetUri = isDemo ? activeVideoUri : videoUri;
 
       if (!isDemo && videoRef.current) {
         await new Promise(r => setTimeout(r, 500));
@@ -267,7 +303,7 @@ export default function LbwTracking() {
   // ═══════════════════════════════════════════════
   const computeDecision = (
     release: Point, pitch: Point, impact: Point,
-    stump: typeof stumpRect extends infer T ? NonNullable<T> : never
+    stump: NonNullable<typeof stumpRect>
   ) => {
     if (!stump) return;
 
@@ -279,16 +315,17 @@ export default function LbwTracking() {
     const sBottom = stump.bottom;
 
     // 1. Pitching (No Umpire's Call for pitching)
-    const pitchInLine = pitch.x >= sLeft && pitch.x <= sRight;
+    let pitchStatus = 'IN LINE';
+    if (pitch.x < sLeft) pitchStatus = 'OUTSIDE OFF';
+    else if (pitch.x > sRight) pitchStatus = 'OUTSIDE LEG';
 
     // 2. Impact (Umpire's Call if < 50% ball width is in line)
-    // Distance from center of ball at impact to the edge of the stumps
     const impactDistFromCenter = Math.min(Math.abs(impact.x - sLeft), Math.abs(impact.x - sRight));
     let impactStatus = 'OUTSIDE';
     if (impact.x >= sLeft && impact.x <= sRight) {
-       impactStatus = 'IN LINE';
+      impactStatus = 'IN LINE';
     } else if (impactDistFromCenter < ballRadiusPx) {
-       impactStatus = "UMPIRE'S CALL";
+      impactStatus = "UMPIRE'S CALL";
     }
 
     // 3. Wickets (Projected)
@@ -296,11 +333,11 @@ export default function LbwTracking() {
     const hitX = projected.x >= sLeft && projected.x <= sRight;
     const hitY = projected.y >= sTop && projected.y <= sBottom;
     const hitWickets = hitX && hitY;
-    
+
     // Hit percentage for widgets
     const wicketsDistX = Math.min(Math.abs(projected.x - sLeft), Math.abs(projected.x - sRight));
     const wicketsDistY = Math.min(Math.abs(projected.y - sTop), Math.abs(projected.y - sBottom));
-    
+
     let wicketsStatus = 'MISSING';
     if (hitWickets) {
       if (wicketsDistX > ballRadiusPx && wicketsDistY > ballRadiusPx) {
@@ -310,16 +347,21 @@ export default function LbwTracking() {
       }
     } else {
       // Check if it's clipping
-      if ((wicketsDistX < ballRadiusPx || projected.x >= sLeft && projected.x <= sRight) && 
-          (wicketsDistY < ballRadiusPx || projected.y >= sTop && projected.y <= sBottom)) {
+      if ((wicketsDistX < ballRadiusPx || projected.x >= sLeft && projected.x <= sRight) &&
+        (wicketsDistY < ballRadiusPx || projected.y >= sTop && projected.y <= sBottom)) {
         wicketsStatus = "UMPIRE'S CALL";
       }
     }
 
     // 4. Final Decision
-    // In real DRS, it depends on the on-field call. Here we'll show the "Ideal" call.
     let finalDecision = 'NOT OUT';
-    if (pitchInLine && impactStatus !== 'OUTSIDE' && wicketsStatus !== 'MISSING') {
+    if (pitchStatus === 'OUTSIDE LEG') {
+      finalDecision = 'NOT OUT';
+    } else if (impactStatus === 'OUTSIDE') {
+      finalDecision = 'NOT OUT';
+    } else if (wicketsStatus === 'MISSING') {
+      finalDecision = 'NOT OUT';
+    } else {
       if (impactStatus === "UMPIRE'S CALL" || wicketsStatus === "UMPIRE'S CALL") {
         finalDecision = "UMPIRE'S CALL";
       } else {
@@ -331,7 +373,7 @@ export default function LbwTracking() {
     const impactH = Math.abs(sBottom - impact.y) / pxPerInch;
 
     setDrsResult({
-      pitching: pitchInLine ? 'IN LINE' : 'OUTSIDE',
+      pitching: pitchStatus,
       impact: impactStatus,
       wickets: wicketsStatus,
       decision: finalDecision,
@@ -341,14 +383,14 @@ export default function LbwTracking() {
 
     // Begin DRS animation sequence
     setStep('analyzing');
-    beginAnalysisPhase();
+    beginAnalysisPhase(release, pitch, impact);
   };
 
   // ═══════════════════════════════════════════════
   //  DRS ANIMATION SEQUENCE
   // ═══════════════════════════════════════════════
-  const beginAnalysisPhase = () => {
-    // Start scan animation
+  const beginAnalysisPhase = (rel: Point, pit: Point, imp: Point) => {
+    // Start scan animation over video
     scanProgress.value = withRepeat(
       withSequence(
         withTiming(1, { duration: 1200 }),
@@ -356,85 +398,114 @@ export default function LbwTracking() {
       ), -1, false
     );
 
-    // Cinematic fade to virtual reconstruction
-    virtualOpacity.value = withDelay(1000, withTiming(1, { duration: 1500 }));
-    stumpReveal.value = withDelay(1500, withTiming(1, { duration: 1000, easing: Easing.out(Easing.back(1)) }));
+    // Fade in dark scrim for contrast
+    scrimOpacity.value = withTiming(0.35, { duration: 800 });
+
+    // Start video playback in loop
+    playVideoLoop();
 
     setTimeout(() => {
-      setStep('pitching');
-      startPitchingAnimation();
+      startPitchingPhase(rel, pit, imp);
     }, 2800);
   };
 
-  const startPitchingAnimation = () => {
-    const rel = scaledRelease || { x: SW / 2, y: SH * 0.15 };
-    const pit = scaledPitch || { x: SW * 0.48, y: SH * 0.62 };
-
-    ballOpacity.value = 0;
+  const startPitchingPhase = (rel: Point, pit: Point, imp: Point) => {
+    setStep('pitching');
     ballX.value = rel.x;
     ballY.value = rel.y;
+    ballOpacity.value = withTiming(1, { duration: 300 });
     ballScale.value = 0.5;
-    glowPulse.value = 0;
+    trailProgress.value = 0;
+    shadowOpacity.value = withTiming(0.4, { duration: 600 });
+    pitchMarkScale.value = 0;
+    impactMarkScale.value = 0;
 
-    ballOpacity.value = withTiming(1, { duration: 250 });
     ballX.value = withTiming(pit.x, { duration: 1600, easing: Easing.bezier(0.2, 0, 0.4, 1) });
     ballY.value = withTiming(pit.y, { duration: 1600, easing: Easing.bezier(0.2, 0, 0.4, 1) });
     ballScale.value = withTiming(1.4, { duration: 1600 });
+    trailProgress.value = withTiming(0.4, { duration: 1600 });
 
+    // Mark pitching point
+    pitchMarkScale.value = withDelay(1600, withSpring(1));
     glowPulse.value = withDelay(1600,
       withSequence(withTiming(1, { duration: 80 }), withTiming(0, { duration: 400 }))
     );
 
-    setTimeout(() => { setStep('impact'); startImpactAnimation(); }, 2800);
+    setTimeout(() => startImpactPhase(pit, imp), 1800);
   };
 
-  const startImpactAnimation = () => {
-    const imp = scaledImpact || { x: SW * 0.5, y: SH * 0.52 };
-    glowPulse.value = 0;
-
+  const startImpactPhase = (pit: Point, imp: Point) => {
+    setStep('impact');
     ballX.value = withTiming(imp.x, { duration: 1200, easing: Easing.bezier(0.25, 0.1, 0.25, 1) });
     ballY.value = withTiming(imp.y, { duration: 1200, easing: Easing.out(Easing.quad) });
     ballScale.value = withTiming(1.5, { duration: 1200 });
+    trailProgress.value = withTiming(0.65, { duration: 1200 });
 
+    // Mark impact point
+    impactMarkScale.value = withDelay(1200, withSpring(1));
     glowPulse.value = withDelay(1200,
       withSequence(withTiming(1, { duration: 60 }), withTiming(0.3, { duration: 500 }))
     );
 
-    setTimeout(() => { setStep('wickets'); startWicketsAnimation(); }, 2500);
+    setTimeout(() => startWicketsPhase(imp), 1500);
   };
 
-  const startWicketsAnimation = () => {
-    const pit = scaledPitch || { x: SW * 0.48, y: SH * 0.62 };
-    const imp = scaledImpact || { x: SW * 0.5, y: SH * 0.52 };
-    const projected = projectBeyondImpact(pit, imp);
-
-    glowPulse.value = 0;
-    ballOpacity.value = withTiming(0.65, { duration: 200 });
+  const startWicketsPhase = (imp: Point) => {
+    setStep('wickets');
+    if (!scaledPitch || !scaledImpact) return;
+    const projected = projectBeyondImpact(scaledPitch, scaledImpact, 0.65);
 
     ballX.value = withTiming(projected.x, { duration: 1400, easing: Easing.bezier(0.25, 0.1, 0.25, 1) });
     ballY.value = withTiming(projected.y, { duration: 1400, easing: Easing.bezier(0.25, 0.1, 0.25, 1) });
     ballScale.value = withTiming(1, { duration: 1400 });
+    trailProgress.value = withTiming(1, { duration: 1400 });
+    shadowOpacity.value = withTiming(0, { duration: 1200 });
 
+    // Stump zone pulse animation
     if (drsResult.wickets === 'HITTING') {
+      impactFlash.value = withDelay(1400, withSequence(withTiming(1, { duration: 100 }), withTiming(0, { duration: 500 })));
+      stumpGlow.value = withDelay(1400,
+        withRepeat(
+          withSequence(
+            withTiming(1, { duration: 300 }),
+            withTiming(0.3, { duration: 300 })
+          ), 3, false
+        )
+      );
       glowPulse.value = withDelay(1400,
         withSequence(
           withTiming(1, { duration: 50 }), withTiming(0.5, { duration: 150 }),
           withTiming(1, { duration: 80 }), withTiming(0.6, { duration: 600 })
         )
       );
+    } else if (drsResult.wickets === "UMPIRE'S CALL") {
+      stumpGlow.value = withDelay(1400,
+        withRepeat(
+          withSequence(
+            withTiming(0.7, { duration: 400 }),
+            withTiming(0.2, { duration: 400 })
+          ), 2, false
+        )
+      );
     }
 
-    setTimeout(() => setStep('decision'), 3000);
+    setTimeout(() => {
+      setStep('decision');
+      pauseVideo();
+    }, 3000);
   };
 
   // ── Reset ──
   const resetAll = useCallback(() => {
     ballOpacity.value = 0;
     glowPulse.value = 0;
+    stumpGlow.value = 0;
+    scrimOpacity.value = withTiming(0, { duration: 300 });
     setStep('extracting');
     setDetection(null);
     setExtractProgress(0);
     setDetectProgress(0);
+    pauseVideo();
     setTimeout(() => startAutoFlow(), 300);
   }, []);
 
@@ -454,20 +525,27 @@ export default function LbwTracking() {
   // ═══════════════════════════════════════════════
   //  TRAJECTORY POINTS
   // ═══════════════════════════════════════════════
-  const trajectoryPoints = useMemo(() => {
+  const deliveryPath = useMemo(() => {
     if (!scaledRelease || !scaledPitch || !scaledImpact) return [];
     return generateTrajectoryPoints(scaledRelease, scaledPitch, scaledImpact, 40);
   }, [scaledRelease, scaledPitch, scaledImpact]);
 
   const projectedPoint = useMemo(() => {
     if (!scaledPitch || !scaledImpact) return null;
-    return projectBeyondImpact(scaledPitch, scaledImpact);
+    return projectBeyondImpact(scaledPitch, scaledImpact, 0.65);
   }, [scaledPitch, scaledImpact]);
+
+  const predictionPath = useMemo(() => {
+    if (!scaledImpact || !projectedPoint) return [];
+    // For prediction, we use a simple two-point path or a short interpolation
+    return [scaledImpact, projectedPoint];
+  }, [scaledImpact, projectedPoint]);
 
   // ═══════════════════════════════════════════════
   //  ANIMATED STYLES & TRACKING STATE
   // ═══════════════════════════════════════════════
   const isTracking = ['pitching', 'impact', 'wickets'].includes(step);
+  const showOverlay = ['analyzing', 'pitching', 'impact', 'wickets', 'decision'].includes(step);
   const ballColor = step === 'wickets'
     ? (drsResult.wickets === 'HITTING' ? '#ef4444' : drsResult.wickets === "UMPIRE'S CALL" ? '#f97316' : '#3b82f6')
     : '#3b82f6';
@@ -491,7 +569,44 @@ export default function LbwTracking() {
   }));
 
   const animScan = useAnimatedStyle(() => ({
-    transform: [{ translateY: scanProgress.value * (SH * 0.35) }],
+    transform: [{ translateY: scanProgress.value * (SH * 0.6) }],
+  }));
+
+  const animScrim = useAnimatedStyle(() => ({
+    opacity: scrimOpacity.value,
+  }));
+
+  const animStumpGlow = useAnimatedStyle(() => ({
+    opacity: stumpGlow.value,
+  }));
+
+  const animFlash = useAnimatedStyle(() => ({
+    opacity: impactFlash.value,
+  }));
+
+  const animShadow = useAnimatedStyle(() => {
+    // Ground level is at targetY of pitching point
+    const groundY = stumpRect ? stumpRect.bottom : SH * 0.85;
+    const distanceToGround = Math.abs(ballY.value - groundY);
+    const closeness = Math.max(0, 1 - distanceToGround / (SH * 0.3));
+
+    return {
+      opacity: shadowOpacity.value * closeness,
+      transform: [
+        { translateX: ballX.value - 10 },
+        { translateY: groundY - 4 },
+        { scaleX: 1 + closeness * 0.5 },
+        { scaleY: 0.4 },
+      ],
+    };
+  });
+
+  const animPitchProps = useAnimatedProps(() => ({
+    r: 12 * pitchMarkScale.value,
+  }));
+
+  const animImpactProps = useAnimatedProps(() => ({
+    r: 14 * impactMarkScale.value,
   }));
 
   const getStatusColor = (status: string) => {
@@ -501,82 +616,59 @@ export default function LbwTracking() {
   };
 
   // ═══════════════════════════════════════════════
-  //  CINEMATIC VISUALS (SVG)
+  //  HAWK-EYE OVERLAY ON VIDEO (SVG)
   // ═══════════════════════════════════════════════
-  const HawkEyeVisuals = () => {
-    if (!isTracking || !stumpRect) return null;
+  const HawkEyeOverlay = () => {
+    if (!showOverlay || !stumpRect) return null;
 
     const { left, right, top, bottom } = stumpRect;
     const centerX = (left + right) / 2;
     const width = right - left;
-    
-    // Perspective Pitch calculation (Virtual)
-    const pitchWidthTop = width * 2;
-    const pitchWidthBottom = SW * 1.5;
-    const pitchTop = top - 100;
-    const pitchBottom = SH;
 
-    // 3D Stump reconstruction
-    const render3DStump = (x: number, isHit: boolean) => {
-      const sWidth = width / 6;
-      const sHeight = bottom - top;
-      return (
-        <G key={`stump-${x}`}>
-          <Defs>
-            <SvgGradient id={`stumpGrad-${x}`} x1="0%" y1="0%" x2="100%" y2="0%">
-              <Stop offset="0%" stopColor="rgba(255,255,255,0.1)" />
-              <Stop offset="50%" stopColor="rgba(255,255,255,0.3)" />
-              <Stop offset="100%" stopColor="rgba(255,255,255,0.1)" />
-            </SvgGradient>
-          </Defs>
-          {/* Main Stump Cylinder */}
-          <Rect
-            x={x - sWidth / 2}
-            y={top}
-            width={sWidth}
-            height={sHeight}
-            rx={2}
-            fill="rgba(148, 163, 184, 0.4)"
-            stroke={isHit ? "#EF4444" : "rgba(255,255,255,0.2)"}
-            strokeWidth={1}
-          />
-          <Rect
-            x={x - sWidth / 2}
-            y={top}
-            width={sWidth}
-            height={sHeight}
-            rx={2}
-            fill={`url(#stumpGrad-${x})`}
-          />
-        </G>
-      );
-    };
+    const stumpHitColor = drsResult.wickets === 'HITTING'
+      ? '#ef4444'
+      : drsResult.wickets === "UMPIRE'S CALL"
+        ? '#f97316'
+        : '#3b82f6';
 
     // Path tracing (Ribbon Style)
-    const renderRibbon = (points: Point[], color: string, glowColor: string, isDashed = false) => {
+    const renderRibbon = (points: Point[], color: string, glowColor: string, isDashed = false, progress = 1) => {
       if (points.length < 2) return null;
+      const visibleCount = Math.floor(points.length * progress);
+      if (visibleCount < 2) return null;
+
       let d = `M ${points[0].x} ${points[0].y}`;
-      for (let i = 1; i < points.length; i++) {
+      for (let i = 1; i < visibleCount; i++) {
         d += ` L ${points[i].x} ${points[i].y}`;
       }
       return (
         <G>
+          {/* Main digital trail */}
           <Path
             d={d}
             stroke={glowColor}
             strokeWidth={12}
             fill="none"
-            opacity={0.15}
+            opacity={0.15 * progress}
             strokeLinecap="round"
           />
           <Path
             d={d}
             stroke={color}
-            strokeWidth={5}
+            strokeWidth={4.5}
             fill="none"
-            strokeDasharray={isDashed ? "8,8" : "0"}
+            strokeDasharray={isDashed ? "10,6" : "0"}
             strokeLinecap="round"
-            opacity={0.9}
+            opacity={0.9 * progress}
+          />
+          {/* Tapered highlight core */}
+          <Path
+            d={d}
+            stroke="#fff"
+            strokeWidth={1}
+            fill="none"
+            opacity={0.25}
+            strokeLinecap="round"
           />
         </G>
       );
@@ -586,73 +678,90 @@ export default function LbwTracking() {
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         <Svg style={StyleSheet.absoluteFill}>
           <Defs>
-            <SvgGradient id="virtualPitchGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-              <Stop offset="0%" stopColor="rgba(15, 23, 42, 0)" />
-              <Stop offset="50%" stopColor="rgba(30, 41, 59, 0.8)" />
-              <Stop offset="100%" stopColor="rgba(15, 23, 42, 1)" />
-            </SvgGradient>
-            <SvgGradient id="trailBlue" x1="0%" y1="0%" x2="100%" y2="0%">
-              <Stop offset="0%" stopColor="#38BDF8" />
-              <Stop offset="100%" stopColor="#818CF8" />
-            </SvgGradient>
-            <SvgGradient id="trailRed" x1="0%" y1="0%" x2="100%" y2="0%">
-              <Stop offset="0%" stopColor="#EF4444" />
-              <Stop offset="100%" stopColor="#F87171" />
+            <SvgGradient id="stumpZoneGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <Stop offset="0%" stopColor={stumpHitColor} stopOpacity="0.15" />
+              <Stop offset="100%" stopColor={stumpHitColor} stopOpacity="0.05" />
             </SvgGradient>
           </Defs>
 
-          {/* Virtual Stadium Perspective Grid */}
-          <Polygon
-            points={`${centerX - pitchWidthTop / 2},${pitchTop} ${centerX + pitchWidthTop / 2},${pitchTop} ${centerX + pitchWidthBottom / 2},${pitchBottom} ${centerX - pitchWidthBottom / 2},${pitchBottom}`}
-            fill="url(#virtualPitchGrad)"
-            opacity={0.8}
-          />
-
-          {/* In-Line Mat */}
-          <Polygon
-            points={`${left},${top} ${right},${top} ${right + 80},${SH} ${left - 80},${SH}`}
-            fill={drsResult.pitching === 'IN LINE' ? "rgba(34, 197, 94, 0.15)" : "rgba(239, 68, 68, 0.1)"}
-            opacity={0.4}
-          />
-
-          {/* Trajectory Ribbons */}
-          {renderRibbon(trajectoryPoints, '#38BDF8', '#818CF8')}
-          
-          {step === 'wickets' && projectedPoint && scaledImpact && (
-            renderRibbon([scaledImpact, projectedPoint], '#EF4444', '#F87171', true)
+          {/* ── In-Line Zone (subtle corridor on pitch) ── */}
+          {isTracking && (
+            <Polygon
+              points={`${left},${top - 20} ${right},${top - 20} ${right + 30},${SH} ${left - 30},${SH}`}
+              fill={drsResult.pitching === 'IN LINE' ? "rgba(34, 197, 94, 0.06)" : "rgba(239, 68, 68, 0.04)"}
+              stroke={drsResult.pitching === 'IN LINE' ? "rgba(34, 197, 94, 0.15)" : "rgba(239, 68, 68, 0.1)"}
+              strokeWidth={1}
+              strokeDasharray="6,4"
+            />
           )}
 
-          {/* 3D Stumps */}
-          <G opacity={0.6}>
-            {render3DStump(left + (right - left) * 0.15, step === 'wickets' && drsResult.wickets === 'HITTING')}
-            {render3DStump(centerX, step === 'wickets' && drsResult.wickets === 'HITTING')}
-            {render3DStump(right - (right - left) * 0.15, step === 'wickets' && drsResult.wickets === 'HITTING')}
-          </G>
-
-          {/* Event Markers (Glows) */}
-          {scaledPitch && <Circle cx={scaledPitch.x} cy={scaledPitch.y} r={10} fill="#38BDF8" opacity={0.3} />}
-          {scaledImpact && <Circle cx={scaledImpact.x} cy={scaledImpact.y} r={12} fill="#EF4444" opacity={0.4} />}
-
-          {/* International Broadcast Labels */}
-          {scaledPitch && (step === 'pitching' || step === 'impact' || step === 'wickets') && (
-            <G transform={`translate(${scaledPitch.x}, ${scaledPitch.y - 30})`}>
-              <Rect x={-40} y={-15} width={80} height={20} rx={4} fill="rgba(0,0,0,0.85)" stroke="#38BDF8" strokeWidth={1} />
-              <SvgText fill="#38BDF8" fontSize="10" fontWeight="bold" fontStyle="italic" x={0} y={0} textAnchor="middle">PITCHING</SvgText>
+          {/* ── Stump Zone Rectangle (overlay on real stumps) ── */}
+          {(isTracking || step === 'analyzing') && (
+            <G>
+              {/* Stump zone fill */}
+              <Rect
+                x={left - 3}
+                y={top - 3}
+                width={width + 6}
+                height={bottom - top + 6}
+                rx={3}
+                fill="url(#stumpZoneGrad)"
+              />
+              {/* Stump zone border */}
+              <Rect
+                x={left - 3}
+                y={top - 3}
+                width={width + 6}
+                height={bottom - top + 6}
+                rx={3}
+                fill="none"
+                stroke={stumpHitColor}
+                strokeWidth={1.5}
+                strokeDasharray="8,4"
+                opacity={0.7}
+              />
+              {/* Individual stump lines (transparent over real stumps) */}
+              <Line x1={left + width * 0.15} y1={top} x2={left + width * 0.15} y2={bottom}
+                stroke="rgba(255,255,255,0.15)" strokeWidth={2} />
+              <Line x1={centerX} y1={top} x2={centerX} y2={bottom}
+                stroke="rgba(255,255,255,0.15)" strokeWidth={2} />
+              <Line x1={right - width * 0.15} y1={top} x2={right - width * 0.15} y2={bottom}
+                stroke="rgba(255,255,255,0.15)" strokeWidth={2} />
+              {/* Bail line */}
+              <Line x1={left - 2} y1={top} x2={right + 2} y2={top}
+                stroke="rgba(255,255,255,0.25)" strokeWidth={3} strokeLinecap="round" />
+              {/* Stump zone label */}
+              <SvgText fill="rgba(255,255,255,0.5)" fontSize="8" fontWeight="bold" letterSpacing={2}
+                x={centerX} y={bottom + 14} textAnchor="middle">STUMPS</SvgText>
             </G>
           )}
 
-          {scaledImpact && (step === 'impact' || step === 'wickets') && (
-            <G transform={`translate(${scaledImpact.x}, ${scaledImpact.y - 40})`}>
-              <Rect x={-35} y={-15} width={70} height={20} rx={4} fill="rgba(0,0,0,0.85)" stroke="#EF4444" strokeWidth={1} />
-              <SvgText fill="#EF4444" fontSize="10" fontWeight="bold" fontStyle="italic" x={0} y={0} textAnchor="middle">IMPACT</SvgText>
-            </G>
-          )}
 
-          {step === 'wickets' && projectedPoint && (
-            <G transform={`translate(${projectedPoint.x}, ${projectedPoint.y - 50})`}>
-              <Rect x={-40} y={-15} width={80} height={20} rx={4} fill="rgba(0,0,0,0.85)" stroke={getStatusColor(drsResult.wickets)} strokeWidth={1} />
-              <SvgText fill={getStatusColor(drsResult.wickets)} fontSize="10" fontWeight="bold" fontStyle="italic" x={0} y={0} textAnchor="middle">WICKETS</SvgText>
-            </G>
+
+          {/* ── Trajectory Paths (The 'Marks') ── */}
+          {deliveryPath.length > 0 && renderRibbon(deliveryPath, '#3b82f6', 'rgba(59,130,246,0.3)', false, trailProgress.value)}
+          {predictionPath.length > 0 && renderRibbon(predictionPath, stumpHitColor, `${stumpHitColor}44`, true, Math.max(0, (trailProgress.value - 0.6) / 0.4))}
+
+          {/* ── Persistent Hotspots (Pitch & Impact) ── */}
+          {scaledPitch && (
+            <AnimatedCircle
+              cx={scaledPitch.x}
+              cy={scaledPitch.y}
+              animatedProps={animPitchProps}
+              fill="rgba(34, 197, 94, 0.4)"
+              stroke="#22c55e"
+              strokeWidth={2}
+            />
+          )}
+          {scaledImpact && (
+            <AnimatedCircle
+              cx={scaledImpact.x}
+              cy={scaledImpact.y}
+              animatedProps={animImpactProps}
+              fill="rgba(249, 115, 22, 0.4)"
+              stroke="#f97316"
+              strokeWidth={2}
+            />
           )}
         </Svg>
       </View>
@@ -662,49 +771,61 @@ export default function LbwTracking() {
   // ═══════════════════════════════════════════════
   //  RENDER
   // ═══════════════════════════════════════════════
-  const videoAnimStyle = useAnimatedStyle(() => ({
-    opacity: 1 - virtualOpacity.value,
-    transform: [{ scale: 1 + virtualOpacity.value * 0.1 }],
-  }));
-
   return (
     <View style={styles.container}>
       {/* Hidden auto-detection engine */}
       <AutoBallDetector ref={detectorRef} />
 
-      {/* ── Virtual stadium (Revealed during tracking) ── */}
-      <View style={[StyleSheet.absoluteFill, styles.demoBackground]} />
-
-      {/* ── Video / Demo Background ── */}
-      <Animated.View style={[styles.video, videoAnimStyle]}>
+      {/* ── Video — ALWAYS VISIBLE ── */}
+      <View style={styles.videoContainer}>
         <Video
           ref={videoRef}
-          style={StyleSheet.absoluteFill}
+          style={styles.fullVideo}
           source={{ uri: activeVideoUri }}
           useNativeControls={false}
           resizeMode={ResizeMode.COVER}
+          isMuted={true}
           shouldPlay={false}
         />
-        
-        {isDemo && step === 'extracting' && (
-          <View style={StyleSheet.absoluteFill}>
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }]} />
-            <LinearGradient
-              colors={['rgba(0,0,0,0.5)', 'transparent', 'rgba(0,0,0,0.7)']}
-              style={StyleSheet.absoluteFill}
-            />
+
+        {/* ── Impact Flash ── */}
+        <Animated.View style={[styles.impactFlashContainer, animFlash]} pointerEvents="none" />
+
+        {/* ── Dark Contrast Scrim (fades in during tracking) ── */}
+        <Animated.View style={[styles.scrim, animScrim]} />
+
+        {/* ── Scan Line (visible over video during analyzing) ── */}
+        {step === 'analyzing' && (
+          <View style={styles.scanContainer}>
+            <Animated.View style={[styles.scanLineOverVideo, animScan]} />
           </View>
         )}
-      </Animated.View>
+      </View>
 
-      {/* ── Hawk-Eye Overlay ── */}
-      <HawkEyeVisuals />
+      {/* ── Hawk-Eye Overlay (directly on video) ── */}
+      <HawkEyeOverlay />
+
+      {/* ── Stump Zone Glow Pulse (when ball hits) ── */}
+      {step === 'wickets' && stumpRect && (drsResult.wickets === 'HITTING' || drsResult.wickets === "UMPIRE'S CALL") && (
+        <Animated.View style={[
+          styles.stumpGlowOverlay,
+          {
+            left: stumpRect.left - 15,
+            top: stumpRect.top - 15,
+            width: stumpRect.right - stumpRect.left + 30,
+            height: stumpRect.bottom - stumpRect.top + 30,
+            borderColor: drsResult.wickets === 'HITTING' ? '#ef4444' : '#f97316',
+            shadowColor: drsResult.wickets === 'HITTING' ? '#ef4444' : '#f97316',
+          },
+          animStumpGlow,
+        ]} />
+      )}
 
       {/* ══════════ EXTRACTING FRAMES ══════════ */}
       {step === 'extracting' && (
         <View style={styles.processingOverlay}>
           <LinearGradient
-            colors={['rgba(11,14,20,0.97)', 'rgba(11,14,20,0.99)']}
+            colors={['rgba(11,14,20,0.85)', 'rgba(11,14,20,0.92)']}
             style={StyleSheet.absoluteFill}
           />
           <View style={styles.processingContent}>
@@ -725,7 +846,7 @@ export default function LbwTracking() {
       {step === 'detecting' && (
         <View style={styles.processingOverlay}>
           <LinearGradient
-            colors={['rgba(11,14,20,0.97)', 'rgba(11,14,20,0.99)']}
+            colors={['rgba(11,14,20,0.85)', 'rgba(11,14,20,0.92)']}
             style={StyleSheet.absoluteFill}
           />
           <View style={styles.processingContent}>
@@ -746,27 +867,31 @@ export default function LbwTracking() {
         </View>
       )}
 
-      {/* ══════════ ANALYZING OVERLAY ══════════ */}
+      {/* ══════════ ANALYZING OVERLAY (over the playing video) ══════════ */}
       {step === 'analyzing' && (
-        <View style={styles.processingOverlay}>
-          <LinearGradient
-            colors={['rgba(15,23,42,0.95)', 'rgba(15,23,42,0.98)']}
-            style={StyleSheet.absoluteFill}
-          />
-          <View style={styles.processingContent}>
-            <View style={styles.scanArea}>
-              <Animated.View style={[styles.scanLine, animScan]} />
+        <View style={styles.analyzingBanner} pointerEvents="none">
+          <LinearGradient colors={['rgba(15,23,42,0.85)', 'rgba(15,23,42,0.3)', 'transparent']} style={StyleSheet.absoluteFill} />
+          <View style={styles.analyzingContent}>
+            <View style={styles.analyzingIconRow}>
+              <Cpu size={22} color="#818cf8" />
+              <Text style={styles.analyzingTitle}>BALL TRACKING</Text>
             </View>
-            <View style={styles.processingIconWrap}>
-              <Cpu size={40} color="#818cf8" />
-            </View>
-            <Text style={styles.processingTitle}>BALL TRACKING</Text>
-            <Text style={styles.processingSub}>Computing trajectory prediction...</Text>
-            <View style={styles.dataList}>
-              <Text style={styles.dataItem}>▸ Stump-to-stump: {stumpRect ? `${stumpRect.widthInches}"` : '—'}</Text>
-              <Text style={styles.dataItem}>▸ Stump height: {stumpRect ? `${stumpRect.heightInches}"` : '—'}</Text>
-              <Text style={styles.dataItem}>▸ Ball pitch: {drsResult.pitchDistInches ? `${drsResult.pitchDistInches}" from center` : '—'}</Text>
-              <Text style={styles.dataItem}>▸ Impact height: {drsResult.impactHeightInches ? `${drsResult.impactHeightInches}" above ground` : '—'}</Text>
+            <Text style={styles.analyzingSub}>Computing trajectory prediction...</Text>
+            <View style={styles.analyzingDataRow}>
+              <View style={styles.analyzingDataItem}>
+                <Text style={styles.analyzingDataLabel}>STUMP WIDTH</Text>
+                <Text style={styles.analyzingDataValue}>{stumpRect ? `${stumpRect.widthInches}"` : '—'}</Text>
+              </View>
+              <View style={styles.analyzingDataDivider} />
+              <View style={styles.analyzingDataItem}>
+                <Text style={styles.analyzingDataLabel}>STUMP HEIGHT</Text>
+                <Text style={styles.analyzingDataValue}>{stumpRect ? `${stumpRect.heightInches}"` : '—'}</Text>
+              </View>
+              <View style={styles.analyzingDataDivider} />
+              <View style={styles.analyzingDataItem}>
+                <Text style={styles.analyzingDataLabel}>IMPACT HT</Text>
+                <Text style={styles.analyzingDataValue}>{drsResult.impactHeightInches ? `${drsResult.impactHeightInches}"` : '—'}</Text>
+              </View>
             </View>
           </View>
         </View>
@@ -775,7 +900,7 @@ export default function LbwTracking() {
       {/* ══════════ DRS DASHBOARD (tracking phases) ══════════ */}
       {isTracking && (
         <View style={styles.drsHeader}>
-          <LinearGradient colors={['rgba(15,23,42,0.9)', 'rgba(15,23,42,0.4)']} style={styles.drsHeaderGrad} />
+          <LinearGradient colors={['rgba(0,0,0,0.8)', 'rgba(0,0,0,0.4)', 'transparent']} style={styles.drsHeaderGrad} />
           <View style={styles.drsRow}>
             <View style={[styles.drsBox, step === 'pitching' && styles.drsBoxActive]}>
               <Text style={styles.drsLabel}>PITCHING</Text>
@@ -814,6 +939,14 @@ export default function LbwTracking() {
               <Text style={styles.measureValue}>{drsResult.impactHeightInches || '—'}"</Text>
             </View>
           </View>
+
+          {/* Phase indicator */}
+          <View style={styles.phaseBadge}>
+            <View style={[styles.phaseDot, { backgroundColor: ballColor }]} />
+            <Text style={styles.phaseText}>
+              {step === 'pitching' ? 'PITCHING ANALYSIS' : step === 'impact' ? 'IMPACT ZONE' : 'WICKET PROJECTION'}
+            </Text>
+          </View>
         </View>
       )}
 
@@ -825,6 +958,9 @@ export default function LbwTracking() {
             { backgroundColor: ballColor + '50' },
             animGlow,
           ]} />
+          {/* ── Ball Shadow (Ground depth) ── */}
+          <Animated.View style={[styles.ballShadow, animShadow]} />
+
           <Animated.View style={[
             styles.ball,
             { borderColor: ballColor, shadowColor: ballColor },
@@ -835,11 +971,11 @@ export default function LbwTracking() {
         </>
       )}
 
-      {/* ══════════ DECISION PANEL ══════════ */}
+      {/* ══════════ DECISION PANEL (over frozen video) ══════════ */}
       {step === 'decision' && (
         <View style={styles.decisionOverlay}>
           <LinearGradient
-            colors={['rgba(15,23,42,0.6)', 'rgba(2,6,23,0.98)']}
+            colors={['transparent', 'rgba(2,6,23,0.4)', 'rgba(2,6,23,0.92)']}
             style={StyleSheet.absoluteFill}
           />
           <View style={styles.decisionContent}>
@@ -919,10 +1055,30 @@ export default function LbwTracking() {
 // ═══════════════════════════════════════════════════
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
-  video: { flex: 1, width: SW, height: SH },
-  demoBackground: {
-    backgroundColor: '#0F172A',
-    justifyContent: 'center', alignItems: 'center',
+
+  // ── Video (always visible) ──
+  videoContainer: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#000',
+    zIndex: 0,
+  },
+  fullVideo: {
+    width: '100%',
+    height: '100%',
+  },
+  scrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#000',
+  },
+  scanContainer: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
+  },
+  scanLineOverVideo: {
+    width: '100%', height: 2,
+    backgroundColor: '#818cf8',
+    shadowColor: '#818cf8', shadowOpacity: 1, shadowRadius: 20,
+    position: 'absolute', top: '15%',
   },
 
   // ── Processing overlays ──
@@ -974,21 +1130,53 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
+  // ── Analyzing banner (top of screen over video) ──
+  analyzingBanner: {
+    position: 'absolute', top: 0, left: 0, right: 0,
+    paddingTop: 52, paddingBottom: 20, paddingHorizontal: 20,
+    zIndex: 20,
+  },
+  analyzingContent: { alignItems: 'center' },
+  analyzingIconRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6,
+  },
+  analyzingTitle: {
+    color: '#fff', fontSize: 16, fontWeight: '900', letterSpacing: 4,
+  },
+  analyzingSub: {
+    color: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: '500', marginBottom: 16,
+  },
+  analyzingDataRow: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+  },
+  analyzingDataItem: { flex: 1, alignItems: 'center' },
+  analyzingDataLabel: {
+    color: 'rgba(255,255,255,0.3)', fontSize: 7,
+    fontWeight: '800', letterSpacing: 1, marginBottom: 2,
+  },
+  analyzingDataValue: { color: '#818cf8', fontSize: 12, fontWeight: '900' },
+  analyzingDataDivider: {
+    width: 1, height: 22, backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+
   // ── DRS Header ──
   drsHeader: {
     position: 'absolute', top: 0, left: 0, right: 0,
     paddingTop: 55, paddingHorizontal: 14, zIndex: 20,
   },
-  drsHeaderGrad: { ...StyleSheet.absoluteFillObject, height: 220 },
+  drsHeaderGrad: { ...StyleSheet.absoluteFillObject, height: 240 },
   drsRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
   drsBox: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
     borderRadius: 10, padding: 10, alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
   },
   drsBoxActive: {
-    borderColor: 'rgba(99,102,241,0.5)',
-    backgroundColor: 'rgba(99,102,241,0.1)',
+    borderColor: 'rgba(99,102,241,0.6)',
+    backgroundColor: 'rgba(99,102,241,0.15)',
   },
   drsLabel: {
     color: 'rgba(255,255,255,0.4)', fontSize: 9,
@@ -1026,38 +1214,19 @@ const styles = StyleSheet.create({
     color: '#fff', fontSize: 11, fontWeight: '800', letterSpacing: 2,
   },
 
-  // ── Stump zone ──
-  stumpZone: {
-    position: 'absolute', borderWidth: 1.5,
-    borderColor: 'rgba(239,68,68,0.25)', borderStyle: 'dashed',
-    borderRadius: 4, justifyContent: 'flex-end', alignItems: 'center',
-    paddingBottom: 4, zIndex: 10,
-  },
-  stumpsRow: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    flexDirection: 'row', justifyContent: 'space-evenly',
-    height: '100%', paddingHorizontal: 4,
-  },
-  stumpLine: {
-    width: 2, height: '100%',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 1,
-  },
-  bailLine: {
-    position: 'absolute', top: 0, left: 2, right: 2,
-    height: 3, backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 1.5,
-  },
-  stumpZoneLabel: {
-    color: 'rgba(239,68,68,0.4)', fontSize: 8,
-    fontWeight: '800', letterSpacing: 2,
-    position: 'absolute', bottom: -14,
+  impactFlashContainer: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#fff',
+    zIndex: 40,
   },
 
-  // ── Trajectory dots ──
-  trajectoryDot: {
-    position: 'absolute', width: 4, height: 4,
-    borderRadius: 2, zIndex: 20,
+  // ── Stump glow overlay ──
+  stumpGlowOverlay: {
+    position: 'absolute', borderRadius: 6,
+    borderWidth: 3, backgroundColor: 'transparent',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1, shadowRadius: 25, elevation: 15,
+    zIndex: 12,
   },
 
   // ── Ball + Effects ──
@@ -1071,6 +1240,11 @@ const styles = StyleSheet.create({
   impactGlow: {
     position: 'absolute', width: 70, height: 70,
     borderRadius: 35, zIndex: 15,
+  },
+  ballShadow: {
+    position: 'absolute', width: 20, height: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 10,
+    zIndex: 9,
   },
 
   // ── Decision ──
@@ -1131,14 +1305,6 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
   },
   replayText: { color: '#fff', fontSize: 12, fontWeight: '700', letterSpacing: 1 },
-  saveBtn: {
-    flex: 1, flexDirection: 'row', gap: 6,
-    backgroundColor: 'rgba(34,197,94,0.12)',
-    paddingVertical: 14, borderRadius: 24,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: 'rgba(34,197,94,0.2)',
-  },
-  saveText: { color: '#22c55e', fontSize: 12, fontWeight: '700', letterSpacing: 1 },
   doneBtn: {
     flex: 2, backgroundColor: '#7C3AED',
     paddingVertical: 14, borderRadius: 24,
