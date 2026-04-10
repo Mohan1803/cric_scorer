@@ -34,9 +34,7 @@
     "plugins": [
       "expo-router",
       "@react-native-firebase/app",
-      "@react-native-firebase/firestore",
-      "expo-font",
-      "expo-video-thumbnails"
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true

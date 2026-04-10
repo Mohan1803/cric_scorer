@@ -9,7 +9,7 @@ import {
   X, RotateCcw, Save, Cpu, Eye, Crosshair, Target, Circle as LucideCircle,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as VideoThumbnails from 'expo-video-thumbnails';
+const VideoThumbnails = Platform.OS !== 'web' ? require('expo-video-thumbnails') : null;
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system';
 import Svg, { Path, Rect, Polygon, Circle, Text as SvgText, G, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
