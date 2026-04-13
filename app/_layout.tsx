@@ -15,11 +15,16 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 
+import { useEffect } from 'react';
+
 export default function RootLayout() {
   useFrameworkReady();
 
-  // Set the root system background to match the dark theme natively
-  SystemUI.setBackgroundColorAsync('#0B0E14');
+  useEffect(() => {
+    // Hide splash screen and set system UI once we are ready
+    SplashScreen.hideAsync().catch(() => {});
+    SystemUI.setBackgroundColorAsync('#0B0E14').catch(() => {});
+  }, []);
 
   return (
     <>

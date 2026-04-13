@@ -241,18 +241,18 @@ export default function TeamEntry() {
           <View style={styles.demoRow}>
             <TouchableOpacity
               activeOpacity={0.8}
-              style={[styles.demoButton, { backgroundColor: 'rgba(34, 197, 94, 0.1)', borderColor: 'rgba(34, 197, 94, 0.3)' }]}
+              style={[styles.demoButton, { backgroundColor: 'rgba(239, 68, 68, 0.1)', borderColor: 'rgba(239, 68, 68, 0.3)' }]}
               onPress={() => router.push({ pathname: '/lbw-tracking' as any, params: { videoUri: 'demo_out' } })}
             >
-              <Text style={[styles.demoButtonText, { color: '#22c55e' }]}>Out Demo</Text>
+              <Text style={[styles.demoButtonText, { color: '#ef4444' }]}>Out Demo</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               activeOpacity={0.8}
-              style={[styles.demoButton, { backgroundColor: 'rgba(239, 68, 68, 0.1)', borderColor: 'rgba(239, 68, 68, 0.3)' }]}
+              style={[styles.demoButton, { backgroundColor: 'rgba(34, 197, 94, 0.1)', borderColor: 'rgba(34, 197, 94, 0.3)' }]}
               onPress={() => router.push({ pathname: '/lbw-tracking' as any, params: { videoUri: 'demo_not_out' } })}
             >
-              <Text style={[styles.demoButtonText, { color: '#ef4444' }]}>Not Out Demo</Text>
+              <Text style={[styles.demoButtonText, { color: '#22c55e' }]}>Not Out Demo</Text>
             </TouchableOpacity>
           </View>
         </View>
