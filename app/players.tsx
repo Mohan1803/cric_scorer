@@ -238,13 +238,13 @@ export default function PlayersEntry() {
               style={[styles.handBtn, !isLeft && styles.handBtnActive]}
               onPress={() => updateBattingHand(teamIndex, actualIndex, 'right')}
             >
-              <Text style={[styles.handBtnText, !isLeft && styles.handBtnTextActive]}>R</Text>
+              <Text style={[styles.handBtnText, !isLeft && styles.handBtnTextActive]}>RIGHT</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.handBtn, isLeft && styles.handBtnActive]}
+              style={[styles.handBtn, isLeft && styles.handBtnActiveLH]}
               onPress={() => updateBattingHand(teamIndex, actualIndex, 'left')}
             >
-              <Text style={[styles.handBtnText, isLeft && styles.handBtnTextActive]}>L</Text>
+              <Text style={[styles.handBtnText, isLeft && styles.handBtnTextActive]}>LEFT</Text>
             </TouchableOpacity>
           </View>
           <TouchableOpacity
@@ -571,10 +571,14 @@ const styles = StyleSheet.create({
   handBtnActive: {
     backgroundColor: colors.accent,
   },
+  handBtnActiveLH: {
+    backgroundColor: '#3b82f6', // Distinct blue for Left handers
+  },
   handBtnText: {
-    fontSize: 10,
-    fontWeight: '800',
+    fontSize: 8,
+    fontWeight: '900',
     color: 'rgba(255,255,255,0.3)',
+    letterSpacing: 0.5,
   },
   handBtnTextActive: {
     color: '#fff',

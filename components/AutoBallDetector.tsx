@@ -12,11 +12,14 @@ export type DetectionResult = {
     widthPx: number;
     heightPx: number;
     centerX: number;
+    widthInches?: number;
+    heightInches?: number;
   } | null;
   ballPositions: DetectedPoint[];
   pitchPoint: DetectedPoint | null;
   impactPoint: DetectedPoint | null;
   releasePoint: DetectedPoint | null;
+  detectedHand?: 'RH' | 'LH';
 };
 
 export type AutoBallDetectorRef = {
@@ -157,9 +160,27 @@ function processNext(){
     // Ensure we have a P1 (release) if findKeyPoints couldn't find a distinct one
     const p1 = keyPts.release || (filtered.length > 0 ? filtered[0] : null);
 
+    // Detect Batsman Stance (Heuristic)
+    // Find average X of movement at bottom of screen in impact frames
+    let batsmanXSum=0, batsmanWeight=0;
+    for(let i=0; i<results.length; i++){
+      const r = results[i];
+      if(r && r.frame > (keyPts.pitch?.frame || 0)){
+        batsmanXSum += r.xAtBottom || 0;
+        batsmanWeight += r.weightAtBottom || 0;
+      }
+    }
+    let detectedHand = 'RH';
+    if(stumps && batsmanWeight > 0){
+      const batsmanAvgX = batsmanXSum / batsmanWeight;
+      // In standard view: RH stands left (lower X), LH stands right (higher X)
+      detectedHand = (batsmanAvgX < stumps.centerX) ? 'RH' : 'LH';
+    }
+
     window.ReactNativeWebView.postMessage(JSON.stringify({
       type:'done',stumps,ballPositions:filtered,
-      pitchPoint:keyPts.pitch,impactPoint:keyPts.impact,releasePoint:p1
+      pitchPoint:keyPts.pitch,impactPoint:keyPts.impact,releasePoint:p1,
+      detectedHand
     }));
     return}
   const{src,idx}=frameQueue.shift();
@@ -168,8 +189,31 @@ function processNext(){
     canvas.width=frameW;canvas.height=frameH;
     ctx.drawImage(img,0,0,frameW,frameH);
     const data=ctx.getImageData(0,0,frameW,frameH).data;
+    
+    // Process Ball
     const pos=detectBall(data,prevImageData,frameW,frameH);
-    if(pos)results.push({x:pos.x,y:pos.y,frame:idx});
+    
+    // Analyze movements at bottom (Batsman identification)
+    let xAtBottom=0, weightAtBottom=0;
+    if(prevImageData){
+      for(let y=Math.floor(frameH*0.6); y<frameH; y+=4){ // Look at bottom 40%
+        for(let x=0; x<frameW; x+=4){
+          const i=(y*frameW+x)*4;
+          const diff=(Math.abs(data[i]-prevImageData[i])+Math.abs(data[i+1]-prevImageData[i+1])+Math.abs(data[i+2]-prevImageData[i+2]))/3;
+          if(diff>30){
+            xAtBottom += x*diff;
+            weightAtBottom += diff;
+          }
+        }
+      }
+    }
+
+    if(pos) {
+      results.push({x:pos.x,y:pos.y,frame:idx,xAtBottom,weightAtBottom});
+    } else {
+      results.push({xAtBottom,weightAtBottom,frame:idx});
+    }
+
     // detect stumps on last few frames (more stable)
     if(frameQueue.length<=2)frameQueue._lastData=new Uint8ClampedArray(data);
     prevImageData=new Uint8ClampedArray(data);
@@ -208,6 +252,7 @@ const AutoBallDetector = forwardRef<AutoBallDetectorRef>((_, ref) => {
           pitchPoint: msg.pitchPoint,
           impactPoint: msg.impactPoint,
           releasePoint: msg.releasePoint,
+          detectedHand: msg.detectedHand,
         });
         resolveRef.current = null;
       }
@@ -231,6 +276,7 @@ const AutoBallDetector = forwardRef<AutoBallDetectorRef>((_, ref) => {
             resolveRef.current({
               stumps: null, ballPositions: [],
               pitchPoint: null, impactPoint: null, releasePoint: null,
+              detectedHand: 'RH',
             });
             resolveRef.current = null;
           }

@@ -229,6 +229,14 @@ export default function SelectPlayersScreen() {
                   <Text style={[styles.playerName, isSelected && styles.playerNameSelected]} numberOfLines={1}>
                     {player.name}
                   </Text>
+                  
+                  {roleTab !== 'bowler' && (
+                    <View style={styles.handBadge}>
+                      <Text style={styles.handBadgeText}>
+                        {(player as any).battingHand?.toUpperCase() === 'LEFT' ? 'LH' : 'RH'}
+                      </Text>
+                    </View>
+                  )}
                   {roleTab === 'bowler' && (
                     <Text style={[styles.oversText, player.isWicketKeeper && { color: colors.accentWarn }]}>
                       {player.isWicketKeeper ? 'WK - Cannot Bowl' : `${Math.floor(player.ballsBowled / 6)}.${player.ballsBowled % 6} Overs`}
@@ -449,6 +457,20 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: '900',
     color: colors.textSecondary,
+  },
+  handBadge: {
+    marginTop: 4,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  handBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: colors.accent,
   },
   footer: {
     position: 'absolute',

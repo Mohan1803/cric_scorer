@@ -17,6 +17,7 @@ import Animated, {
   useSharedValue, useAnimatedStyle, withTiming,
   withSequence, withDelay, withRepeat, Easing, runOnJS, interpolate,
 } from 'react-native-reanimated';
+import { useGameStore } from '../store/gameStore';
 import { colors } from './theme';
 import AutoBallDetector, {
   type AutoBallDetectorRef, type DetectionResult, type DetectedPoint,
@@ -68,6 +69,7 @@ export default function LbwTracking() {
   const { videoUri } = useLocalSearchParams<{ videoUri: string }>();
   const videoRef = useRef<Video>(null);
   const detectorRef = useRef<AutoBallDetectorRef>(null);
+  const { striker } = useGameStore();
 
   // ── Flow state ──
   type FlowStep = 'extracting' | 'detecting' | 'analyzing' | 'pitching' | 'impact' | 'wickets' | 'decision';
@@ -95,6 +97,17 @@ export default function LbwTracking() {
     pitchDistInches: '', impactHeightInches: '',
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [handedness, setHandedness] = useState<'RH' | 'LH'>('RH');
+  const [shotOffered, setShotOffered] = useState(true);
+
+  // ── Sync Handedness with Store ──
+  useEffect(() => {
+    if (striker?.battingHand) {
+      const hand = striker.battingHand.toLowerCase() === 'left' ? 'LH' : 'RH';
+      setHandedness(hand);
+      console.log(`[DRS] Auto-identified Batsman: ${striker.name} (${hand})`);
+    }
+  }, [striker?.id]);
 
   // ── Animation values ──
   const ballOpacity = useSharedValue(0);
@@ -272,6 +285,11 @@ export default function LbwTracking() {
     }
     setStumpRect(stump);
 
+    if (result.detectedHand) {
+      setHandedness(result.detectedHand);
+      console.log(`[DRS] Video-detected Stance: ${result.detectedHand}`);
+    }
+
     // Compute DRS decision
     computeDecision(release, pitch, impact, stump);
   };
@@ -292,18 +310,33 @@ export default function LbwTracking() {
     const sTop = stump.top;
     const sBottom = stump.bottom;
 
-    // 1. Pitching (No Umpire's Call for pitching)
-    const pitchInLine = pitch.x >= sLeft && pitch.x <= sRight;
+    // 1. Pitching
+    // Professional rule: Pitching Outside Leg is always Not Out
+    let pitchingStatus = 'IN LINE';
+    const isOutsideLeg = handedness === 'RH' ? pitch.x > sRight : pitch.x < sLeft;
+    const isOutsideOff = handedness === 'RH' ? pitch.x < sLeft : pitch.x > sRight;
+
+    if (isOutsideLeg) {
+      pitchingStatus = 'OUTSIDE LEG';
+    } else if (isOutsideOff) {
+      pitchingStatus = 'OUTSIDE OFF';
+    }
 
     // 2. Impact (Umpire's Call if < 50% ball width is in line)
-    // Distance from center of ball at impact to the edge of the stumps
-    const impactDistFromCenter = Math.min(Math.abs(impact.x - sLeft), Math.abs(impact.x - sRight));
-    let impactStatus = 'OUTSIDE';
-    if (impact.x >= sLeft && impact.x <= sRight) {
-      impactStatus = 'IN LINE';
-    } else if (impactDistFromCenter < ballRadiusPx) {
+    const impactInLineX = impact.x >= sLeft && impact.x <= sRight;
+    const impactDistFromEdge = Math.min(Math.abs(impact.x - sLeft), Math.abs(impact.x - sRight));
+
+    let impactStatus = impactInLineX ? 'IN LINE' : 'OUTSIDE';
+    if (!impactInLineX && impactDistFromEdge < ballRadiusPx) {
       impactStatus = "UMPIRE'S CALL";
+    } else if (impactInLineX && impactDistFromEdge < ballRadiusPx) {
+      // Marginal in-line also counts as Umpire's call in some contexts but usually IN LINE
+      // We'll stick to the 50% rule for OUTSIDE -> IN LINE
     }
+
+    // Professional Impact Rule: Outside Off impact is Not Out IF shot was offered.
+    // (We'll assume shot offered for now as per user preference for "Professional" tracking)
+    const impactOutsideOff = handedness === 'RH' ? impact.x < sLeft : impact.x > sRight;
 
     // 3. Wickets (Projected)
     const projected = projectBeyondImpact(pitch, impact);
@@ -311,33 +344,43 @@ export default function LbwTracking() {
     const hitY = projected.y >= sTop && projected.y <= sBottom;
     const hitWickets = hitX && hitY;
 
-    // Hit percentage for widgets
     const wicketsDistX = Math.min(Math.abs(projected.x - sLeft), Math.abs(projected.x - sRight));
     const wicketsDistY = Math.min(Math.abs(projected.y - sTop), Math.abs(projected.y - sBottom));
 
     let wicketsStatus = 'MISSING';
     if (hitWickets) {
+      // 50% Rule for Wickets: If ball center is outside stumps but edge is hitting -> Umpire's Call
       if (wicketsDistX > ballRadiusPx && wicketsDistY > ballRadiusPx) {
         wicketsStatus = 'HITTING';
       } else {
         wicketsStatus = "UMPIRE'S CALL";
       }
     } else {
-      // Check if it's clipping
-      if ((wicketsDistX < ballRadiusPx || projected.x >= sLeft && projected.x <= sRight) &&
-        (wicketsDistY < ballRadiusPx || projected.y >= sTop && projected.y <= sBottom)) {
+      // Check if it's clipping (Umpire's Call)
+      const isClippingX = (wicketsDistX < ballRadiusPx || (projected.x >= sLeft && projected.x <= sRight));
+      const isClippingY = (wicketsDistY < ballRadiusPx || (projected.y >= sTop && projected.y <= sBottom));
+      if (isClippingX && isClippingY) {
         wicketsStatus = "UMPIRE'S CALL";
       }
     }
 
     // 4. Final Decision
-    // In real DRS, it depends on the on-field call. Here we'll show the "Ideal" call.
     let finalDecision = 'NOT OUT';
-    if (pitchInLine && impactStatus !== 'OUTSIDE' && wicketsStatus !== 'MISSING') {
-      if (impactStatus === "UMPIRE'S CALL" || wicketsStatus === "UMPIRE'S CALL") {
-        finalDecision = "UMPIRE'S CALL";
-      } else {
-        finalDecision = 'OUT';
+
+    // Logic Gate:
+    // - Pitching MUST NOT be Outside Leg
+    // - Impact MUST be In-Line OR (Outside Off AND No Shot Offered) -> Assuming Shot Offered for now
+    // - Wickets MUST hit or be Umpire's Call
+
+    if (pitchingStatus !== 'OUTSIDE LEG') {
+      const impactIsLegallyOut = impactStatus === 'IN LINE' || (impactStatus === "UMPIRE'S CALL") || (!shotOffered && impactOutsideOff);
+
+      if (impactIsLegallyOut && wicketsStatus !== 'MISSING') {
+        if (impactStatus === "UMPIRE'S CALL" || wicketsStatus === "UMPIRE'S CALL") {
+          finalDecision = "UMPIRE'S CALL";
+        } else {
+          finalDecision = 'OUT';
+        }
       }
     }
 
@@ -345,7 +388,7 @@ export default function LbwTracking() {
     const impactH = Math.abs(sBottom - impact.y) / pxPerInch;
 
     setDrsResult({
-      pitching: pitchInLine ? 'IN LINE' : 'OUTSIDE',
+      pitching: pitchingStatus,
       impact: impactStatus,
       wickets: wicketsStatus,
       decision: finalDecision,
@@ -439,7 +482,10 @@ export default function LbwTracking() {
       );
     }
 
-    setTimeout(() => setStep('decision'), 3000);
+    setTimeout(() => {
+      setStep('decision');
+      // Potential to play final drumroll/hit sound here
+    }, 3500); // 3.5s delay for tension
   };
 
   // ── Reset ──
@@ -794,23 +840,60 @@ export default function LbwTracking() {
       {isTracking && (
         <View style={styles.drsHeader}>
           <LinearGradient colors={['rgba(15,23,42,0.9)', 'rgba(15,23,42,0.4)']} style={styles.drsHeaderGrad} />
+
+          {striker && (
+            <View style={styles.trackingInfoBar}>
+              <Text style={styles.trackingInfoLabel}>TRACKING BATSMAN</Text>
+              <View style={styles.trackingInfoRow}>
+                <Text style={styles.trackingInfoName}>{striker.name.toUpperCase()}</Text>
+                {detection?.detectedHand && (
+                  <View style={styles.aiBadge}>
+                    <Cpu size={8} color="#22c55e" />
+                    <Text style={styles.aiBadgeText}>VIDEO IDENTIFIED</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
+
+          <View style={styles.proSettingsBar}>
+            <View style={styles.proSetting}>
+              <Text style={styles.proSettingLabel}>BATSMAN</Text>
+              <TouchableOpacity
+                style={styles.proSettingToggle}
+                onPress={() => { setHandedness(handedness === 'RH' ? 'LH' : 'RH'); resetAll(); }}
+              >
+                <Text style={styles.proSettingValue}>{handedness === 'RH' ? 'RIGHT HANDED' : 'LEFT HANDED'}</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.proSetting}>
+              <Text style={styles.proSettingLabel}>SHOT OFFERED</Text>
+              <TouchableOpacity
+                style={styles.proSettingToggle}
+                onPress={() => { setShotOffered(!shotOffered); resetAll(); }}
+              >
+                <Text style={styles.proSettingValue}>{shotOffered ? 'YES' : 'NO'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
           <View style={styles.drsRow}>
             <View style={[styles.drsBox, step === 'pitching' && styles.drsBoxActive]}>
               <Text style={styles.drsLabel}>PITCHING</Text>
               <Text style={[styles.drsValue, { color: getStatusColor(drsResult.pitching) }]}>
-                {['pitching', 'impact', 'wickets'].includes(step) ? drsResult.pitching : '—'}
+                {['pitching', 'impact', 'wickets'].includes(step) ? drsResult.pitching : 'WAITING...'}
               </Text>
             </View>
             <View style={[styles.drsBox, step === 'impact' && styles.drsBoxActive]}>
               <Text style={styles.drsLabel}>IMPACT</Text>
               <Text style={[styles.drsValue, { color: getStatusColor(drsResult.impact) }]}>
-                {['impact', 'wickets'].includes(step) ? drsResult.impact : '—'}
+                {['impact', 'wickets'].includes(step) ? drsResult.impact : 'WAITING...'}
               </Text>
             </View>
             <View style={[styles.drsBox, step === 'wickets' && styles.drsBoxActive]}>
               <Text style={styles.drsLabel}>WICKETS</Text>
               <Text style={[styles.drsValue, { color: getStatusColor(drsResult.wickets) }]}>
-                {step === 'wickets' ? drsResult.wickets : '—'}
+                {step === 'wickets' ? drsResult.wickets : 'WAITING...'}
               </Text>
             </View>
           </View>
@@ -861,32 +944,31 @@ export default function LbwTracking() {
             style={StyleSheet.absoluteFill}
           />
           <View style={styles.decisionContent}>
-            <View style={styles.summaryRow}>
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>PITCHING</Text>
-                <View style={[styles.summaryPill, {
-                  borderColor: getStatusColor(drsResult.pitching),
-                  backgroundColor: getStatusColor(drsResult.pitching) + '15'
-                }]}>
-                  <Text style={[styles.summaryValue, { color: getStatusColor(drsResult.pitching) }]}>{drsResult.pitching}</Text>
+            <View style={styles.professionalMatrix}>
+              <View style={styles.matrixRow}>
+                <Text style={styles.matrixLabel}>PITCHING</Text>
+                <View style={[styles.matrixPill, { backgroundColor: getStatusColor(drsResult.pitching) + '20', borderColor: getStatusColor(drsResult.pitching) }]}>
+                  <Text style={[styles.matrixValue, { color: getStatusColor(drsResult.pitching) }]}>{drsResult.pitching}</Text>
                 </View>
               </View>
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>IMPACT</Text>
-                <View style={[styles.summaryPill, {
-                  borderColor: getStatusColor(drsResult.impact),
-                  backgroundColor: getStatusColor(drsResult.impact) + '15'
-                }]}>
-                  <Text style={[styles.summaryValue, { color: getStatusColor(drsResult.impact) }]}>{drsResult.impact}</Text>
+              <View style={styles.matrixRow}>
+                <Text style={styles.matrixLabel}>IMPACT</Text>
+                <View style={[styles.matrixPill, { backgroundColor: getStatusColor(drsResult.impact) + '20', borderColor: getStatusColor(drsResult.impact) }]}>
+                  <Text style={[styles.matrixValue, { color: getStatusColor(drsResult.impact) }]}>{drsResult.impact}</Text>
                 </View>
               </View>
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>WICKETS</Text>
-                <View style={[styles.summaryPill, {
-                  borderColor: getStatusColor(drsResult.wickets),
-                  backgroundColor: getStatusColor(drsResult.wickets) + '15'
-                }]}>
-                  <Text style={[styles.summaryValue, { color: getStatusColor(drsResult.wickets) }]}>{drsResult.wickets}</Text>
+              <View style={styles.matrixRow}>
+                <Text style={styles.matrixLabel}>WICKETS</Text>
+                <View style={[styles.matrixPill, { backgroundColor: getStatusColor(drsResult.wickets) + '20', borderColor: getStatusColor(drsResult.wickets) }]}>
+                  <Text style={[styles.matrixValue, { color: getStatusColor(drsResult.wickets) }]}>{drsResult.wickets}</Text>
+                </View>
+              </View>
+              <View style={styles.matrixRow}>
+                <Text style={styles.matrixLabel}>BATSMAN STANCE</Text>
+                <View style={[styles.matrixPill, { backgroundColor: 'rgba(99, 102, 241, 0.15)', borderColor: 'rgba(99, 102, 241, 0.3)' }]}>
+                  <Text style={[styles.matrixValue, { color: '#818cf8' }]}>
+                    {handedness === 'LH' ? 'LEFT HANDED' : 'RIGHT HANDED'}
+                  </Text>
                 </View>
               </View>
             </View>
@@ -1013,7 +1095,51 @@ const styles = StyleSheet.create({
     fontWeight: '800', letterSpacing: 1.5, marginBottom: 3,
   },
   drsValue: {
-    color: 'rgba(255,255,255,0.25)', fontSize: 12, fontWeight: '900',
+    color: 'rgba(255,255,255,0.25)', fontSize: 13, fontWeight: '900',
+    letterSpacing: 1,
+  },
+
+  proSettingsBar: {
+    flexDirection: 'row', gap: 10, marginBottom: 12,
+  },
+  proSetting: {
+    flex: 1, backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 8, padding: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+  },
+  proSettingLabel: {
+    color: colors.textMuted, fontSize: 8, fontWeight: '700', letterSpacing: 1, marginBottom: 4,
+  },
+  proSettingToggle: {
+    paddingVertical: 2,
+  },
+  proSettingValue: {
+    color: colors.accent, fontSize: 10, fontWeight: '900',
+  },
+
+  trackingInfoBar: {
+    paddingHorizontal: 12, paddingVertical: 10,
+    backgroundColor: 'rgba(99,102,241,0.15)',
+    borderRadius: 10, marginBottom: 12,
+    borderWidth: 1, borderColor: 'rgba(99,102,241,0.25)',
+    alignItems: 'center',
+  },
+  trackingInfoLabel: {
+    color: 'rgba(255,255,255,0.4)', fontSize: 7, fontWeight: '800', letterSpacing: 1.5, marginBottom: 2,
+  },
+  trackingInfoName: {
+    color: '#fff', fontSize: 13, fontWeight: '900', letterSpacing: 1,
+  },
+  trackingInfoRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+  },
+  aiBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
+    borderWidth: 1, borderColor: 'rgba(34, 197, 94, 0.2)',
+  },
+  aiBadgeText: {
+    color: '#22c55e', fontSize: 7, fontWeight: '900', letterSpacing: 0.5,
   },
 
   // ── Measurements bar ──
@@ -1101,17 +1227,24 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 28, borderTopRightRadius: 28,
     borderTopWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
   },
-  summaryRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  summaryItem: { flex: 1, alignItems: 'center' },
-  summaryLabel: {
-    color: 'rgba(255,255,255,0.35)', fontSize: 9,
-    fontWeight: '800', letterSpacing: 1.5, marginBottom: 6,
+  // ── Decision Professional Matrix ──
+  professionalMatrix: {
+    marginBottom: 24, paddingVertical: 12,
+    borderTopWidth: 1, borderBottomWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
   },
-  summaryPill: {
-    width: '100%', paddingVertical: 6, borderRadius: 6,
-    alignItems: 'center', borderWidth: 1,
+  matrixRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 6,
   },
-  summaryValue: { fontSize: 11, fontWeight: '900' },
+  matrixLabel: {
+    color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '800', letterSpacing: 2,
+  },
+  matrixPill: {
+    width: 140, paddingVertical: 5, borderRadius: 5, alignItems: 'center', borderWidth: 1,
+  },
+  matrixValue: {
+    fontSize: 12, fontWeight: '900', letterSpacing: 1,
+  },
 
   // ── Measurement summary ──
   measureSummaryRow: {
