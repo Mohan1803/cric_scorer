@@ -40,6 +40,29 @@ export default function FullScorecard() {
   const [showVictoryModal, setShowVictoryModal] = useState(!!matchResult);
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [selectedStatsPlayer, setSelectedStatsPlayer] = useState<any>(null);
+  const [showNewMatchModal, setShowNewMatchModal] = useState(false);
+
+  // Safe team name derivation for both ongoing and completed matches
+  const firstInningsBattingTeamName = useMemo(() => {
+    if (currentInningsNumber === 2) return bowlingTeam;
+    return battingTeam;
+  }, [currentInningsNumber, battingTeam, bowlingTeam]);
+
+  const firstInningsBowlingTeamName = useMemo(() => {
+    if (currentInningsNumber === 2) return battingTeam;
+    return bowlingTeam;
+  }, [currentInningsNumber, battingTeam, bowlingTeam]);
+
+  const secondInningsBattingTeamName = useMemo(() => {
+    if (currentInningsNumber === 2) return battingTeam;
+    return null;
+  }, [currentInningsNumber, battingTeam]);
+
+  const secondInningsBowlingTeamName = useMemo(() => {
+    if (currentInningsNumber === 2) return bowlingTeam;
+    return null;
+  }, [currentInningsNumber, bowlingTeam]);
+
   if (!teams || teams.length < 2 || !teams[0]?.players || !teams[1]?.players) {
     return (
       <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
@@ -333,15 +356,7 @@ export default function FullScorecard() {
 
   // Debug: log histories
 
-  console.log('[FullScorecard] ballHistory:', ballHistory);
-  console.log('[FullScorecard] firstInningsBallHistory:', firstInningsBallHistory);
-
-  const firstInningsBattingTeamName = currentInningsNumber === 1 ? battingTeam : bowlingTeam;
-  const firstInningsBowlingTeamName = currentInningsNumber === 1 ? bowlingTeam : battingTeam;
-  const secondInningsBattingTeamName = currentInningsNumber === 2 ? battingTeam : bowlingTeam;
-  const secondInningsBowlingTeamName = currentInningsNumber === 2 ? bowlingTeam : battingTeam;
-
-  const [showNewMatchModal, setShowNewMatchModal] = useState(false);
+  // Safe team name derivation was moved to the top to avoid hook order issues
 
   const handleNewMatch = () => {
     startNewMatch();
@@ -441,13 +456,11 @@ export default function FullScorecard() {
             <Text style={styles.cell}>6s</Text>
             <Text style={styles.cell}>SR</Text>
           </View>
-          <FlatList
-            data={participatingBatters}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item: player }) => {
+          {participatingBatters.map((player) => {
               const strikeRate = player.balls > 0 ? ((player.runs / player.balls) * 100).toFixed(1) : '0.0';
               return (
                 <TouchableOpacity
+                  key={player.id}
                   style={styles.tableRow}
                   onPress={() => {
                     setSelectedStatsPlayer(player);
@@ -469,9 +482,8 @@ export default function FullScorecard() {
                   <Text style={styles.cell}>{strikeRate}</Text>
                 </TouchableOpacity>
               );
-            }}
-            ListEmptyComponent={<Text style={styles.emptyText}>No batting data.</Text>}
-          />
+            })}
+            {participatingBatters.length === 0 && <Text style={styles.emptyText}>No batting data.</Text>}
         </View>
 
         {/* Bowling Table */}
@@ -484,17 +496,14 @@ export default function FullScorecard() {
             <Text style={styles.cell}>W</Text>
             <Text style={styles.cell}>Econ</Text>
           </View>
-          <FlatList
-            data={participatingBowlers}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item: player }) => {
+          {participatingBowlers.map((player) => {
               const overs = Math.floor(player.ballsBowled / 6);
               const balls = player.ballsBowled % 6;
               const economy = player.ballsBowled > 0
                 ? (player.runsGiven / (player.ballsBowled / 6)).toFixed(1)
                 : '0.0';
               return (
-                <View style={styles.tableRow}>
+                <View key={player.id} style={styles.tableRow}>
                   <Text style={[styles.cell, styles.playerCell]}>
                     {player.name}{player.isCaptain ? ' (C)' : ''}{player.isWicketKeeper ? ' (WK)' : ''}
                   </Text>
@@ -504,9 +513,8 @@ export default function FullScorecard() {
                   <Text style={styles.cell}>{economy}</Text>
                 </View>
               );
-            }}
-            ListEmptyComponent={<Text style={styles.emptyText}>No bowling data.</Text>}
-          />
+            })}
+            {participatingBowlers.length === 0 && <Text style={styles.emptyText}>No bowling data.</Text>}
         </View>
 
         {/* Fall of Wickets (FOW) */}

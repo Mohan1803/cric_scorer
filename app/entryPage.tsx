@@ -19,8 +19,10 @@ export default function TeamEntry() {
     setTotalOvers,
     enableAnimations,
     enableSounds,
+    enableFieldMap,
     setEnableAnimations,
     setEnableSounds,
+    setEnableFieldMap,
     hasHydrated,
     matchCompleted,
     teams,
@@ -200,6 +202,14 @@ export default function TeamEntry() {
             >
               <Shield size={16} color={enableSounds ? colors.accentSecondary : colors.textMuted} />
               <Text style={[styles.settingText, !enableSounds && { color: colors.textMuted }]}>Sounds</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.settingItem, !enableFieldMap && styles.settingDisabled]}
+              onPress={() => setEnableFieldMap(!enableFieldMap)}
+            >
+              <Search size={16} color={enableFieldMap ? colors.accentGold : colors.textMuted} />
+              <Text style={[styles.settingText, !enableFieldMap && { color: colors.textMuted }]}>Field Map</Text>
             </TouchableOpacity>
           </View>
 

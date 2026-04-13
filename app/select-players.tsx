@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Dimensions } from 'react-native';
-import { router } from 'expo-router';
+import { router, Stack } from 'expo-router';
 import { useGameStore } from '../store/gameStore';
 import { colors } from './theme';
 import { User, Shield, Target, ChevronRight, CheckCircle2, Circle, ChevronLeft } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { BackHandler } from 'react-native';
+import { useCallback } from 'react';
 
 const { width } = Dimensions.get('window');
 
@@ -25,6 +28,45 @@ export default function SelectPlayersScreen() {
   const [selectedNonStrikerId, setSelectedNonStrikerId] = useState<string | null>(null);
   const [selectedBowlerId, setSelectedBowlerId] = useState<string | null>(null);
   const [roleTab, setRoleTab] = useState<'striker' | 'nonStriker' | 'bowler'>('striker');
+  const navigation = useNavigation();
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      // Prevent default behavior of leaving the screen
+      e.preventDefault();
+
+      // Prompt the user before leaving
+      Alert.alert(
+        'Exit Setup',
+        'Do you want to close the current match setup? Your progress will be saved.',
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => { } },
+          {
+            text: 'OK',
+            style: 'destructive',
+            onPress: () => {
+              navigation.dispatch(e.data.action);
+            },
+          },
+        ]
+      );
+    });
+
+    return unsubscribe;
+  }, [navigation]);
+
+  const handleBack = useCallback(() => {
+    // Manually trigger the removal which will hit the listener
+    navigation.goBack();
+    return true;
+  }, [navigation]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const subscription = BackHandler.addEventListener('hardwareBackPress', () => true);
+      return () => subscription.remove();
+    }, [])
+  );
 
   useEffect(() => {
     setSelectedStrikerId(null);
@@ -61,7 +103,7 @@ export default function SelectPlayersScreen() {
     const striker = battingTeamObj?.players.find(p => p.id === selectedStrikerId);
     const nonStriker = battingTeamObj?.players.find(p => p.id === selectedNonStrikerId);
     const bowler = bowlingTeamObj?.players.find(p => p.id === selectedBowlerId);
-    
+
     if (striker && nonStriker && bowler) {
       setStriker(striker);
       setNonStriker(nonStriker);
@@ -78,13 +120,13 @@ export default function SelectPlayersScreen() {
         { id: 'bowler', label: 'Bowler', icon: User }
       ].map((step, idx) => {
         const isActive = roleTab === step.id;
-        const isCompleted = (step.id === 'striker' && selectedStrikerId) || 
-                            (step.id === 'nonStriker' && selectedNonStrikerId) ||
-                            (step.id === 'bowler' && selectedBowlerId);
-        
+        const isCompleted = (step.id === 'striker' && selectedStrikerId) ||
+          (step.id === 'nonStriker' && selectedNonStrikerId) ||
+          (step.id === 'bowler' && selectedBowlerId);
+
         return (
           <View key={step.id} style={styles.stepItem}>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => setRoleTab(step.id as any)}
               style={[styles.stepCircle, isActive && styles.stepCircleActive]}
             >
@@ -126,88 +168,89 @@ export default function SelectPlayersScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={styles.topHeader}>
-        <TouchableOpacity 
-          style={styles.headerBackButton} 
-          onPress={() => router.back()}
+        <TouchableOpacity
+          style={styles.headerBackButton}
+          onPress={handleBack}
         >
           <ChevronLeft color={colors.accent} size={28} />
           <Text style={styles.headerBackText}>Back</Text>
         </TouchableOpacity>
       </View>
       <View style={styles.container}>
-      <View style={styles.topInfo}>
-        <Text style={styles.subtitle}>
-          {roleTab === 'bowler' ? `Bowling: ${bowlingTeam}` : `Batting: ${battingTeam}`}
-        </Text>
+        <Stack.Screen options={{ gestureEnabled: false, headerShown: false }} />
+        <View style={styles.topInfo}>
+          <Text style={styles.subtitle}>
+            {roleTab === 'bowler' ? `Bowling: ${bowlingTeam}` : `Batting: ${battingTeam}`}
+          </Text>
+        </View>
+
+        <StepIndicator />
+
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.grid}>
+            {playersToDisplay?.map((player, index) => {
+              const isSelected = currentSelectionId === player.id;
+              const isDisabled = (roleTab === 'striker' && player.id === selectedNonStrikerId) ||
+                (roleTab === 'nonStriker' && player.id === selectedStrikerId) ||
+                (roleTab === 'bowler' && player.isWicketKeeper);
+
+              return (
+                <TouchableOpacity
+                  key={player.id}
+                  activeOpacity={0.7}
+                  onPress={() => handleSelect(player.id)}
+                  style={[
+                    styles.playerCard,
+                    isSelected && styles.playerCardSelected,
+                    isDisabled && styles.playerCardDisabled
+                  ]}
+                  disabled={isDisabled}
+                >
+                  <View style={[styles.avatar, isSelected && styles.avatarSelected]}>
+                    {isSelected ? (
+                      <CheckCircle2 size={24} color="#fff" />
+                    ) : (
+                      <User size={28} color={isDisabled && roleTab === 'bowler' ? colors.disabled : colors.textSecondary} />
+                    )}
+                  </View>
+                  {player.isWicketKeeper ? (
+                    <View style={[styles.xiBadge, { backgroundColor: 'rgba(234, 179, 8, 0.1)', borderColor: 'rgba(234, 179, 8, 0.3)' }]}>
+                      <Text style={[styles.xiBadgeText, { color: colors.accentSecondary }]}>WK</Text>
+                    </View>
+                  ) : player.isReserve ? (
+                    <View style={styles.subBadge}>
+                      <Text style={styles.subBadgeText}>SUB</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.xiBadge}>
+                      <Text style={styles.xiBadgeText}>XI</Text>
+                    </View>
+                  )}
+                  <Text style={[styles.playerName, isSelected && styles.playerNameSelected]} numberOfLines={1}>
+                    {player.name}
+                  </Text>
+                  {roleTab === 'bowler' && (
+                    <Text style={[styles.oversText, player.isWicketKeeper && { color: colors.accentWarn }]}>
+                      {player.isWicketKeeper ? 'WK - Cannot Bowl' : `${Math.floor(player.ballsBowled / 6)}.${player.ballsBowled % 6} Overs`}
+                    </Text>
+                  )}
+                  {isSelected && (
+                    <View style={styles.selectedBadge}>
+                      <Text style={styles.selectedBadgeText}>SELECTED</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </ScrollView>
       </View>
 
-      <StepIndicator />
-
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.grid}>
-          {playersToDisplay?.map((player, index) => {
-            const isSelected = currentSelectionId === player.id;
-            const isDisabled = (roleTab === 'striker' && player.id === selectedNonStrikerId) ||
-                               (roleTab === 'nonStriker' && player.id === selectedStrikerId) ||
-                               (roleTab === 'bowler' && player.isWicketKeeper);
-            
-            return (
-              <TouchableOpacity
-                key={player.id}
-                activeOpacity={0.7}
-                onPress={() => handleSelect(player.id)}
-                style={[
-                  styles.playerCard,
-                  isSelected && styles.playerCardSelected,
-                  isDisabled && styles.playerCardDisabled
-                ]}
-                disabled={isDisabled}
-              >
-                <View style={[styles.avatar, isSelected && styles.avatarSelected]}>
-                  {isSelected ? (
-                    <CheckCircle2 size={24} color="#fff" />
-                  ) : (
-                    <User size={28} color={isDisabled && roleTab === 'bowler' ? colors.disabled : colors.textSecondary} />
-                  )}
-                </View>
-                {player.isWicketKeeper ? (
-                  <View style={[styles.xiBadge, { backgroundColor: 'rgba(234, 179, 8, 0.1)', borderColor: 'rgba(234, 179, 8, 0.3)' }]}>
-                    <Text style={[styles.xiBadgeText, { color: colors.accentSecondary }]}>WK</Text>
-                  </View>
-                ) : player.isReserve ? (
-                  <View style={styles.subBadge}>
-                    <Text style={styles.subBadgeText}>SUB</Text>
-                  </View>
-                ) : (
-                  <View style={styles.xiBadge}>
-                    <Text style={styles.xiBadgeText}>XI</Text>
-                  </View>
-                )}
-                <Text style={[styles.playerName, isSelected && styles.playerNameSelected]} numberOfLines={1}>
-                  {player.name}
-                </Text>
-                {roleTab === 'bowler' && (
-                  <Text style={[styles.oversText, player.isWicketKeeper && { color: colors.accentWarn }]}>
-                    {player.isWicketKeeper ? 'WK - Cannot Bowl' : `${Math.floor(player.ballsBowled / 6)}.${player.ballsBowled % 6} Overs`}
-                  </Text>
-                )}
-                {isSelected && (
-                  <View style={styles.selectedBadge}>
-                    <Text style={styles.selectedBadgeText}>SELECTED</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </ScrollView>
-    </View>
-
-    <View style={styles.footer}>
+      <View style={styles.footer}>
         <SelectionSummary />
-        
-        <TouchableOpacity 
-          style={[styles.continueButton, (!selectedStrikerId || !selectedNonStrikerId || !selectedBowlerId) && styles.continueButtonDisabled]} 
+
+        <TouchableOpacity
+          style={[styles.continueButton, (!selectedStrikerId || !selectedNonStrikerId || !selectedBowlerId) && styles.continueButtonDisabled]}
           onPress={handleContinue}
         >
           <Text style={styles.continueButtonText}>Start Match</Text>

@@ -1,10 +1,10 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Animated, Easing, Dimensions, BackHandler } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { colors, shadows } from './theme';
-import { useRouter, usePathname } from 'expo-router';
+import { useRouter, usePathname, Stack } from 'expo-router';
 import { useGameStore } from '../store/gameStore';
 import { getCurrentPartnership } from '../store/partnershipUtils';
 import ExtraRunsModal from '../components/ExtraRunsModal';
@@ -23,23 +23,44 @@ export default function Scorecard() {
   const router = useRouter();
   const pathname = usePathname();
 
+  const navigation = useNavigation();
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      // Prevent default behavior of leaving the screen
+      e.preventDefault();
+
+      // Prompt the user before leaving
+      Alert.alert(
+        'Exit Match',
+        'Do you want to close the current match setup? Your progress will be saved but you will return to the setup screen.',
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => { } },
+          {
+            text: 'OK',
+            style: 'destructive',
+            // If the user confirms, we manually remove the listener and proceed
+            onPress: () => {
+              navigation.dispatch(e.data.action);
+            },
+          },
+        ]
+      );
+    });
+
+    return unsubscribe;
+  }, [navigation]);
+
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
-        Alert.alert(
-          'Confirm Exit',
-          'You cannot go back from this page. If you want to close match means press ok else cancel',
-          [
-            { text: 'Cancel', style: 'cancel', onPress: () => { } },
-            { text: 'OK', onPress: () => router.replace('/entryPage') }
-          ]
-        );
-        return true;
+        // Hardware back press on Android
+        return true; // We let beforeRemove handle the alert
       };
 
       const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
       return () => subscription.remove();
-    }, [router])
+    }, [])
   );
   const {
     teams,
@@ -52,6 +73,7 @@ export default function Scorecard() {
     currentInningsNumber,
     target,
     totalOvers,
+    enableFieldMap,
     updateScore,
     undoLastBall,
     swapBatsmen,
@@ -100,14 +122,14 @@ export default function Scorecard() {
   const battingTeamObj = teams.find(team => team.name === battingTeam);
   const bowlingTeamObj = teams.find(team => team.name === bowlingTeam);
 
-  const legalDeliveries = ballHistory.filter(ball =>
+  const legalDeliveries = useMemo(() => ballHistory.filter(ball =>
     !ball.isExtra || (ball.isExtra && (ball.extraType === 'bye' || ball.extraType === 'lb' || ball.extraType === 'penalty'))
-  );
+  ), [ballHistory]);
 
   const totalCompletedOvers = Math.floor(legalDeliveries.length / 6);
   const currentOver = legalDeliveries.length % 6;
-  const totalScore = ballHistory.reduce((sum, ball) => sum + ball.runs + (ball.isExtra && (ball.extraType === 'wide' || ball.extraType === 'no-ball') ? 1 : 0), 0);
-  const totalWickets = ballHistory.filter(ball => ball.isWicket).length;
+  const totalScore = useMemo(() => ballHistory.reduce((sum, ball) => sum + ball.runs + (ball.isExtra && (ball.extraType === 'wide' || ball.extraType === 'no-ball') ? 1 : 0), 0), [ballHistory]);
+  const totalWickets = useMemo(() => ballHistory.filter(ball => ball.isWicket).length, [ballHistory]);
 
   const runsNeeded = target !== null ? target - totalScore + 1 : null;
   const ballsRemaining = totalOvers * 6 - legalDeliveries.length;
@@ -124,7 +146,7 @@ export default function Scorecard() {
     ? (Math.max(0, runsNeeded - 1) / (ballsRemaining / 6)).toFixed(2)
     : (currentInningsNumber === 2 && ballsRemaining === 0 && runsNeeded !== null && runsNeeded > 1) ? '∞' : null;
 
-  const partnership = getCurrentPartnership(ballHistory, striker, nonStriker);
+  const partnership = useMemo(() => getCurrentPartnership(ballHistory, striker, nonStriker), [ballHistory, striker?.id, nonStriker?.id]);
 
   const getAvailableBatsmen = () => {
     return battingTeamObj?.players.filter(player =>
@@ -135,9 +157,9 @@ export default function Scorecard() {
     ) || [];
   };
 
-  const getCurrentOverBalls = () => {
+  const getCurrentOverBalls = useCallback(() => {
     return oversData.find((e) => e.overNumber === totalCompletedOvers && e.innings === currentInningsNumber)?.deliveries ?? [];
-  };
+  }, [oversData, totalCompletedOvers, currentInningsNumber]);
 
   useEffect(() => {
     if (matchCompleted && pathname === '/scorecard') {
@@ -243,11 +265,42 @@ export default function Scorecard() {
   const handleRun = (runs: number) => {
     if (!striker || !currentBowler) return;
 
-    if (runs > 0) {
+    if (runs > 0 && enableFieldMap) {
       setCurrentBallData({ runs });
       setShowFieldMap(true);
     } else {
-      updateScore({ runs, isExtra: false, isNoBall: false, batsmanName: striker.name, batsmanId: striker.id, bowlerName: currentBowler.name, bowlerId: currentBowler.id, isWicket: false });
+      updateScore({
+        runs,
+        isExtra: false,
+        isNoBall: false,
+        batsmanName: striker.name,
+        batsmanId: striker.id,
+        bowlerName: currentBowler.name,
+        bowlerId: currentBowler.id,
+        isWicket: false,
+        commentary: runs === 0 ? `${striker.name} plays a dot ball` : `${striker.name} scores ${runs} ${runs === 1 ? 'run' : 'runs'}`
+      });
+
+      // Trigger celebration if 4 or 6 and field map is disabled
+      if (!enableFieldMap && (runs === 4 || runs === 6)) {
+        setCelebrationText(runs === 6 ? 'MASSIVE SIX!' : 'FANTASTIC FOUR!');
+        if (enableAnimations) {
+          setShowConfetti(true);
+          playCelebrationSound(runs);
+          Animated.sequence([
+            Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 50, friction: 3 }),
+            Animated.delay(2000),
+            Animated.timing(fadeAnim, { toValue: 0, duration: 500, useNativeDriver: true })
+          ]).start(() => {
+            setShowConfetti(false);
+            setCelebrationText('');
+            scaleAnim.setValue(0);
+            fadeAnim.setValue(1);
+          });
+        } else {
+          setTimeout(() => setCelebrationText(''), 2000);
+        }
+      }
     }
   };
 
@@ -502,6 +555,7 @@ export default function Scorecard() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <Stack.Screen options={{ gestureEnabled: false, headerShown: false }} />
 
       <ScrollView
         stickyHeaderIndices={[1]}

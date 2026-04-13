@@ -94,6 +94,7 @@ export interface GameState {
   previousStriker: Player | null;
   enableAnimations: boolean;
   enableSounds: boolean;
+  enableFieldMap: boolean;
 
   setTeams: (teams: Team[]) => void;
   setTossWinner: (team: string) => void;
@@ -109,6 +110,7 @@ export interface GameState {
   startSecondInnings: () => void;
   setEnableAnimations: (enabled: boolean) => void;
   setEnableSounds: (enabled: boolean) => void;
+  setEnableFieldMap: (enabled: boolean) => void;
   startNewMatch: () => void;
   clearMatchResult: () => void;
   checkDuplicateName: (teamIndex: number, name: string) => boolean;
@@ -148,6 +150,7 @@ export const useGameStore = create<GameState>()(
       secondInningsOver: 0,
       enableAnimations: true,
       enableSounds: true,
+      enableFieldMap: true,
 
       target: null,
       matchDate: new Date(),
@@ -187,6 +190,7 @@ export const useGameStore = create<GameState>()(
       setPreviousStriker: (player: Player | null) => set({ previousStriker: player }),
       setEnableAnimations: (enabled: boolean) => set({ enableAnimations: enabled }),
       setEnableSounds: (enabled: boolean) => set({ enableSounds: enabled }),
+      setEnableFieldMap: (enabled: boolean) => set({ enableFieldMap: enabled }),
 
       batsmanToReplace: null,
       showNewBatsmanSelection: false,
@@ -289,6 +293,10 @@ export const useGameStore = create<GameState>()(
         if (state.matchCompleted || state.awaitingSecondInningsStart) return;
 
         // 1. Enrich history and overs data
+        const ballRuns = record.runs;
+        const extraRuns = (record.isExtra && (record.extraType === 'wide' || record.extraType === 'no-ball')) ? 1 : 0;
+        const penaltyRunsVal = (record.isExtra && record.extraType === 'penalty') ? record.runs : 0;
+
         const newBallHistory = [...state.ballHistory, {
           ...record,
           bowlerName: state.currentBowler?.name || record.bowlerName || '',
@@ -296,14 +304,14 @@ export const useGameStore = create<GameState>()(
           nonStrikerName: state.nonStriker?.name,
           dismissalDetail: record.isWicket ? (() => {
             switch (record.wicketType as any) {
-              case 'caught': return `c ${record.fielderName || 'Fielder'} b ${record.bowlerName}`;
-              case 'bowled': return `b ${record.bowlerName}`;
-              case 'lbw': return `lbw b ${record.bowlerName}`;
-              case 'stumped': return `st ${record.fielderName || 'Fielder'} b ${record.bowlerName}`;
+              case 'caught': return `c ${record.fielderName || 'Fielder'} b ${state.currentBowler?.name || 'Bowler'}`;
+              case 'bowled': return `b ${state.currentBowler?.name || 'Bowler'}`;
+              case 'lbw': return `lbw b ${state.currentBowler?.name || 'Bowler'}`;
+              case 'stumped': return `st ${record.fielderName || 'Fielder'} b ${state.currentBowler?.name || 'Bowler'}`;
               case 'run-out': return `run out (${record.fielderName || ''})`;
-              case 'caught-and-bowled': return `c&b ${record.bowlerName}`;
-              case 'hit-wicket': return `hit wicket b ${record.bowlerName}`;
-              default: return `b ${record.bowlerName}`;
+              case 'caught-and-bowled': return `c&b ${state.currentBowler?.name || 'Bowler'}`;
+              case 'hit-wicket': return `hit wicket b ${state.currentBowler?.name || 'Bowler'}`;
+              default: return `b ${state.currentBowler?.name || 'Bowler'}`;
             }
           })() : undefined,
           fieldPosition: record.fieldPosition,
@@ -431,7 +439,8 @@ export const useGameStore = create<GameState>()(
         }
 
         // 4. Inning Progress
-        const score = newBallHistory.reduce((sum, b) => sum + b.runs + (b.isExtra && (b.extraType === 'wide' || b.extraType === 'no-ball') ? 1 : 0) + (b.isExtra && b.extraType === 'penalty' ? b.runs : 0), 0);
+        const currentInningsTotal = state.ballHistory.reduce((s, b) => s + b.runs + (b.isExtra && (b.extraType === 'wide' || b.extraType === 'no-ball') ? 1 : 0) + (b.isExtra && b.extraType === 'penalty' ? b.runs : 0), 0);
+        const score = currentInningsTotal + ballRuns + extraRuns + penaltyRunsVal;
         const wicketsCount = newBallHistory.filter(b => b.isWicket).length;
         const currentBattingTeamPlayers = updatedTeams.find(t => t.name === state.battingTeam)?.players || [];
         const isAllOut = wicketsCount >= (currentBattingTeamPlayers.length - 1);

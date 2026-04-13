@@ -113,14 +113,14 @@ const FieldMapModal: React.FC<Props> = ({ visible, onClose, onSelect, batsmanNam
                     const p2 = toXY(endAngle, boundaryR);
                     const d = `M ${cx} ${cy} L ${p1.x} ${p1.y} A ${boundaryR} ${boundaryR} 0 0 1 ${p2.x} ${p2.y} Z`;
                     return (
-                      <Path
-                        key={`sector-${region.id}`}
-                        d={d}
-                        fill="transparent"
-                        stroke="rgba(255,255,255,0.08)"
-                        strokeWidth={0.8}
-                        onPress={() => onSelect(region.name)}
-                      />
+                      <G key={`sector-${region.id}`} onPress={() => onSelect(region.name)}>
+                        <Path
+                          d={d}
+                          fill="transparent"
+                          stroke="rgba(255,255,255,0.08)"
+                          strokeWidth={0.8}
+                        />
+                      </G>
                     );
                   })}
 
@@ -134,18 +134,19 @@ const FieldMapModal: React.FC<Props> = ({ visible, onClose, onSelect, batsmanNam
                   {regions.map((region) => {
                     const pt = toXY(region.angle, boundaryR * 0.65);
                     return (
-                      <SvgText
-                        key={`label-${region.id}`}
-                        x={pt.x}
-                        y={pt.y}
-                        fill="rgba(255,255,255,0.7)"
-                        fontSize={7}
-                        fontWeight="600"
-                        textAnchor="middle"
-                        onPress={() => onSelect(region.name)}
-                      >
-                        {region.name}
-                      </SvgText>
+                      <G key={`label-g-${region.id}`} onPress={() => onSelect(region.name)}>
+                        <SvgText
+                          key={`label-${region.id}`}
+                          x={pt.x}
+                          y={pt.y}
+                          fill="rgba(255,255,255,0.7)"
+                          fontSize={7}
+                          fontWeight="600"
+                          textAnchor="middle"
+                        >
+                          {region.name}
+                        </SvgText>
+                      </G>
                     );
                   })}
                 </Svg>
