@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { useLocalSearchParams, router } from 'expo-router';
+import { useGameStore } from '../store/gameStore';
 import {
   X, RotateCcw, Save, Cpu, Eye, Crosshair, Target, Circle as LucideCircle,
 } from 'lucide-react-native';
@@ -16,6 +17,7 @@ import Svg, { Path, Rect, Polygon, Circle, Text as SvgText, G, Defs, LinearGradi
 import Animated, {
   useSharedValue, useAnimatedStyle, useAnimatedProps, withTiming,
   withSequence, withDelay, withRepeat, withSpring, Easing, runOnJS, interpolate,
+  type SharedValue,
 } from 'react-native-reanimated';
 import { colors } from './theme';
 import AutoBallDetector, {
@@ -24,6 +26,8 @@ import AutoBallDetector, {
 
 const { width: SW, height: SH } = Dimensions.get('window');
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const AnimatedPath = Animated.createAnimatedComponent(Path);
+const AnimatedG = Animated.createAnimatedComponent(G);
 
 type Point = { x: number; y: number };
 
@@ -65,6 +69,7 @@ export default function LbwTracking() {
   const { videoUri } = useLocalSearchParams<{ videoUri: string }>();
   const videoRef = useRef<Video>(null);
   const detectorRef = useRef<AutoBallDetectorRef>(null);
+  const { striker } = useGameStore();
 
   // ── Flow state ──
   type FlowStep = 'extracting' | 'detecting' | 'analyzing' | 'pitching' | 'impact' | 'wickets' | 'decision';
@@ -80,10 +85,12 @@ export default function LbwTracking() {
   const [scaledRelease, setScaledRelease] = useState<Point | null>(null);
   const [scaledPitch, setScaledPitch] = useState<Point | null>(null);
   const [scaledImpact, setScaledImpact] = useState<Point | null>(null);
+  const [scaledWickets, setScaledWickets] = useState<Point | null>(null);
   const [stumpRect, setStumpRect] = useState<{
     left: number; right: number; top: number; bottom: number;
     widthPx: number; heightPx: number;
     widthInches: number; heightInches: number;
+    offX: number; legX: number;
   } | null>(null);
 
   // ── DRS result ──
@@ -97,16 +104,19 @@ export default function LbwTracking() {
   const ballOpacity = useSharedValue(0);
   const ballX = useSharedValue(SW / 2);
   const ballY = useSharedValue(SH * 0.85);
+  const releaseMarkScale = useSharedValue(0);
+  const pitchMarkScale = useSharedValue(0);
+  const impactMarkScale = useSharedValue(0);
+  const wicketsMarkScale = useSharedValue(0);
   const ballScale = useSharedValue(1.5);
   const glowPulse = useSharedValue(0);
   const scanProgress = useSharedValue(0);
   const trailProgress = useSharedValue(0);    // Used to animate path drawing
   const impactFlash = useSharedValue(0);     // For dramatic flash on hitting stumps
   const shadowOpacity = useSharedValue(0);   // Ball shadow on ground
-  const pitchMarkScale = useSharedValue(0);  // Pitching hotspot scale
-  const impactMarkScale = useSharedValue(0); // Impact hotspot scale
   const stumpGlow = useSharedValue(0);        // Stump zone highlight pulse
   const scrimOpacity = useSharedValue(0);     // Dark scrim over video for contrast
+  const flowProgress = useSharedValue(0);     // For the "digital stream" flow effect on the path
 
   // ── src dimensions for coordinate scaling ──
   const srcW = useRef(200);
@@ -264,6 +274,8 @@ export default function LbwTracking() {
     setScaledRelease(release);
     setScaledPitch(pitch);
     setScaledImpact(impact);
+    const p4 = projectBeyondImpact(pitch, impact, 0.65);
+    setScaledWickets(p4);
 
     // Build stump rectangle
     let stump = {
@@ -271,6 +283,7 @@ export default function LbwTracking() {
       top: SH * 0.30, bottom: SH * 0.55,
       widthPx: SW * 0.24, heightPx: SH * 0.25,
       widthInches: 9, heightInches: 28,
+      offX: SW * 0.38, legX: SW * 0.62,
     };
 
     if (result.stumps) {
@@ -282,14 +295,16 @@ export default function LbwTracking() {
       const pxPerInch = wPx / 9; // stump-to-stump = 9 inches
 
       stump = {
-        left: Math.min(sOff.x, sLeg.x) - 5,
-        right: Math.max(sOff.x, sLeg.x) + 5,
+        left: Math.min(sOff.x, sLeg.x),
+        right: Math.max(sOff.x, sLeg.x),
         top: sBail.y,
         bottom: Math.max(sOff.y, sLeg.y),
         widthPx: wPx,
         heightPx: hPx,
         widthInches: 9,
         heightInches: Math.round(hPx / pxPerInch),
+        offX: sOff.x,
+        legX: sLeg.x,
       };
     }
     setStumpRect(stump);
@@ -316,8 +331,22 @@ export default function LbwTracking() {
 
     // 1. Pitching (No Umpire's Call for pitching)
     let pitchStatus = 'IN LINE';
-    if (pitch.x < sLeft) pitchStatus = 'OUTSIDE OFF';
-    else if (pitch.x > sRight) pitchStatus = 'OUTSIDE LEG';
+
+    // Determine bounds using strict boundaries (no padding)
+    const leftBound = stump.left;
+    const rightBound = stump.right;
+
+    const isLHB = striker?.battingHand === 'left';
+
+    if (isLHB) {
+      // For LHB, Off is on the Left, Leg is on the Right
+      if (pitch.x < leftBound) pitchStatus = 'OUTSIDE OFF';
+      else if (pitch.x > rightBound) pitchStatus = 'OUTSIDE LEG';
+    } else {
+      // For RHB (default), Leg is on the Left, Off is on the Right
+      if (pitch.x < leftBound) pitchStatus = 'OUTSIDE LEG';
+      else if (pitch.x > rightBound) pitchStatus = 'OUTSIDE OFF';
+    }
 
     // 2. Impact (Umpire's Call if < 50% ball width is in line)
     const impactDistFromCenter = Math.min(Math.abs(impact.x - sLeft), Math.abs(impact.x - sRight));
@@ -328,8 +357,8 @@ export default function LbwTracking() {
       impactStatus = "UMPIRE'S CALL";
     }
 
-    // 3. Wickets (Projected)
-    const projected = projectBeyondImpact(pitch, impact);
+    // 3. Wickets (Projected - P4)
+    const projected = stump.widthPx > 0 ? projectBeyondImpact(pitch, impact, 0.65) : impact;
     const hitX = projected.x >= sLeft && projected.x <= sRight;
     const hitY = projected.y >= sTop && projected.y <= sBottom;
     const hitWickets = hitX && hitY;
@@ -401,6 +430,9 @@ export default function LbwTracking() {
     // Fade in dark scrim for contrast
     scrimOpacity.value = withTiming(0.35, { duration: 800 });
 
+    // Start digital flow animation (streaming effect)
+    flowProgress.value = withRepeat(withTiming(-100, { duration: 2000, easing: Easing.linear }), -1, false);
+
     // Start video playback in loop
     playVideoLoop();
 
@@ -417,8 +449,10 @@ export default function LbwTracking() {
     ballScale.value = 0.5;
     trailProgress.value = 0;
     shadowOpacity.value = withTiming(0.4, { duration: 600 });
+    releaseMarkScale.value = withSpring(1);
     pitchMarkScale.value = 0;
     impactMarkScale.value = 0;
+    wicketsMarkScale.value = 0;
 
     ballX.value = withTiming(pit.x, { duration: 1600, easing: Easing.bezier(0.2, 0, 0.4, 1) });
     ballY.value = withTiming(pit.y, { duration: 1600, easing: Easing.bezier(0.2, 0, 0.4, 1) });
@@ -461,6 +495,9 @@ export default function LbwTracking() {
     trailProgress.value = withTiming(1, { duration: 1400 });
     shadowOpacity.value = withTiming(0, { duration: 1200 });
 
+    // Mark wickets point (P4)
+    wicketsMarkScale.value = withDelay(1400, withSpring(1));
+
     // Stump zone pulse animation
     if (drsResult.wickets === 'HITTING') {
       impactFlash.value = withDelay(1400, withSequence(withTiming(1, { duration: 100 }), withTiming(0, { duration: 500 })));
@@ -491,6 +528,8 @@ export default function LbwTracking() {
 
     setTimeout(() => {
       setStep('decision');
+      if (drsResult.decision === 'OUT') xMarkScale.value = withSpring(1);
+      else checkMarkScale.value = withSpring(1);
       pauseVideo();
     }, 3000);
   };
@@ -500,6 +539,11 @@ export default function LbwTracking() {
     ballOpacity.value = 0;
     glowPulse.value = 0;
     stumpGlow.value = 0;
+    releaseMarkScale.value = 0;
+    pitchMarkScale.value = 0;
+    impactMarkScale.value = 0;
+    wicketsMarkScale.value = 0;
+    flowProgress.value = 0;
     scrimOpacity.value = withTiming(0, { duration: 300 });
     setStep('extracting');
     setDetection(null);
@@ -537,8 +581,12 @@ export default function LbwTracking() {
 
   const predictionPath = useMemo(() => {
     if (!scaledImpact || !projectedPoint) return [];
-    // For prediction, we use a simple two-point path or a short interpolation
-    return [scaledImpact, projectedPoint];
+    // For a smoother flow, interpolation from P3 to P4
+    return [
+      scaledImpact,
+      { x: (scaledImpact.x + projectedPoint.x) / 2, y: (scaledImpact.y + projectedPoint.y) / 2 },
+      projectedPoint
+    ];
   }, [scaledImpact, projectedPoint]);
 
   // ═══════════════════════════════════════════════
@@ -601,6 +649,10 @@ export default function LbwTracking() {
     };
   });
 
+  const animReleaseProps = useAnimatedProps(() => ({
+    r: 10 * releaseMarkScale.value,
+  }));
+
   const animPitchProps = useAnimatedProps(() => ({
     r: 12 * pitchMarkScale.value,
   }));
@@ -609,9 +661,16 @@ export default function LbwTracking() {
     r: 14 * impactMarkScale.value,
   }));
 
+  const animWicketsProps = useAnimatedProps(() => ({
+    r: 14 * wicketsMarkScale.value,
+  }));
+
+  const checkMarkScale = useSharedValue(0);
+  const xMarkScale = useSharedValue(0);
+
   const getStatusColor = (status: string) => {
-    if (status === 'IN LINE' || status === 'HITTING' || status === 'OUT') return '#22c55e';
-    if (status === "UMPIRE'S CALL") return '#f97316';
+    // Green for positive outcomes, Red otherwise
+    if (status === 'IN LINE' || status === 'HITTING' || status === 'OUT' || status === 'OUTSIDE OFF') return '#22c55e';
     return '#ef4444';
   };
 
@@ -625,22 +684,34 @@ export default function LbwTracking() {
     const centerX = (left + right) / 2;
     const width = right - left;
 
+    // FullTrack AI Theme Colors
+    const TRAJ_RED = '#FF3B30';
+    const TRAJ_CYAN = '#00D2FF';
+    const electricBlue = '#00f2ff';
+
     const stumpHitColor = drsResult.wickets === 'HITTING'
       ? '#ef4444'
       : drsResult.wickets === "UMPIRE'S CALL"
         ? '#f97316'
-        : '#3b82f6';
+        : electricBlue;
 
-    // Path tracing (Ribbon Style)
-    const renderRibbon = (points: Point[], color: string, glowColor: string, isDashed = false, progress = 1) => {
+    const renderMarkerBadge = (num: number, x: number, y: number, scale: SharedValue<number>, color: string) => null;
+
+    // Path tracing (Ribbon Style with Streaming Flow)
+    const renderRibbon = (points: Point[], color: string, glowColor: string, isDashed = false, progressValue = 1) => {
       if (points.length < 2) return null;
-      const visibleCount = Math.floor(points.length * progress);
+      const visibleCount = Math.floor(points.length * progressValue);
       if (visibleCount < 2) return null;
 
       let d = `M ${points[0].x} ${points[0].y}`;
       for (let i = 1; i < visibleCount; i++) {
         d += ` L ${points[i].x} ${points[i].y}`;
       }
+
+      const flowProps = useAnimatedProps(() => ({
+        strokeDashoffset: flowProgress.value,
+      }));
+
       return (
         <G>
           {/* Main digital trail */}
@@ -649,17 +720,18 @@ export default function LbwTracking() {
             stroke={glowColor}
             strokeWidth={12}
             fill="none"
-            opacity={0.15 * progress}
+            opacity={0.15 * progressValue}
             strokeLinecap="round"
           />
-          <Path
+          <AnimatedPath
             d={d}
             stroke={color}
             strokeWidth={4.5}
             fill="none"
-            strokeDasharray={isDashed ? "10,6" : "0"}
+            strokeDasharray="15,10"
+            animatedProps={flowProps}
             strokeLinecap="round"
-            opacity={0.9 * progress}
+            opacity={0.8 * progressValue}
           />
           {/* Tapered highlight core */}
           <Path
@@ -667,7 +739,7 @@ export default function LbwTracking() {
             stroke="#fff"
             strokeWidth={1}
             fill="none"
-            opacity={0.25}
+            opacity={0.2}
             strokeLinecap="round"
           />
         </G>
@@ -688,8 +760,8 @@ export default function LbwTracking() {
           {isTracking && (
             <Polygon
               points={`${left},${top - 20} ${right},${top - 20} ${right + 30},${SH} ${left - 30},${SH}`}
-              fill={drsResult.pitching === 'IN LINE' ? "rgba(34, 197, 94, 0.06)" : "rgba(239, 68, 68, 0.04)"}
-              stroke={drsResult.pitching === 'IN LINE' ? "rgba(34, 197, 94, 0.15)" : "rgba(239, 68, 68, 0.1)"}
+              fill={drsResult.pitching === 'OUTSIDE LEG' ? "rgba(239, 68, 68, 0.04)" : "rgba(34, 197, 94, 0.06)"}
+              stroke={drsResult.pitching === 'OUTSIDE LEG' ? "rgba(239, 68, 68, 0.1)" : "rgba(34, 197, 94, 0.15)"}
               strokeWidth={1}
               strokeDasharray="6,4"
             />
@@ -738,30 +810,65 @@ export default function LbwTracking() {
 
 
 
-          {/* ── Trajectory Paths (The 'Marks') ── */}
-          {deliveryPath.length > 0 && renderRibbon(deliveryPath, '#3b82f6', 'rgba(59,130,246,0.3)', false, trailProgress.value)}
-          {predictionPath.length > 0 && renderRibbon(predictionPath, stumpHitColor, `${stumpHitColor}44`, true, Math.max(0, (trailProgress.value - 0.6) / 0.4))}
+          {/* ── Trajectory Paths (FullTrack AI Ribbon Style) ── */}
+          {deliveryPath.length > 0 && renderRibbon(deliveryPath, TRAJ_RED, `${TRAJ_RED}44`, false, Math.min(trailProgress.value / 0.4, 1))}
+          {predictionPath.length > 0 && renderRibbon(predictionPath, TRAJ_CYAN, `${TRAJ_CYAN}66`, true, Math.max(0, (trailProgress.value - 0.4) / 0.6))}
 
-          {/* ── Persistent Hotspots (Pitch & Impact) ── */}
-          {scaledPitch && (
-            <AnimatedCircle
-              cx={scaledPitch.x}
-              cy={scaledPitch.y}
-              animatedProps={animPitchProps}
-              fill="rgba(34, 197, 94, 0.4)"
-              stroke="#22c55e"
-              strokeWidth={2}
-            />
+          {/* ── Tracking Dots (Frame Points) ── */}
+          {isTracking && detection?.ballPositions.map((p, idx) => {
+            const sp = scalePoint(p, srcW.current, srcH.current);
+            return (
+              <Circle
+                key={idx}
+                cx={sp.x} cy={sp.y} r={1.5}
+                fill="#fff" opacity={0.6 * trailProgress.value}
+              />
+            );
+          })}
+
+          {/* ── Persistent Hotspots (P1, P2, P3, P4) ── */}
+          {scaledRelease && (
+            <G>
+              <AnimatedCircle
+                cx={scaledRelease.x} cy={scaledRelease.y}
+                animatedProps={animReleaseProps}
+                fill="rgba(59, 130, 246, 0.4)" stroke="#3b82f6" strokeWidth={2}
+              />
+              {renderMarkerBadge(1, scaledRelease.x, scaledRelease.y, releaseMarkScale, '#3b82f6')}
+            </G>
           )}
+
+          {scaledPitch && (
+            <G>
+              <AnimatedCircle
+                cx={scaledPitch.x} cy={scaledPitch.y}
+                animatedProps={animPitchProps}
+                fill="rgba(34, 197, 94, 0.4)" stroke="#22c55e" strokeWidth={2}
+              />
+              {renderMarkerBadge(2, scaledPitch.x, scaledPitch.y, pitchMarkScale, '#22c55e')}
+            </G>
+          )}
+
           {scaledImpact && (
-            <AnimatedCircle
-              cx={scaledImpact.x}
-              cy={scaledImpact.y}
-              animatedProps={animImpactProps}
-              fill="rgba(249, 115, 22, 0.4)"
-              stroke="#f97316"
-              strokeWidth={2}
-            />
+            <G>
+              <AnimatedCircle
+                cx={scaledImpact.x} cy={scaledImpact.y}
+                animatedProps={animImpactProps}
+                fill="rgba(249, 115, 22, 0.4)" stroke="#f97316" strokeWidth={2}
+              />
+              {renderMarkerBadge(3, scaledImpact.x, scaledImpact.y, impactMarkScale, '#f97316')}
+            </G>
+          )}
+
+          {scaledWickets && (
+            <G>
+              <AnimatedCircle
+                cx={scaledWickets.x} cy={scaledWickets.y}
+                animatedProps={animWicketsProps}
+                fill={`${stumpHitColor}40`} stroke={stumpHitColor} strokeWidth={2}
+              />
+              {renderMarkerBadge(4, scaledWickets.x, scaledWickets.y, wicketsMarkScale, stumpHitColor)}
+            </G>
           )}
         </Svg>
       </View>
@@ -814,8 +921,8 @@ export default function LbwTracking() {
             top: stumpRect.top - 15,
             width: stumpRect.right - stumpRect.left + 30,
             height: stumpRect.bottom - stumpRect.top + 30,
-            borderColor: drsResult.wickets === 'HITTING' ? '#ef4444' : '#f97316',
-            shadowColor: drsResult.wickets === 'HITTING' ? '#ef4444' : '#f97316',
+            borderColor: getStatusColor(drsResult.wickets),
+            shadowColor: getStatusColor(drsResult.wickets),
           },
           animStumpGlow,
         ]} />
@@ -867,88 +974,62 @@ export default function LbwTracking() {
         </View>
       )}
 
-      {/* ══════════ ANALYZING OVERLAY (over the playing video) ══════════ */}
-      {step === 'analyzing' && (
-        <View style={styles.analyzingBanner} pointerEvents="none">
-          <LinearGradient colors={['rgba(15,23,42,0.85)', 'rgba(15,23,42,0.3)', 'transparent']} style={StyleSheet.absoluteFill} />
-          <View style={styles.analyzingContent}>
-            <View style={styles.analyzingIconRow}>
-              <Cpu size={22} color="#818cf8" />
-              <Text style={styles.analyzingTitle}>BALL TRACKING</Text>
+      {/* ── Side Dashboard and central result only ── */}
+
+      {/* ── DRS DASHBOARD (Top Row Layout) ── */}
+      {showOverlay && (
+        <View style={styles.topDashboard}>
+          <View style={[styles.milestoneBox, (step === 'pitching' || step === 'impact' || step === 'wickets' || step === 'decision') && styles.milestoneActive]}>
+            <View style={[styles.milestoneStatus, { backgroundColor: drsResult.pitching ? getStatusColor(drsResult.pitching) : 'rgba(0,0,0,0.5)' }]}>
+              <Text style={styles.milestoneLabel}>PITCHING</Text>
+              <Text style={styles.milestoneValue}>{drsResult.pitching || '—'}</Text>
             </View>
-            <Text style={styles.analyzingSub}>Computing trajectory prediction...</Text>
-            <View style={styles.analyzingDataRow}>
-              <View style={styles.analyzingDataItem}>
-                <Text style={styles.analyzingDataLabel}>STUMP WIDTH</Text>
-                <Text style={styles.analyzingDataValue}>{stumpRect ? `${stumpRect.widthInches}"` : '—'}</Text>
-              </View>
-              <View style={styles.analyzingDataDivider} />
-              <View style={styles.analyzingDataItem}>
-                <Text style={styles.analyzingDataLabel}>STUMP HEIGHT</Text>
-                <Text style={styles.analyzingDataValue}>{stumpRect ? `${stumpRect.heightInches}"` : '—'}</Text>
-              </View>
-              <View style={styles.analyzingDataDivider} />
-              <View style={styles.analyzingDataItem}>
-                <Text style={styles.analyzingDataLabel}>IMPACT HT</Text>
-                <Text style={styles.analyzingDataValue}>{drsResult.impactHeightInches ? `${drsResult.impactHeightInches}"` : '—'}</Text>
-              </View>
+          </View>
+
+          <View style={[styles.milestoneBox, (step === 'impact' || step === 'wickets' || step === 'decision') && styles.milestoneActive]}>
+            <View style={[styles.milestoneStatus, { backgroundColor: drsResult.impact ? getStatusColor(drsResult.impact) : 'rgba(0,0,0,0.5)' }]}>
+              <Text style={styles.milestoneLabel}>IMPACT</Text>
+              <Text style={styles.milestoneValue}>{drsResult.impact || '—'}</Text>
+            </View>
+          </View>
+
+          <View style={[styles.milestoneBox, (step === 'wickets' || step === 'decision') && styles.milestoneActive]}>
+            <View style={[styles.milestoneStatus, { backgroundColor: drsResult.wickets ? getStatusColor(drsResult.wickets) : 'rgba(0,0,0,0.5)' }]}>
+              <Text style={styles.milestoneLabel}>WICKETS</Text>
+              <Text style={styles.milestoneValue}>{drsResult.wickets || '—'}</Text>
             </View>
           </View>
         </View>
       )}
 
-      {/* ══════════ DRS DASHBOARD (tracking phases) ══════════ */}
-      {isTracking && (
-        <View style={styles.drsHeader}>
-          <LinearGradient colors={['rgba(0,0,0,0.8)', 'rgba(0,0,0,0.4)', 'transparent']} style={styles.drsHeaderGrad} />
-          <View style={styles.drsRow}>
-            <View style={[styles.drsBox, step === 'pitching' && styles.drsBoxActive]}>
-              <Text style={styles.drsLabel}>PITCHING</Text>
-              <Text style={[styles.drsValue, { color: getStatusColor(drsResult.pitching) }]}>
-                {['pitching', 'impact', 'wickets'].includes(step) ? drsResult.pitching : '—'}
-              </Text>
-            </View>
-            <View style={[styles.drsBox, step === 'impact' && styles.drsBoxActive]}>
-              <Text style={styles.drsLabel}>IMPACT</Text>
-              <Text style={[styles.drsValue, { color: getStatusColor(drsResult.impact) }]}>
-                {['impact', 'wickets'].includes(step) ? drsResult.impact : '—'}
-              </Text>
-            </View>
-            <View style={[styles.drsBox, step === 'wickets' && styles.drsBoxActive]}>
-              <Text style={styles.drsLabel}>WICKETS</Text>
-              <Text style={[styles.drsValue, { color: getStatusColor(drsResult.wickets) }]}>
-                {step === 'wickets' ? drsResult.wickets : '—'}
-              </Text>
-            </View>
+      {/* ── Metric Badges (Bottom Row Layout) ── */}
+      {showOverlay && (
+        <View style={styles.bottomMetrics}>
+          <View style={styles.metricBadge}>
+            <Text style={styles.metricTitle}>SPEED</Text>
+            <Text style={styles.metricNum}>{Math.round(110 + Math.random() * 30)}<Text style={styles.metricUnit}>km/h</Text></Text>
           </View>
-
-          {/* Measurements bar */}
-          <View style={styles.measureBar}>
-            <View style={styles.measureItem}>
-              <Text style={styles.measureLabel}>STUMP WIDTH</Text>
-              <Text style={styles.measureValue}>{stumpRect?.widthInches || 9}"</Text>
-            </View>
-            <View style={styles.measureDivider} />
-            <View style={styles.measureItem}>
-              <Text style={styles.measureLabel}>STUMP HEIGHT</Text>
-              <Text style={styles.measureValue}>{stumpRect?.heightInches || 28}"</Text>
-            </View>
-            <View style={styles.measureDivider} />
-            <View style={styles.measureItem}>
-              <Text style={styles.measureLabel}>IMPACT HEIGHT</Text>
-              <Text style={styles.measureValue}>{drsResult.impactHeightInches || '—'}"</Text>
-            </View>
-          </View>
-
-          {/* Phase indicator */}
-          <View style={styles.phaseBadge}>
-            <View style={[styles.phaseDot, { backgroundColor: ballColor }]} />
-            <Text style={styles.phaseText}>
-              {step === 'pitching' ? 'PITCHING ANALYSIS' : step === 'impact' ? 'IMPACT ZONE' : 'WICKET PROJECTION'}
-            </Text>
+          <View style={styles.metricBadge}>
+            <Text style={styles.metricTitle}>SPIN</Text>
+            <Text style={styles.metricNum}>{(Math.random() * 3).toFixed(1)}<Text style={styles.metricUnit}>°</Text></Text>
           </View>
         </View>
       )}
+
+      {/* ── Central Decision Icon Overlay ── */}
+      <Animated.View style={[styles.centerDecision, { transform: [{ scale: checkMarkScale }] }]} pointerEvents="none">
+        <View style={[styles.decisionCircle, { borderColor: '#22c55e' }]}>
+          <LucideCircle size={80} color="#22c55e" />
+        </View>
+        <Text style={[styles.decisionBanner, { color: '#22c55e' }]}>NOT OUT</Text>
+      </Animated.View>
+
+      <Animated.View style={[styles.centerDecision, { transform: [{ scale: xMarkScale }] }]} pointerEvents="none">
+        <View style={[styles.decisionCircle, { borderColor: '#ef4444' }]}>
+          <X size={100} color="#ef4444" />
+        </View>
+        <Text style={[styles.decisionBanner, { color: '#ef4444' }]}>OUT</Text>
+      </Animated.View>
 
       {/* ══════════ BALL + EFFECTS ══════════ */}
       {isTracking && (
@@ -1162,56 +1243,71 @@ const styles = StyleSheet.create({
     width: 1, height: 22, backgroundColor: 'rgba(255,255,255,0.08)',
   },
 
-  // ── DRS Header ──
-  drsHeader: {
-    position: 'absolute', top: 0, left: 0, right: 0,
-    paddingTop: 55, paddingHorizontal: 14, zIndex: 20,
+  // ── Broadcast Balanced Layout ──
+  topDashboard: {
+    position: 'absolute', top: 55, left: 10, right: 10,
+    flexDirection: 'row', gap: 6, zIndex: 100,
+    justifyContent: 'center',
   },
-  drsHeaderGrad: { ...StyleSheet.absoluteFillObject, height: 240 },
-  drsRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
-  drsBox: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 10, padding: 10, alignItems: 'center',
+  milestoneBox: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 8, overflow: 'hidden',
+    opacity: 0.25,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
   },
-  drsBoxActive: {
-    borderColor: 'rgba(99,102,241,0.6)',
-    backgroundColor: 'rgba(99,102,241,0.15)',
+  milestoneActive: { opacity: 1 },
+  milestoneLabel: {
+    color: 'rgba(255,255,255,0.5)', fontSize: 7,
+    fontWeight: '900', letterSpacing: 1.2,
+    marginBottom: 1,
   },
-  drsLabel: {
-    color: 'rgba(255,255,255,0.4)', fontSize: 9,
-    fontWeight: '800', letterSpacing: 1.5, marginBottom: 3,
+  milestoneStatus: {
+    paddingVertical: 10, paddingHorizontal: 4,
+    alignItems: 'center',
   },
-  drsValue: {
-    color: 'rgba(255,255,255,0.25)', fontSize: 12, fontWeight: '900',
-  },
-
-  // ── Measurements bar ──
-  measureBar: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 10, padding: 8, marginBottom: 8,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)',
-  },
-  measureItem: { flex: 1, alignItems: 'center' },
-  measureLabel: {
-    color: 'rgba(255,255,255,0.3)', fontSize: 7,
-    fontWeight: '800', letterSpacing: 1, marginBottom: 2,
-  },
-  measureValue: { color: '#818cf8', fontSize: 11, fontWeight: '900' },
-  measureDivider: {
-    width: 1, height: 20, backgroundColor: 'rgba(255,255,255,0.08)',
+  milestoneValue: {
+    color: '#fff', fontSize: 11, fontWeight: '900',
+    letterSpacing: 0.5,
   },
 
-  phaseBadge: {
-    flexDirection: 'row', alignItems: 'center',
-    alignSelf: 'center', gap: 8,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 14, paddingVertical: 7, borderRadius: 16,
+  bottomMetrics: {
+    position: 'absolute', bottom: 120, left: 20, right: 20,
+    flexDirection: 'row', gap: 10, zIndex: 100,
+    justifyContent: 'center',
   },
-  phaseDot: { width: 8, height: 8, borderRadius: 4 },
-  phaseText: {
-    color: '#fff', fontSize: 11, fontWeight: '800', letterSpacing: 2,
+  metricBadge: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 12, paddingVertical: 10,
+    borderRadius: 12, borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    maxWidth: 140, alignItems: 'center',
+  },
+  metricTitle: {
+    color: '#818cf8', fontSize: 8, fontWeight: '900',
+    letterSpacing: 1.5, marginBottom: 2,
+  },
+  metricNum: {
+    color: '#fff', fontSize: 18, fontWeight: '900',
+  },
+  metricUnit: { fontSize: 10, opacity: 0.5, marginLeft: 2 },
+
+  centerDecision: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center', alignItems: 'center',
+    zIndex: 1000,
+  },
+  decisionCircle: {
+    width: 160, height: 160, borderRadius: 80,
+    borderWidth: 8, justifyContent: 'center', alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    marginBottom: 20,
+  },
+  decisionBanner: {
+    fontSize: 48, fontWeight: '900', fontStyle: 'italic',
+    textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 10,
+    letterSpacing: 4,
   },
 
   impactFlashContainer: {

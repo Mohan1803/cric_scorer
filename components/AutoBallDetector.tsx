@@ -117,9 +117,28 @@ function findKeyPoints(positions){
   for(let i=1;i<positions.length-1;i++){
     if(positions[i].y>maxY){maxY=positions[i].y;pitchIdx=i}}
   const pitch=positions[pitchIdx];
-  // impact = ~60-75% through remaining trajectory after pitch
+  
   const afterPitch=positions.slice(pitchIdx);
-  const impactIdx=Math.min(afterPitch.length-1,Math.max(1,Math.floor(afterPitch.length*0.6)));
+  let impactIdx = afterPitch.length - 1;
+  
+  // Detect impact: ball hits the batsman and drops down (Y increases) or deflects sharply
+  for(let i=1; i<afterPitch.length; i++){
+    if(afterPitch[i].y > afterPitch[i-1].y + 1.5){
+      impactIdx = i - 1;
+      break;
+    }
+    if(i >= 2){
+      let dx1 = afterPitch[i-1].x - afterPitch[i-2].x;
+      let dx2 = afterPitch[i].x - afterPitch[i-1].x;
+      if(dx1 * dx2 < 0 && Math.abs(dx2) > 2 && Math.abs(dx1) > 2){
+        impactIdx = i - 1;
+        break;
+      }
+    }
+  }
+  
+  if (impactIdx < 1 && afterPitch.length > 1) impactIdx = 1;
+  
   const impact=afterPitch[impactIdx];
   return{release,pitch,impact}}
 
@@ -134,9 +153,13 @@ function processNext(){
     let stumps=null;
     if(frameQueue._lastData){
       stumps=detectStumps(frameQueue._lastData,frameW,frameH)}
+    
+    // Ensure we have a P1 (release) if findKeyPoints couldn't find a distinct one
+    const p1 = keyPts.release || (filtered.length > 0 ? filtered[0] : null);
+
     window.ReactNativeWebView.postMessage(JSON.stringify({
       type:'done',stumps,ballPositions:filtered,
-      pitchPoint:keyPts.pitch,impactPoint:keyPts.impact,releasePoint:keyPts.release
+      pitchPoint:keyPts.pitch,impactPoint:keyPts.impact,releasePoint:p1
     }));
     return}
   const{src,idx}=frameQueue.shift();
