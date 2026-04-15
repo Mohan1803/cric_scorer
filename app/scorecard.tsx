@@ -31,6 +31,15 @@ export default function Scorecard() {
       e.preventDefault();
 
       // Prompt the user before leaving
+      if (awaitingSecondInningsStart || currentInningsNumber === 2) {
+        Alert.alert(
+          'Navigation Restricted',
+          'You cannot go back during the innings transition or second innings. Please complete the match or use the home button to exit via a new match.',
+          [{ text: 'OK', style: 'default' }]
+        );
+        return;
+      }
+
       Alert.alert(
         'Exit Match',
         'Do you want to close the current match setup? Your progress will be saved but you will return to the setup screen.',

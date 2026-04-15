@@ -292,6 +292,13 @@ export const useGameStore = create<GameState>()(
         const state = get();
         if (state.matchCompleted || state.awaitingSecondInningsStart) return;
 
+        // Ensure we don't cross totalOvers
+        const legalDeliveriesCount = state.ballHistory.filter(b => !b.isExtra || (b.extraType === 'bye' || b.extraType === 'lb' || b.extraType === 'penalty')).length;
+        if (legalDeliveriesCount >= state.totalOvers * 6) {
+          console.log('Innings already completed (max overs reached).');
+          return;
+        }
+
         // 1. Enrich history and overs data
         const ballRuns = record.runs;
         const extraRuns = (record.isExtra && (record.extraType === 'wide' || record.extraType === 'no-ball')) ? 1 : 0;

@@ -118,7 +118,7 @@ export default function SplashScreen() {
                 </Animated.View>
 
                 <Animated.View style={[styles.textContainer, animatedTextStyle]}>
-                    <Text style={styles.appName}>ONE SCORER</Text>
+                    <Text style={styles.appName} numberOfLines={1} adjustsFontSizeToFit>ONE SCORER</Text>
                     <View style={styles.underline}>
                         <LinearGradient
                             colors={[colors.accentAlt, colors.accentGold, colors.accentAlt]}
@@ -132,7 +132,7 @@ export default function SplashScreen() {
             </View>
 
             <View style={styles.footer}>
-                <Text style={styles.footerText}>POWERED BY ONE SCORER</Text>
+                <Text style={styles.footerText} numberOfLines={1} adjustsFontSizeToFit>POWERED BY ONE SCORER</Text>
             </View>
 
             <ResumeMatchModal
@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
         fontSize: 32,
         fontWeight: '900',
         color: '#FFFFFF',
-        letterSpacing: 6,
+        letterSpacing: 3,
         fontStyle: 'italic',
     },
     underline: {
@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
         fontSize: 10,
         fontWeight: '700',
         color: 'rgba(255,255,255,0.5)',
-        letterSpacing: 3,
+        letterSpacing: 2,
         textTransform: 'uppercase',
     },
     footer: {
@@ -233,7 +233,9 @@ const styles = StyleSheet.create({
         fontSize: 10,
         fontWeight: '600',
         color: 'rgba(255,255,255,0.3)',
-        letterSpacing: 2,
+        letterSpacing: 1,
+        textTransform: 'uppercase',
+        paddingHorizontal: 30,
     },
 });
 

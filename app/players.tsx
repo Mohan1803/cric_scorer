@@ -79,11 +79,8 @@ export default function PlayersEntry() {
 
   const updatePlayerName = (teamIndex: number, playerIndex: number, name: string) => {
     const list = teamIndex === 0 ? team1Players : team2Players;
-    if (isDuplicate(name, list, playerIndex)) {
-      Alert.alert('Duplicate Name', `Player "${name}" already exists.`);
-      return;
-    }
-
+    // Duplicate name check removed as per requirement
+    
     const updated = [...list];
     updated[playerIndex].name = name;
     teamIndex === 0 ? setTeam1Players(updated) : setTeam2Players(updated);
