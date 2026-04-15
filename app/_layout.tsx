@@ -16,6 +16,7 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 
 import { useEffect } from 'react';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 export default function RootLayout() {
   useFrameworkReady();
@@ -27,7 +28,7 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <>
+    <SafeAreaProvider>
       <Stack
         initialRouteName="index"
         screenOptions={{
@@ -130,6 +131,6 @@ export default function RootLayout() {
         />
       </Stack>
       <StatusBar style="light" />
-    </>
+    </SafeAreaProvider>
   );
 }

@@ -3,6 +3,7 @@ import {
   StyleSheet, Text, View, TouchableOpacity, Dimensions,
   Platform, Alert, Image, Pressable, ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { useLocalSearchParams, router, useNavigation } from 'expo-router';
 import {
@@ -872,7 +873,7 @@ export default function LbwTracking() {
   }));
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {/* Hidden auto-detection engine */}
       <AutoBallDetector ref={detectorRef} />
 
@@ -1131,11 +1132,10 @@ export default function LbwTracking() {
         </View>
       )}
 
-      {/* ── Close ── */}
       <TouchableOpacity style={styles.closeBtn} onPress={() => goBack()}>
         <X size={22} color="#fff" />
       </TouchableOpacity>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -1202,7 +1202,7 @@ const styles = StyleSheet.create({
   // ── DRS Header ──
   drsHeader: {
     position: 'absolute', top: 0, left: 0, right: 0,
-    paddingTop: 55, paddingHorizontal: 14, zIndex: 20,
+    paddingHorizontal: 14, zIndex: 20,
   },
   drsHeaderGrad: { ...StyleSheet.absoluteFillObject, height: 220 },
   drsRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
@@ -1424,7 +1424,7 @@ const styles = StyleSheet.create({
 
   // ── Close ──
   closeBtn: {
-    position: 'absolute', top: 52, right: 18,
+    position: 'absolute', top: 18, right: 18,
     width: 40, height: 40, borderRadius: 20,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center', alignItems: 'center', zIndex: 200,

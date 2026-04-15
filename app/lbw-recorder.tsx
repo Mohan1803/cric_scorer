@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, Dimensions, Alert, Platform } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Dimensions, Alert, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { router } from 'expo-router';
 import { X, Video, Circle, RotateCcw } from 'lucide-react-native';
@@ -181,7 +182,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 20,
   },
   closeButton: {
     width: 40,

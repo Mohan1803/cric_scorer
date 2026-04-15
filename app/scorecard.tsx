@@ -27,34 +27,15 @@ export default function Scorecard() {
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (e) => {
-      // Prevent default behavior of leaving the screen
-      e.preventDefault();
-
-      // Prompt the user before leaving
+      // Only show alert and prevent navigation if in restricted states
       if (awaitingSecondInningsStart || currentInningsNumber === 2) {
+        e.preventDefault();
         Alert.alert(
           'Navigation Restricted',
           'You cannot go back during the innings transition or second innings. Please complete the match or use the home button to exit via a new match.',
           [{ text: 'OK', style: 'default' }]
         );
-        return;
       }
-
-      Alert.alert(
-        'Exit Match',
-        'Do you want to close the current match setup? Your progress will be saved but you will return to the setup screen.',
-        [
-          { text: 'Cancel', style: 'cancel', onPress: () => { } },
-          {
-            text: 'OK',
-            style: 'destructive',
-            // If the user confirms, we manually remove the listener and proceed
-            onPress: () => {
-              navigation.dispatch(e.data.action);
-            },
-          },
-        ]
-      );
     });
 
     return unsubscribe;
@@ -907,7 +888,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,
-    paddingTop: 20,
   },
   scrollContent: {
     paddingBottom: 20,
