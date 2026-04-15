@@ -4,7 +4,7 @@ import {
   Platform, Alert, Image, Pressable, ActivityIndicator,
 } from 'react-native';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useLocalSearchParams, router, useNavigation } from 'expo-router';
 import {
   X, RotateCcw, Save, Cpu, Eye, Crosshair, Target, Circle as LucideCircle,
 } from 'lucide-react-native';
@@ -25,9 +25,7 @@ import AutoBallDetector, {
 
 const { width: SW, height: SH } = Dimensions.get('window');
 
-const AnimatedPath = Animated.createAnimatedComponent(Path);
-const AnimatedG = Animated.createAnimatedComponent(G);
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
 
 type Point = { x: number; y: number };
 
@@ -50,10 +48,34 @@ function generateTrajectoryPoints(
   return pts;
 }
 
-function projectBeyondImpact(pitch: Point, impact: Point, factor = 0.65): Point {
+// ─── Project ball trajectory beyond impact to stump plane ───
+// Uses proper geometry: extends the pitch→impact line to where it
+// reaches the stump's vertical midpoint (center between bails and base).
+// This matches how professional DRS hawk-eye projects the ball path.
+function projectBeyondImpact(
+  pitch: Point, impact: Point,
+  stumpCenterY?: number
+): Point {
+  const dx = impact.x - pitch.x;
+  const dy = impact.y - pitch.y;
+
+  // If we have a stump center Y, project to that exact y-level
+  if (stumpCenterY !== undefined && Math.abs(dy) > 0.5) {
+    // Calculate how far along the pitch→impact vector we need to go
+    // to reach the stump center Y
+    const t = (stumpCenterY - pitch.y) / dy;
+    // Clamp t to a reasonable range (at least to impact, at most 3x the distance)
+    const tClamped = Math.max(1, Math.min(t, 3));
+    return {
+      x: pitch.x + dx * tClamped,
+      y: pitch.y + dy * tClamped,
+    };
+  }
+
+  // Fallback: extend by a reasonable factor
   return {
-    x: impact.x + (impact.x - pitch.x) * factor,
-    y: impact.y + (impact.y - pitch.y) * 0.4,
+    x: impact.x + dx * 0.5,
+    y: impact.y + dy * 0.5,
   };
 }
 
@@ -70,6 +92,16 @@ export default function LbwTracking() {
   const videoRef = useRef<Video>(null);
   const detectorRef = useRef<AutoBallDetectorRef>(null);
   const { striker } = useGameStore();
+  const navigation = useNavigation();
+
+  // Safe back navigation — falls back to home if no screen to go back to
+  const goBack = useCallback(() => {
+    if (navigation.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/');
+    }
+  }, [navigation]);
 
   // ── Flow state ──
   type FlowStep = 'extracting' | 'detecting' | 'analyzing' | 'pitching' | 'impact' | 'wickets' | 'decision';
@@ -118,7 +150,7 @@ export default function LbwTracking() {
   const scanProgress = useSharedValue(0);
   const virtualOpacity = useSharedValue(0); // For video-to-virtual fade
   const stumpReveal = useSharedValue(0);   // For 3D stump animation
-  const flowProgress = useSharedValue(0);  // For digital flow effect
+
 
   // ── src dimensions for coordinate scaling ──
   const srcW = useRef(200);
@@ -163,6 +195,7 @@ export default function LbwTracking() {
         releasePoint: { x: 100, y: 15, frame: 0 },
         pitchPoint: pitchInfo,
         impactPoint: impactInfo,
+        detectedHand: 'RH',
       };
       srcW.current = 200; srcH.current = 150;
       processDetectionResult(demoDetection);
@@ -208,7 +241,7 @@ export default function LbwTracking() {
 
       if (base64Frames.length < 5) {
         Alert.alert('Error', 'Could not extract enough frames from video.');
-        router.back();
+        goBack();
         return;
       }
 
@@ -224,12 +257,12 @@ export default function LbwTracking() {
         processDetectionResult(result);
       } else {
         Alert.alert('Detection Failed', 'Could not detect ball or stumps. Please try again with a clearer video.');
-        router.back();
+        goBack();
       }
     } catch (err) {
       console.error('Auto-detection error:', err);
       Alert.alert('Error', 'Ball tracking failed.');
-      router.back();
+      goBack();
     }
   };
 
@@ -273,8 +306,8 @@ export default function LbwTracking() {
       const pxPerInch = wPx / 9; // stump-to-stump = 9 inches
 
       stump = {
-        left: Math.min(sOff.x, sLeg.x) - 5,
-        right: Math.max(sOff.x, sLeg.x) + 5,
+        left: Math.min(sOff.x, sLeg.x),
+        right: Math.max(sOff.x, sLeg.x),
         top: sBail.y,
         bottom: Math.max(sOff.y, sLeg.y),
         widthPx: wPx,
@@ -285,9 +318,12 @@ export default function LbwTracking() {
     }
     setStumpRect(stump);
 
-    if (result.detectedHand) {
+    // Only use video-detected hand as fallback when store doesn't have it
+    if (result.detectedHand && !striker?.battingHand) {
       setHandedness(result.detectedHand);
-      console.log(`[DRS] Video-detected Stance: ${result.detectedHand}`);
+      console.log(`[DRS] Video-detected Stance (fallback): ${result.detectedHand}`);
+    } else if (striker?.battingHand) {
+      console.log(`[DRS] Using store batting hand: ${handedness}`);
     }
 
     // Compute DRS decision
@@ -295,7 +331,26 @@ export default function LbwTracking() {
   };
 
   // ═══════════════════════════════════════════════
-  //  COMPUTE DRS DECISION
+  //  COMPUTE DRS DECISION — ICC Professional Rules
+  //
+  //  ICC LBW Law 36 Decision Tree:
+  //  1. PITCHING: Where did the ball land?
+  //     - Outside Leg → NOT OUT (always, game over)
+  //     - In Line or Outside Off → proceed
+  //
+  //  2. IMPACT: Where did the ball hit the batsman?
+  //     - In Line with stumps → proceed
+  //     - Outside Off AND shot offered → NOT OUT
+  //     - Outside Off AND no shot → proceed (can be out)
+  //     - Marginal (within half-ball of stump edge) → UMPIRE'S CALL
+  //
+  //  3. WICKETS: Would the ball go on to hit the stumps?
+  //     - Ball center inside stump zone → HITTING
+  //     - Ball center outside but edge clips (within half-ball) → UMPIRE'S CALL
+  //     - Missing entirely → MISSING
+  //
+  //  4. FINAL: OUT only if Pitching legal, Impact legal, Wickets hitting.
+  //     Any element at UMPIRE'S CALL → original decision stands.
   // ═══════════════════════════════════════════════
   const computeDecision = (
     release: Point, pitch: Point, impact: Point,
@@ -304,79 +359,158 @@ export default function LbwTracking() {
     if (!stump) return;
 
     const pxPerInch = stump.widthPx / 9;
-    const ballRadiusPx = (pxPerInch * 2.8) / 2; // Ball avg diameter ~2.8 inches
+    // ICC ball diameter: 2.86 inches (men's), half = radius
+    const ballDiameterPx = pxPerInch * 2.86;
+    const halfBallPx = ballDiameterPx / 2;
+
+    // Stump boundaries (exact, no padding)
     const sLeft = stump.left;
     const sRight = stump.right;
-    const sTop = stump.top;
-    const sBottom = stump.bottom;
+    const sTop = stump.top;     // bail top (lower y = higher on screen)
+    const sBottom = stump.bottom; // stump base (higher y = lower on screen)
+    const sCenterX = (sLeft + sRight) / 2;
+    const sCenterY = (sTop + sBottom) / 2;
 
-    // 1. Pitching
-    // Professional rule: Pitching Outside Leg is always Not Out
+    // For RH batsman (behind bowler view):
+    //   Off side = LEFT of stumps (lower x)
+    //   Leg side = RIGHT of stumps (higher x)
+    // For LH batsman: reversed
+    const offEdge = handedness === 'RH' ? sLeft : sRight;
+    const legEdge = handedness === 'RH' ? sRight : sLeft;
+
+    // ──────────────────────────────────────────────
+    // 1. PITCHING — Where did the ball bounce?
+    // ──────────────────────────────────────────────
     let pitchingStatus = 'IN LINE';
-    const isOutsideLeg = handedness === 'RH' ? pitch.x > sRight : pitch.x < sLeft;
-    const isOutsideOff = handedness === 'RH' ? pitch.x < sLeft : pitch.x > sRight;
+    const pitchDistFromOff = handedness === 'RH'
+      ? sLeft - pitch.x   // positive = outside off
+      : pitch.x - sRight; // positive = outside off (LH)
+    const pitchDistFromLeg = handedness === 'RH'
+      ? pitch.x - sRight  // positive = outside leg
+      : sLeft - pitch.x;  // positive = outside leg (LH)
 
-    if (isOutsideLeg) {
+    if (pitchDistFromLeg > 0) {
       pitchingStatus = 'OUTSIDE LEG';
-    } else if (isOutsideOff) {
+    } else if (pitchDistFromOff > 0) {
       pitchingStatus = 'OUTSIDE OFF';
     }
 
-    // 2. Impact (Umpire's Call if < 50% ball width is in line)
-    const impactInLineX = impact.x >= sLeft && impact.x <= sRight;
-    const impactDistFromEdge = Math.min(Math.abs(impact.x - sLeft), Math.abs(impact.x - sRight));
+    // ──────────────────────────────────────────────
+    // 2. IMPACT — Where did the ball hit the pad?
+    // ──────────────────────────────────────────────
+    const impactDistFromOff = handedness === 'RH'
+      ? sLeft - impact.x
+      : impact.x - sRight;
+    const impactDistFromLeg = handedness === 'RH'
+      ? impact.x - sRight
+      : sLeft - impact.x;
 
-    let impactStatus = impactInLineX ? 'IN LINE' : 'OUTSIDE';
-    if (!impactInLineX && impactDistFromEdge < ballRadiusPx) {
-      impactStatus = "UMPIRE'S CALL";
-    } else if (impactInLineX && impactDistFromEdge < ballRadiusPx) {
-      // Marginal in-line also counts as Umpire's call in some contexts but usually IN LINE
-      // We'll stick to the 50% rule for OUTSIDE -> IN LINE
+    let impactStatus = 'IN LINE';
+    let impactSide = ''; // 'OFF' or 'LEG' for outside impacts
+
+    if (impactDistFromOff > 0) {
+      // Ball center is outside off
+      if (impactDistFromOff < halfBallPx) {
+        // Less than 50% outside → UMPIRE'S CALL
+        impactStatus = "UMPIRE'S CALL";
+      } else {
+        impactStatus = 'OUTSIDE OFF';
+      }
+      impactSide = 'OFF';
+    } else if (impactDistFromLeg > 0) {
+      // Ball center is outside leg
+      if (impactDistFromLeg < halfBallPx) {
+        impactStatus = "UMPIRE'S CALL";
+      } else {
+        impactStatus = 'OUTSIDE LEG';
+      }
+      impactSide = 'LEG';
     }
+    // else: ball center between stumps → IN LINE
 
-    // Professional Impact Rule: Outside Off impact is Not Out IF shot was offered.
-    // (We'll assume shot offered for now as per user preference for "Professional" tracking)
-    const impactOutsideOff = handedness === 'RH' ? impact.x < sLeft : impact.x > sRight;
+    // ──────────────────────────────────────────────
+    // 3. WICKETS — Would the ball hit the stumps?
+    //    Project trajectory from pitch→impact to the stump plane
+    // ──────────────────────────────────────────────
+    const projected = projectBeyondImpact(pitch, impact, sCenterY);
 
-    // 3. Wickets (Projected)
-    const projected = projectBeyondImpact(pitch, impact);
-    const hitX = projected.x >= sLeft && projected.x <= sRight;
-    const hitY = projected.y >= sTop && projected.y <= sBottom;
-    const hitWickets = hitX && hitY;
+    // Check if projected point is within the stump rectangle
+    const projDistFromLeftEdge = projected.x - sLeft;
+    const projDistFromRightEdge = sRight - projected.x;
+    const projDistFromTop = projected.y - sTop;
+    const projDistFromBottom = sBottom - projected.y;
 
-    const wicketsDistX = Math.min(Math.abs(projected.x - sLeft), Math.abs(projected.x - sRight));
-    const wicketsDistY = Math.min(Math.abs(projected.y - sTop), Math.abs(projected.y - sBottom));
+    const projInsideX = projDistFromLeftEdge >= 0 && projDistFromRightEdge >= 0;
+    const projInsideY = projDistFromTop >= 0 && projDistFromBottom >= 0;
+
+    // Distance from nearest stump edge (for clipping check)
+    const projDistX = projInsideX
+      ? Math.min(projDistFromLeftEdge, projDistFromRightEdge)
+      : Math.min(Math.abs(projDistFromLeftEdge), Math.abs(projDistFromRightEdge));
+    const projDistY = projInsideY
+      ? Math.min(projDistFromTop, projDistFromBottom)
+      : Math.min(Math.abs(projDistFromTop), Math.abs(projDistFromBottom));
 
     let wicketsStatus = 'MISSING';
-    if (hitWickets) {
-      // 50% Rule for Wickets: If ball center is outside stumps but edge is hitting -> Umpire's Call
-      if (wicketsDistX > ballRadiusPx && wicketsDistY > ballRadiusPx) {
+
+    if (projInsideX && projInsideY) {
+      // Ball center is inside the stump rectangle
+      if (projDistX >= halfBallPx && projDistY >= halfBallPx) {
+        // More than half the ball inside → clearly HITTING
         wicketsStatus = 'HITTING';
       } else {
-        wicketsStatus = "UMPIRE'S CALL";
+        // Ball center inside but very close to edge → marginal
+        // In ICC DRS, if ball center is inside stumps, it's HITTING
+        // Umpire's Call is only when center is OUTSIDE but edge clips
+        wicketsStatus = 'HITTING';
       }
     } else {
-      // Check if it's clipping (Umpire's Call)
-      const isClippingX = (wicketsDistX < ballRadiusPx || (projected.x >= sLeft && projected.x <= sRight));
-      const isClippingY = (wicketsDistY < ballRadiusPx || (projected.y >= sTop && projected.y <= sBottom));
-      if (isClippingX && isClippingY) {
+      // Ball center is outside the stump rectangle
+      // Check if the ball's edge would still clip the stumps
+      const clipsX = projInsideX || projDistX < halfBallPx;
+      const clipsY = projInsideY || projDistY < halfBallPx;
+
+      if (clipsX && clipsY) {
+        // Ball edge clips the stumps → UMPIRE'S CALL
         wicketsStatus = "UMPIRE'S CALL";
       }
+      // else: completely missing → stays MISSING
     }
 
-    // 4. Final Decision
+    // ──────────────────────────────────────────────
+    // 4. FINAL DECISION — ICC Decision Tree
+    // ──────────────────────────────────────────────
     let finalDecision = 'NOT OUT';
 
-    // Logic Gate:
-    // - Pitching MUST NOT be Outside Leg
-    // - Impact MUST be In-Line OR (Outside Off AND No Shot Offered) -> Assuming Shot Offered for now
-    // - Wickets MUST hit or be Umpire's Call
+    // Gate 1: Pitching outside leg → always NOT OUT
+    if (pitchingStatus === 'OUTSIDE LEG') {
+      finalDecision = 'NOT OUT';
+    }
+    // Gate 2: Check impact + wickets
+    else {
+      // Determine if impact allows LBW
+      let impactAllowsLBW = false;
 
-    if (pitchingStatus !== 'OUTSIDE LEG') {
-      const impactIsLegallyOut = impactStatus === 'IN LINE' || (impactStatus === "UMPIRE'S CALL") || (!shotOffered && impactOutsideOff);
+      if (impactStatus === 'IN LINE') {
+        impactAllowsLBW = true;
+      } else if (impactStatus === "UMPIRE'S CALL") {
+        impactAllowsLBW = true; // proceed, but final may be Umpire's Call
+      } else if (impactStatus === 'OUTSIDE OFF' && !shotOffered) {
+        // ICC Rule: If no shot offered, impact outside off can still be out
+        impactAllowsLBW = true;
+      } else if (impactStatus === 'OUTSIDE OFF' && shotOffered) {
+        impactAllowsLBW = false; // NOT OUT
+      } else if (impactStatus === 'OUTSIDE LEG') {
+        impactAllowsLBW = false; // NOT OUT
+      }
 
-      if (impactIsLegallyOut && wicketsStatus !== 'MISSING') {
-        if (impactStatus === "UMPIRE'S CALL" || wicketsStatus === "UMPIRE'S CALL") {
+      if (impactAllowsLBW && wicketsStatus !== 'MISSING') {
+        // Check for Umpire's Call elements
+        const hasUmpiresCall =
+          impactStatus === "UMPIRE'S CALL" ||
+          wicketsStatus === "UMPIRE'S CALL";
+
+        if (hasUmpiresCall) {
           finalDecision = "UMPIRE'S CALL";
         } else {
           finalDecision = 'OUT';
@@ -384,7 +518,8 @@ export default function LbwTracking() {
       }
     }
 
-    const pitchDist = Math.abs(pitch.x - (sLeft + sRight) / 2) / pxPerInch;
+    // ── Measurements for display ──
+    const pitchDist = Math.abs(pitch.x - sCenterX) / pxPerInch;
     const impactH = Math.abs(sBottom - impact.y) / pxPerInch;
 
     setDrsResult({
@@ -395,6 +530,13 @@ export default function LbwTracking() {
       pitchDistInches: pitchDist.toFixed(1),
       impactHeightInches: impactH.toFixed(1),
     });
+
+    console.log(`[DRS] ── ICC Decision ──`);
+    console.log(`[DRS] Pitching: ${pitchingStatus}`);
+    console.log(`[DRS] Impact: ${impactStatus}`);
+    console.log(`[DRS] Wickets: ${wicketsStatus} (projected: ${projected.x.toFixed(1)}, ${projected.y.toFixed(1)})`);
+    console.log(`[DRS] Stumps: L=${sLeft.toFixed(0)} R=${sRight.toFixed(0)} T=${sTop.toFixed(0)} B=${sBottom.toFixed(0)}`);
+    console.log(`[DRS] Final: ${finalDecision}`);
 
     // Begin DRS animation sequence
     setStep('analyzing');
@@ -416,7 +558,7 @@ export default function LbwTracking() {
     // Cinematic fade to virtual reconstruction
     virtualOpacity.value = withDelay(1000, withTiming(1, { duration: 1500 }));
     stumpReveal.value = withDelay(1500, withTiming(1, { duration: 1000, easing: Easing.out(Easing.back(1)) }));
-    flowProgress.value = withRepeat(withTiming(-100, { duration: 2000, easing: Easing.linear }), -1, false);
+
 
     setTimeout(() => {
       setStep('pitching');
@@ -464,7 +606,8 @@ export default function LbwTracking() {
   const startWicketsAnimation = () => {
     const pit = scaledPitch || { x: SW * 0.48, y: SH * 0.62 };
     const imp = scaledImpact || { x: SW * 0.5, y: SH * 0.52 };
-    const projected = projectBeyondImpact(pit, imp);
+    const sCenterY = stumpRect ? (stumpRect.top + stumpRect.bottom) / 2 : undefined;
+    const projected = projectBeyondImpact(pit, imp, sCenterY);
 
     glowPulse.value = 0;
     ballOpacity.value = withTiming(0.65, { duration: 200 });
@@ -522,8 +665,9 @@ export default function LbwTracking() {
 
   const projectedPoint = useMemo(() => {
     if (!scaledPitch || !scaledImpact) return null;
-    return projectBeyondImpact(scaledPitch, scaledImpact);
-  }, [scaledPitch, scaledImpact]);
+    const sCenterY = stumpRect ? (stumpRect.top + stumpRect.bottom) / 2 : undefined;
+    return projectBeyondImpact(scaledPitch, scaledImpact, sCenterY);
+  }, [scaledPitch, scaledImpact, stumpRect]);
 
   // ═══════════════════════════════════════════════
   //  ANIMATED STYLES & TRACKING STATE
@@ -631,13 +775,12 @@ export default function LbwTracking() {
             opacity={0.15}
             strokeLinecap="round"
           />
-          <AnimatedPath
+          <Path
             d={d}
             stroke={color}
             strokeWidth={5}
             fill="none"
             strokeDasharray="15,10"
-            strokeDashoffset={flowProgress as any}
             strokeLinecap="round"
             opacity={0.9}
           />
@@ -692,9 +835,7 @@ export default function LbwTracking() {
             {render3DStump(right - (right - left) * 0.15, step === 'wickets' && drsResult.wickets === 'HITTING')}
           </G>
 
-          {/* Event Markers (Glows) */}
-          {scaledPitch && <Circle cx={scaledPitch.x} cy={scaledPitch.y} r={10} fill="#38BDF8" opacity={0.3} />}
-          {scaledImpact && <Circle cx={scaledImpact.x} cy={scaledImpact.y} r={12} fill="#EF4444" opacity={0.4} />}
+
 
           {/* International Broadcast Labels */}
           {scaledPitch && (step === 'pitching' || step === 'impact' || step === 'wickets') && (
@@ -918,23 +1059,7 @@ export default function LbwTracking() {
         </View>
       )}
 
-      {/* ══════════ BALL + EFFECTS ══════════ */}
-      {isTracking && (
-        <>
-          <Animated.View style={[
-            styles.impactGlow,
-            { backgroundColor: ballColor + '50' },
-            animGlow,
-          ]} />
-          <Animated.View style={[
-            styles.ball,
-            { borderColor: ballColor, shadowColor: ballColor },
-            animBall,
-          ]}>
-            <View style={[styles.ballInner, { backgroundColor: ballColor + '30' }]} />
-          </Animated.View>
-        </>
-      )}
+
 
       {/* ══════════ DECISION PANEL ══════════ */}
       {step === 'decision' && (
@@ -998,7 +1123,7 @@ export default function LbwTracking() {
                 <RotateCcw size={16} color="#94a3b8" />
                 <Text style={styles.replayText}>RE-PROCESS</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.doneBtn} onPress={() => router.back()}>
+              <TouchableOpacity style={styles.doneBtn} onPress={() => goBack()}>
                 <Text style={styles.doneText}>COMMIT RECORD</Text>
               </TouchableOpacity>
             </View>
@@ -1007,7 +1132,7 @@ export default function LbwTracking() {
       )}
 
       {/* ── Close ── */}
-      <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
+      <TouchableOpacity style={styles.closeBtn} onPress={() => goBack()}>
         <X size={22} color="#fff" />
       </TouchableOpacity>
     </View>

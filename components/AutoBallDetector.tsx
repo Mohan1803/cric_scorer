@@ -173,8 +173,10 @@ function processNext(){
     let detectedHand = 'RH';
     if(stumps && batsmanWeight > 0){
       const batsmanAvgX = batsmanXSum / batsmanWeight;
-      // In standard view: RH stands left (lower X), LH stands right (higher X)
-      detectedHand = (batsmanAvgX < stumps.centerX) ? 'RH' : 'LH';
+      // In professional behind-the-bowler view: 
+      // RH stands on the RIGHT (Leg Side, higher X)
+      // LH stands on the LEFT (Leg Side, lower X)
+      detectedHand = (batsmanAvgX > stumps.centerX) ? 'RH' : 'LH';
     }
 
     window.ReactNativeWebView.postMessage(JSON.stringify({
