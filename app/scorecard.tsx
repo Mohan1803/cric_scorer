@@ -59,22 +59,22 @@ export default function Scorecard() {
     enableSounds,
   } = useGameStore();
 
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
-      // Only show alert and prevent navigation if in restricted states
-      if (awaitingSecondInningsStart || currentInningsNumber === 2) {
-        e.preventDefault();
-        Alert.alert(
-          'Navigation Restricted',
-          'You cannot go back during the innings transition or second innings. Please complete the match or use the home button to exit via a new match.',
-          [{ text: 'OK', style: 'default' }]
-        );
-      }
-      // During first innings (not awaiting second), allow normal back navigation
-    });
+  // useEffect(() => {
+  //   const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+  //     // Only show alert and prevent navigation if in restricted states
+  //     if (awaitingSecondInningsStart || currentInningsNumber === 2) {
+  //       e.preventDefault();
+  //       Alert.alert(
+  //         'Navigation Restricted',
+  //         'You cannot go back during the innings transition or second innings. Please complete the match or use the home button to exit via a new match.',
+  //         [{ text: 'OK', style: 'default' }]
+  //       );
+  //     }
+  //     // During first innings (not awaiting second), allow normal back navigation
+  //   });
 
-    return unsubscribe;
-  }, [navigation, awaitingSecondInningsStart, currentInningsNumber]);
+  //   return unsubscribe;
+  // }, [navigation, awaitingSecondInningsStart, currentInningsNumber]);
 
   useFocusEffect(
     useCallback(() => {

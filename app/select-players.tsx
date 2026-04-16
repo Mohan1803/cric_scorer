@@ -29,9 +29,15 @@ export default function SelectPlayersScreen() {
   const [selectedBowlerId, setSelectedBowlerId] = useState<string | null>(null);
   const [roleTab, setRoleTab] = useState<'striker' | 'nonStriker' | 'bowler'>('striker');
   const navigation = useNavigation();
+  const isProceeding = React.useRef(false);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      // If we are legitimately proceeding to the match, don't block
+      if (isProceeding.current) {
+        return;
+      }
+
       // Prevent default behavior of leaving the screen
       e.preventDefault();
 
@@ -105,10 +111,19 @@ export default function SelectPlayersScreen() {
     const bowler = bowlingTeamObj?.players.find(p => p.id === selectedBowlerId);
 
     if (striker && nonStriker && bowler) {
+      console.log('Starting match with:', striker.name, nonStriker.name, bowler.name);
+      isProceeding.current = true;
       setStriker(striker);
       setNonStriker(nonStriker);
       setCurrentBowler(bowler);
-      router.replace('/scorecard');
+
+      // Small timeout to ensure state/ref propagates before navigation on some high-load devices
+      setTimeout(() => {
+        router.replace('/scorecard');
+      }, 50);
+    } else {
+      console.error('Failed to find player objects for IDs:', { selectedStrikerId, selectedNonStrikerId, selectedBowlerId });
+      Alert.alert('Selection Error', 'Could not find the selected players. Please try re-selecting them.');
     }
   };
 
@@ -229,7 +244,7 @@ export default function SelectPlayersScreen() {
                   <Text style={[styles.playerName, isSelected && styles.playerNameSelected]} numberOfLines={1}>
                     {player.name}
                   </Text>
-                  
+
                   {roleTab !== 'bowler' && (
                     <View style={styles.handBadge}>
                       <Text style={styles.handBadgeText}>
@@ -261,7 +276,11 @@ export default function SelectPlayersScreen() {
           style={[styles.continueButton, (!selectedStrikerId || !selectedNonStrikerId || !selectedBowlerId) && styles.continueButtonDisabled]}
           onPress={handleContinue}
         >
-          <Text style={styles.continueButtonText}>Start Match</Text>
+          <Text style={styles.continueButtonText}>
+            {!selectedStrikerId ? 'Select Striker' :
+              !selectedNonStrikerId ? 'Select Non-Striker' :
+                !selectedBowlerId ? 'Select Bowler' : 'Start Match'}
+          </Text>
           <ChevronRight size={24} color={colors.textDark} />
         </TouchableOpacity>
       </View>
