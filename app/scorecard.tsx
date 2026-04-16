@@ -25,33 +25,6 @@ export default function Scorecard() {
 
   const navigation = useNavigation();
 
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
-      // Only show alert and prevent navigation if in restricted states
-      if (awaitingSecondInningsStart || currentInningsNumber === 2) {
-        e.preventDefault();
-        Alert.alert(
-          'Navigation Restricted',
-          'You cannot go back during the innings transition or second innings. Please complete the match or use the home button to exit via a new match.',
-          [{ text: 'OK', style: 'default' }]
-        );
-      }
-    });
-
-    return unsubscribe;
-  }, [navigation]);
-
-  useFocusEffect(
-    useCallback(() => {
-      const onBackPress = () => {
-        // Hardware back press on Android
-        return true; // We let beforeRemove handle the alert
-      };
-
-      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-      return () => subscription.remove();
-    }, [])
-  );
   const {
     teams,
     striker,
@@ -85,6 +58,38 @@ export default function Scorecard() {
     enableAnimations,
     enableSounds,
   } = useGameStore();
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      // Only show alert and prevent navigation if in restricted states
+      if (awaitingSecondInningsStart || currentInningsNumber === 2) {
+        e.preventDefault();
+        Alert.alert(
+          'Navigation Restricted',
+          'You cannot go back during the innings transition or second innings. Please complete the match or use the home button to exit via a new match.',
+          [{ text: 'OK', style: 'default' }]
+        );
+      }
+      // During first innings (not awaiting second), allow normal back navigation
+    });
+
+    return unsubscribe;
+  }, [navigation, awaitingSecondInningsStart, currentInningsNumber]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        // Only block hardware back during second innings or innings transition
+        if (awaitingSecondInningsStart || currentInningsNumber === 2) {
+          return true; // Block back and let beforeRemove handle the alert
+        }
+        return false; // Allow normal back navigation during first innings
+      };
+
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
+    }, [awaitingSecondInningsStart, currentInningsNumber])
+  );
 
   // Removed local selection states, now using store states
 
@@ -663,9 +668,9 @@ export default function Scorecard() {
                 (ball.runs === 4 || ball.runs === 6) && styles.boundaryBall,
                 ball.isExtra && styles.extraBall
               ]}>
-                <Text style={styles.ballCircleText}>
+                <Text style={[styles.ballCircleText, ball.isExtra && ball.runs > 0 && { fontSize: 10 }]}>
                   {ball.isWicket ? 'W' :
-                    ball.isExtra ? (ball.extraType === 'wide' ? 'wd' : ball.extraType === 'no-ball' ? 'nb' : ball.extraType === 'penalty' ? 'pen' : 'lb') :
+                    ball.isExtra ? `${ball.extraType === 'wide' ? 'wd' : ball.extraType === 'no-ball' ? 'nb' : ball.extraType === 'penalty' ? 'pen' : ball.extraType === 'lb' ? 'lb' : 'bye'}${ball.runs > 0 ? '+' + ball.runs : ''}` :
                       ball.runs}
                 </Text>
               </View>
