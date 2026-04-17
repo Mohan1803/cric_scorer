@@ -872,6 +872,7 @@ export default function Scorecard() {
             onClose={() => setShowShotType(false)}
             onSelect={onShotSelect}
             batsmanName={striker.name}
+            selectedRegion={currentBallData?.fieldPosition}
           />
         </>
       )}

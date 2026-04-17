@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet, Dimensions, ScrollView } from 'react-native';
+import { Modal, View, Text, TouchableOpacity, StyleSheet, Dimensions, ScrollView, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { X } from 'lucide-react-native';
@@ -14,14 +14,14 @@ const { width } = Dimensions.get('window');
 // Off-side (right-hander) = LEFT side of screen.
 // On-side / Leg-side = RIGHT side of screen.
 const FIELD_REGIONS = [
-  { id: 'third_man',         name: 'Third Man',         angle: -22.5 },   // top-left (behind batsman, off-side)
-  { id: 'deep_point',        name: 'Deep Point',        angle: -67.5 },   // left (square off-side)
-  { id: 'deep_cover',        name: 'Deep Cover',        angle: -112.5 },  // bottom-left
-  { id: 'long_off',          name: 'Long Off',          angle: -157.5 },  // bottom, off-side
-  { id: 'long_on',           name: 'Long On',           angle: 157.5 },   // bottom, leg-side
-  { id: 'deep_mid_wicket',   name: 'Deep Mid-Wicket',   angle: 112.5 },   // bottom-right
-  { id: 'deep_square_leg',   name: 'Deep Square Leg',   angle: 67.5 },    // right (square leg-side)
-  { id: 'fine_leg',          name: 'Fine Leg',          angle: 22.5 },    // top-right (behind batsman, leg-side)
+  { id: 'third_man', name: 'Third Man', angle: -22.5 },   // top-left (behind batsman, off-side)
+  { id: 'deep_point', name: 'Deep Point', angle: -67.5 },   // left (square off-side)
+  { id: 'deep_cover', name: 'Deep Cover', angle: -112.5 },  // bottom-left
+  { id: 'long_off', name: 'Long Off', angle: -157.5 },  // bottom, off-side
+  { id: 'long_on', name: 'Long On', angle: 157.5 },   // bottom, leg-side
+  { id: 'deep_mid_wicket', name: 'Deep Mid-Wicket', angle: 112.5 },   // bottom-right
+  { id: 'deep_square_leg', name: 'Deep Square Leg', angle: 67.5 },    // right (square leg-side)
+  { id: 'fine_leg', name: 'Fine Leg', angle: 22.5 },    // top-right (behind batsman, leg-side)
 ];
 
 interface Props {
@@ -104,7 +104,7 @@ const FieldMapModal: React.FC<Props> = ({ visible, onClose, onSelect, batsmanNam
                     BOWLER
                   </SvgText>
 
-                  {/* Tappable pie-slice sectors (each 45°) */}
+                  {/* Tappable sectors (each 45°) */}
                   {regions.map((region) => {
                     const halfSector = 22.5;
                     const startAngle = region.angle - halfSector;
@@ -112,15 +112,21 @@ const FieldMapModal: React.FC<Props> = ({ visible, onClose, onSelect, batsmanNam
                     const p1 = toXY(startAngle, boundaryR);
                     const p2 = toXY(endAngle, boundaryR);
                     const d = `M ${cx} ${cy} L ${p1.x} ${p1.y} A ${boundaryR} ${boundaryR} 0 0 1 ${p2.x} ${p2.y} Z`;
+                    
+                    const handleSelect = () => onSelect(region.name);
+                    const interactionProps = Platform.OS === 'web' 
+                      ? { onClick: handleSelect } 
+                      : { onPress: handleSelect };
+
                     return (
-                      <G key={`sector-${region.id}`} onPress={() => onSelect(region.name)}>
-                        <Path
-                          d={d}
-                          fill="transparent"
-                          stroke="rgba(255,255,255,0.08)"
-                          strokeWidth={0.8}
-                        />
-                      </G>
+                      <Path
+                        key={`sector-${region.id}`}
+                        d={d}
+                        fill="rgba(255,255,255,0.01)" // use low opacity for better touch area detection on web
+                        stroke="rgba(255,255,255,0.08)"
+                        strokeWidth={0.8}
+                        {...interactionProps}
+                      />
                     );
                   })}
 
@@ -129,27 +135,24 @@ const FieldMapModal: React.FC<Props> = ({ visible, onClose, onSelect, batsmanNam
                     const pt = toXY(region.angle, boundaryR * 0.8);
                     return <Circle key={`dot-${region.id}`} cx={pt.x} cy={pt.y} r={4} fill="#fff" opacity={0.85} />;
                   })}
-
-                  {/* Field position labels */}
-                  {regions.map((region) => {
-                    const pt = toXY(region.angle, boundaryR * 0.65);
-                    return (
-                      <G key={`label-g-${region.id}`} onPress={() => onSelect(region.name)}>
-                        <SvgText
-                          key={`label-${region.id}`}
-                          x={pt.x}
-                          y={pt.y}
-                          fill="rgba(255,255,255,0.7)"
-                          fontSize={7}
-                          fontWeight="600"
-                          textAnchor="middle"
-                        >
-                          {region.name}
-                        </SvgText>
-                      </G>
-                    );
-                  })}
                 </Svg>
+
+                {/* Field position labels overlay - moved out of SVG for better reliability & to fix web warnings */}
+                {regions.map((region) => {
+                  const pt = toXY(region.angle, boundaryR * 0.65);
+                  return (
+                    <TouchableOpacity
+                      key={`label-${region.id}`}
+                      style={[
+                        styles.labelOverlayBtn,
+                        { left: pt.x - 40, top: pt.y - 12 }
+                      ]}
+                      onPress={() => onSelect(region.name)}
+                    >
+                      <Text style={styles.labelText}>{region.name}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </View>
 
@@ -218,11 +221,21 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   labelText: {
-    fontSize: 7.5,
-    color: '#ccc',
-    fontWeight: '600',
+    fontSize: 9,
+    color: 'rgba(255,255,255,0.85)',
+    fontWeight: '700',
     textAlign: 'center',
     letterSpacing: 0.3,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  labelOverlayBtn: {
+    position: 'absolute',
+    width: 80,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   quickSelect: {
     marginTop: 16,
