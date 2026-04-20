@@ -2,10 +2,11 @@ import React from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet, Dimensions, ScrollView, FlatList } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { X, User, ChevronRight, Target } from 'lucide-react-native';
+import { X, User, ChevronRight, Target, Star } from 'lucide-react-native';
 import { colors, shadows } from '../app/theme';
 import WagonWheel from './WagonWheel';
 import { BallRecord, Player } from '../store/gameStore';
+import { useFollowStore } from '../store/followStore';
 
 const { width, height } = Dimensions.get('window');
 
@@ -17,7 +18,18 @@ interface Props {
 }
 
 const BatsmanStatsModal: React.FC<Props> = ({ visible, onClose, player, ballHistory }) => {
+  const { followPlayer, unfollowPlayer, followedPlayers } = useFollowStore();
   if (!player) return null;
+
+  const isFollowing = followedPlayers.includes(player.name);
+
+  const toggleFollow = () => {
+    if (isFollowing) {
+      unfollowPlayer(player.name);
+    } else {
+      followPlayer(player.name);
+    }
+  };
 
   const batsmanBalls = ballHistory.filter(b => b.batsmanId === player.id);
   const strikeRate = player.balls > 0 ? ((player.runs / player.balls) * 100).toFixed(1) : '0.0';
@@ -63,7 +75,16 @@ const BatsmanStatsModal: React.FC<Props> = ({ visible, onClose, player, ballHist
                   <User color={colors.accent} size={24} />
                 </View>
                 <View>
-                  <Text style={styles.playerName}>{player.name}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={styles.playerName}>{player.name}</Text>
+                    <TouchableOpacity onPress={toggleFollow} style={styles.followBtn}>
+                      <Star 
+                        size={18} 
+                        color={isFollowing ? colors.accentGold : colors.textSecondary} 
+                        fill={isFollowing ? colors.accentGold : 'transparent'} 
+                      />
+                    </TouchableOpacity>
+                  </View>
                   <Text style={styles.playerRole}>{player.role || 'Batsman'}</Text>
                 </View>
               </View>
@@ -189,6 +210,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.05)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  followBtn: {
+    padding: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.03)',
   },
   scrollContent: {
     paddingBottom: 40,

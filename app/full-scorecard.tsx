@@ -592,9 +592,6 @@ export default function FullScorecard() {
               <Download color={colors.textDark} size={20} />
               <Text style={styles.buttonText}>Download Scorecard</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.exportButton, { backgroundColor: colors.accentGold, marginTop: 12 }]} onPress={() => setShowNewMatchModal(true)}>
-              <Text style={styles.buttonText}>🏏  Start New Match</Text>
-            </TouchableOpacity>
             <TouchableOpacity 
               style={[styles.exportButton, { backgroundColor: 'rgba(255,255,255,0.05)', marginTop: 12, borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 }]} 
               onPress={handleNewMatch}

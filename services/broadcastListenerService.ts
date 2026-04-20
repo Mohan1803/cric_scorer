@@ -3,6 +3,7 @@ import { db } from './firebaseConfig';
 import { sendLocalNotification } from './notificationService';
 import { getDeviceId } from './deviceIdService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFollowStore } from '../store/followStore';
 
 const NOTIFIED_MATCHES_KEY = 'notified_match_ids';
 
@@ -27,6 +28,7 @@ export async function startBroadcastListener() {
   );
 
   return onSnapshot(q, async (snapshot) => {
+    const { followedPlayers } = useFollowStore.getState();
     const newNotifiedIds = [...notifiedIds];
     let hasChanges = false;
 
@@ -37,17 +39,33 @@ export async function startBroadcastListener() {
 
         // Only notify if we haven't seen this match ID before
         // and it was updated recently (within the last 5 minutes)
-        // to avoid notifying about ancient live matches on app restart
         const lastUpdated = matchData.lastUpdated as Timestamp;
         const reflectsRecentStart = lastUpdated && (Date.now() - lastUpdated.toMillis()) < 300000;
         const isNotLocal = matchData.creatorId !== localDeviceId;
 
         if (!notifiedIds.includes(matchId) && reflectsRecentStart && isNotLocal) {
-          sendLocalNotification(
-            '🏏 New Match Started!',
-            `${matchData.team1} vs ${matchData.team2} at ${matchData.groundName || 'Unknown Ground'}`,
-            { matchId }
+          // SELECTIVE NOTIFICATION: Check if any followed player is in this match
+          const playersInMatch = matchData.playerNames || [];
+          const followedMatch = followedPlayers.some(followedName => 
+            playersInMatch.some((matchPlayerName: string) => 
+               matchPlayerName.toLowerCase() === followedName.toLowerCase()
+            )
           );
+
+          if (followedMatch) {
+            const favoritePlayer = followedPlayers.find(followedName => 
+              playersInMatch.some((matchPlayerName: string) => 
+                 matchPlayerName.toLowerCase() === followedName.toLowerCase()
+              )
+            );
+
+            sendLocalNotification(
+              '🌟 Your Followed Player is Playing!',
+              `${favoritePlayer} is in the match: ${matchData.team1} vs ${matchData.team2}`,
+              { matchId }
+            );
+          }
+          
           newNotifiedIds.push(matchId);
           hasChanges = true;
         } else if (!notifiedIds.includes(matchId)) {

@@ -26,6 +26,7 @@ export interface GlobalMatch {
   battingTeam: string;
   matchResult?: string;
   creatorId?: string;
+  playerNames?: string[];
 }
 
 /**

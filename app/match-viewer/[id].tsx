@@ -5,9 +5,9 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  ActivityIndicator,
-  SafeAreaView
+  ActivityIndicator
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronLeft, Trophy, MapPin, Award, Activity } from 'lucide-react-native';
@@ -50,8 +50,8 @@ export default function MatchViewer() {
     return (
       <SafeAreaView style={styles.centerContainer}>
         <Text style={styles.errorText}>Match not found or not yet synced.</Text>
-        <TouchableOpacity 
-          style={styles.backButton} 
+        <TouchableOpacity
+          style={styles.backButton}
           onPress={() => router.canGoBack() ? router.back() : router.replace('/')}
         >
           <Text style={styles.backButtonText}>Go Back</Text>
@@ -70,28 +70,28 @@ export default function MatchViewer() {
 
     // Identify teams
     const firstBall = inningsBallHistory[0];
-    const battingTeamObj = teams.find((t: any) => 
+    const battingTeamObj = teams.find((t: any) =>
       t.players.some((p: any) => p.id === firstBall.batsmanId)
     ) || teams[0];
     const bowlingTeamObj = teams.find((t: any) => t.name !== battingTeamObj.name) || teams[1];
-    
+
     const totalScore = inningsBallHistory.reduce(
       (sum, ball) => sum + ball.runs + (ball.isExtra && (ball.extraType === 'wide' || ball.extraType === 'no-ball') ? 1 : 0),
       0
     );
     const wicketsCount = inningsBallHistory.filter(ball => ball.isWicket).length;
     const legalBalls = inningsBallHistory.filter(ball => !ball.isExtra).length;
-    
+
     // Derive orders
     const battingOrderIds: string[] = [];
     const bowlingOrderIds: string[] = [];
-    
+
     inningsBallHistory.forEach(b => {
       if (b.batsmanId && !battingOrderIds.includes(b.batsmanId)) battingOrderIds.push(b.batsmanId);
       if (b.nonStrikerId && !battingOrderIds.includes(b.nonStrikerId)) battingOrderIds.push(b.nonStrikerId);
       if (b.bowlerId && !bowlingOrderIds.includes(b.bowlerId)) bowlingOrderIds.push(b.bowlerId);
     });
-    
+
     const batters = battingOrderIds.map(id => battingTeamObj.players.find((p: any) => p.id === id)).filter(Boolean);
     const bowlers = bowlingOrderIds.map(id => bowlingTeamObj.players.find((p: any) => p.id === id)).filter(Boolean);
 

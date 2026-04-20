@@ -562,7 +562,8 @@ export const useGameStore = create<GameState>()(
             battingTeam: state.battingTeam || '',
             wickets: wicketsCount,
             matchResult: finalUpdates.matchResult || undefined,
-            creatorId: await getDeviceId()
+            creatorId: await getDeviceId(),
+            playerNames: state.teams.flatMap(t => t.players.map(p => p.name))
           };
           syncMatchToCloud(state.matchId, summary);
 

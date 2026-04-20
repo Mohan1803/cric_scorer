@@ -5,12 +5,12 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  SafeAreaView,
   ActivityIndicator,
   Dimensions,
   RefreshControl
 } from 'react-native';
-import { router } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { router, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   ChevronLeft,
@@ -21,7 +21,8 @@ import {
   Radio,
   Users,
   Clock,
-  ArrowRight
+  ArrowRight,
+  History
 } from 'lucide-react-native';
 import { colors } from './theme';
 import { listenForLiveMatches, listenForPastMatches, type GlobalMatch } from '../services/matchSyncService';
@@ -29,8 +30,9 @@ import { listenForLiveMatches, listenForPastMatches, type GlobalMatch } from '..
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function LiveMatches() {
+  const { tab } = useLocalSearchParams();
   const [matches, setMatches] = useState<GlobalMatch[]>([]);
-  const [activeTab, setActiveTab] = useState<'live' | 'past'>('live');
+  const [activeTab, setActiveTab] = useState<'live' | 'past'>((tab as 'live' | 'past') || 'live');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -169,33 +171,41 @@ export default function LiveMatches() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.canGoBack() ? router.back() : router.replace('/')}
+          onPress={() => router.canGoBack() ? router.back() : router.replace('/entryPage' as any)}
         >
           <ChevronLeft size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
-          <Radio size={20} color={colors.accentAlt} />
-          <Text style={styles.headerTitle}>Global Matches</Text>
+          {activeTab === 'live' ? (
+            <Radio size={20} color={colors.accentAlt} />
+          ) : (
+            <History size={20} color={colors.accentGold} />
+          )}
+          <Text style={styles.headerTitle}>
+            {tab === 'live' ? 'Live Global Feed' : tab === 'past' ? 'Match Archive' : 'Global Matches'}
+          </Text>
         </View>
         <View style={{ width: 44 }} />
       </View>
 
-      <View style={styles.tabsContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'live' && styles.activeTab]}
-          onPress={() => setActiveTab('live')}
-        >
-          <Text style={[styles.tabText, activeTab === 'live' && styles.activeTabText]}>Live Now</Text>
-          {activeTab === 'live' && <View style={styles.tabIndicator} />}
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'past' && styles.activeTab]}
-          onPress={() => setActiveTab('past')}
-        >
-          <Text style={[styles.tabText, activeTab === 'past' && styles.activeTabText]}>Recent Results</Text>
-          {activeTab === 'past' && <View style={styles.tabIndicator} />}
-        </TouchableOpacity>
-      </View>
+      {!tab && (
+        <View style={styles.tabsContainer}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'live' && styles.activeTab]}
+            onPress={() => setActiveTab('live')}
+          >
+            <Text style={[styles.tabText, activeTab === 'live' && styles.activeTabText]}>Live Now</Text>
+            {activeTab === 'live' && <View style={styles.tabIndicator} />}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'past' && styles.activeTab]}
+            onPress={() => setActiveTab('past')}
+          >
+            <Text style={[styles.tabText, activeTab === 'past' && styles.activeTabText]}>Recent Results</Text>
+            {activeTab === 'past' && <View style={styles.tabIndicator} />}
+          </TouchableOpacity>
+        </View>
+      )}
 
       {loading ? (
         <View style={styles.centerContainer}>
