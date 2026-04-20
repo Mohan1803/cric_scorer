@@ -3,7 +3,7 @@ import {
   StyleSheet, Text, View, TouchableOpacity, Dimensions,
   Platform, Alert, Image, Pressable, ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { useLocalSearchParams, router, useNavigation } from 'expo-router';
 import {
@@ -94,15 +94,26 @@ export default function LbwTracking() {
   const detectorRef = useRef<AutoBallDetectorRef>(null);
   const { striker } = useGameStore();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
+  const timeouts = useRef<NodeJS.Timeout[]>([]);
 
-  // Safe back navigation — falls back to home if no screen to go back to
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      timeouts.current.forEach(t => clearTimeout(t));
+    };
+  }, []);
+
+  const addTimeout = (fn: () => void, ms: number) => {
+    const t = setTimeout(fn, ms);
+    timeouts.current.push(t);
+    return t;
+  };
+
+  // Safe back navigation — redirects to entry page to ensure clean state
   const goBack = useCallback(() => {
-    if (navigation.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/');
-    }
-  }, [navigation]);
+    router.replace('/entryPage');
+  }, []);
 
   // ── Flow state ──
   type FlowStep = 'extracting' | 'detecting' | 'analyzing' | 'pitching' | 'impact' | 'wickets' | 'decision';
@@ -561,7 +572,7 @@ export default function LbwTracking() {
     stumpReveal.value = withDelay(1500, withTiming(1, { duration: 1000, easing: Easing.out(Easing.back(1)) }));
 
 
-    setTimeout(() => {
+    addTimeout(() => {
       setStep('pitching');
       startPitchingAnimation();
     }, 2800);
@@ -586,7 +597,7 @@ export default function LbwTracking() {
       withSequence(withTiming(1, { duration: 80 }), withTiming(0, { duration: 400 }))
     );
 
-    setTimeout(() => { setStep('impact'); startImpactAnimation(); }, 2800);
+    addTimeout(() => { setStep('impact'); startImpactAnimation(); }, 2800);
   };
 
   const startImpactAnimation = () => {
@@ -601,7 +612,7 @@ export default function LbwTracking() {
       withSequence(withTiming(1, { duration: 60 }), withTiming(0.3, { duration: 500 }))
     );
 
-    setTimeout(() => { setStep('wickets'); startWicketsAnimation(); }, 2500);
+    addTimeout(() => { setStep('wickets'); startWicketsAnimation(); }, 2500);
   };
 
   const startWicketsAnimation = () => {
@@ -626,7 +637,7 @@ export default function LbwTracking() {
       );
     }
 
-    setTimeout(() => {
+    addTimeout(() => {
       setStep('decision');
       // Potential to play final drumroll/hit sound here
     }, 3500); // 3.5s delay for tension
@@ -640,7 +651,7 @@ export default function LbwTracking() {
     setDetection(null);
     setExtractProgress(0);
     setDetectProgress(0);
-    setTimeout(() => startAutoFlow(), 300);
+    addTimeout(() => startAutoFlow(), 300);
   }, []);
 
   // ── Save video ──
@@ -980,7 +991,7 @@ export default function LbwTracking() {
 
       {/* ══════════ DRS DASHBOARD (tracking phases) ══════════ */}
       {isTracking && (
-        <View style={styles.drsHeader}>
+        <View style={[styles.drsHeader, { paddingTop: Math.max(insets.top, 14) }]}>
           <LinearGradient colors={['rgba(15,23,42,0.9)', 'rgba(15,23,42,0.4)']} style={styles.drsHeaderGrad} />
 
           {striker && (
@@ -1132,7 +1143,10 @@ export default function LbwTracking() {
         </View>
       )}
 
-      <TouchableOpacity style={styles.closeBtn} onPress={() => goBack()}>
+      <TouchableOpacity 
+        style={[styles.closeBtn, { top: Math.max(insets.top, 10) }]} 
+        onPress={() => goBack()}
+      >
         <X size={22} color="#fff" />
       </TouchableOpacity>
     </SafeAreaView>

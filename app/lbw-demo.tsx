@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Dimensions, Image, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { X, TrendingUp, Cpu, RotateCcw } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -32,6 +33,25 @@ type Phase =
 // ─── COMPONENT ──────────────────────────────────
 export default function LbwDemo() {
   const [phase, setPhase] = useState<Phase>('processing');
+  const insets = useSafeAreaInsets();
+  const timeouts = useRef<NodeJS.Timeout[]>([]);
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      timeouts.current.forEach(t => clearTimeout(t));
+    };
+  }, []);
+
+  const addTimeout = (fn: () => void, ms: number) => {
+    const t = setTimeout(fn, ms);
+    timeouts.current.push(t);
+    return t;
+  };
+
+  const goBack = () => {
+    router.replace('/entryPage');
+  };
 
   // DRS status data
   const drsStatus = {
@@ -61,8 +81,7 @@ export default function LbwDemo() {
     );
 
     // Auto-start the DRS sequence after 3s
-    const t = setTimeout(() => setPhase('pitching'), 3000);
-    return () => clearTimeout(t);
+    const t = addTimeout(() => setPhase('pitching'), 3000);
   }, []);
 
   // ── Phase transition controller ──
@@ -107,7 +126,7 @@ export default function LbwDemo() {
     );
 
     // Transition to next phase
-    setTimeout(() => setPhase('impact'), 3200);
+    addTimeout(() => setPhase('impact'), 3200);
   };
 
   // ═══════════════════════════════════════════════
@@ -144,7 +163,7 @@ export default function LbwDemo() {
     );
 
     // Transition
-    setTimeout(() => setPhase('wickets'), 3000);
+    addTimeout(() => setPhase('wickets'), 3000);
   };
 
   // ═══════════════════════════════════════════════
@@ -183,7 +202,7 @@ export default function LbwDemo() {
     );
 
     // Decision
-    setTimeout(() => setPhase('decision'), 3500);
+    addTimeout(() => setPhase('decision'), 3500);
   };
 
   // ─── Restart ──
@@ -192,8 +211,7 @@ export default function LbwDemo() {
     ballOpacity.value = 0;
     trailOpacity.value = 0;
     glowPulse.value = 0;
-    const t = setTimeout(() => setPhase('pitching'), 3000);
-    return () => clearTimeout(t);
+    addTimeout(() => setPhase('pitching'), 3000);
   }, []);
 
   // ═══════════════════════════════════════════════
@@ -309,7 +327,7 @@ export default function LbwDemo() {
 
       {/* ══════════ DRS HEADER DASHBOARD ══════════ */}
       {isTrackingPhase && (
-        <View style={styles.headerDashboard}>
+        <View style={[styles.headerDashboard, { paddingTop: Math.max(insets.top, 14) }]}>
           <LinearGradient
             colors={['rgba(0,0,0,0.85)', 'transparent']}
             style={styles.headerGrad}
@@ -430,7 +448,7 @@ export default function LbwDemo() {
                 <RotateCcw size={18} color="#fff" />
                 <Text style={styles.replayText}>REPLAY</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.doneBtn} onPress={() => router.back()}>
+              <TouchableOpacity style={styles.doneBtn} onPress={goBack}>
                 <Text style={styles.doneText}>DONE</Text>
               </TouchableOpacity>
             </View>
@@ -439,7 +457,10 @@ export default function LbwDemo() {
       )}
 
       {/* ── Close button ── */}
-      <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
+      <TouchableOpacity 
+        style={[styles.closeBtn, { top: Math.max(insets.top, 10) }]} 
+        onPress={goBack}
+      >
         <X size={22} color="#fff" />
       </TouchableOpacity>
     </View>

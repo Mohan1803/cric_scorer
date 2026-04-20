@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Dimensions, Alert, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { router } from 'expo-router';
 import { X, Video, Circle, RotateCcw } from 'lucide-react-native';
@@ -14,12 +14,20 @@ export default function LbwRecorder() {
   const cameraRef = useRef<CameraView>(null);
   const [recordingTime, setRecordingTime] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const isMounted = useRef(true);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
+    isMounted.current = true;
     return () => {
+      isMounted.current = false;
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
+
+  const goBack = () => {
+    router.replace('/entryPage');
+  };
 
   if (!permission || !micPermission) {
     // Camera permissions are still loading
@@ -51,22 +59,35 @@ export default function LbwRecorder() {
       return;
     }
 
-    if (cameraRef.current) {
+    if (cameraRef.current && isMounted.current) {
       try {
         setIsRecording(true);
         setRecordingTime(0);
+        
+        if (timerRef.current) clearInterval(timerRef.current);
         timerRef.current = setInterval(() => {
-          setRecordingTime(prev => prev + 1);
+          if (isMounted.current) {
+            setRecordingTime(prev => prev + 1);
+          }
         }, 1000);
+
+        // Optional: prepare for recording if the API supports it
+        // await cameraRef.current.prepareRecording();
 
         const video = await cameraRef.current.recordAsync({
             maxDuration: 15, // Limit to 15 seconds
         });
 
-        if (timerRef.current) clearInterval(timerRef.current);
-        setIsRecording(false);
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+        }
+        
+        if (isMounted.current) {
+          setIsRecording(false);
+        }
 
-        if (video) {
+        if (video && isMounted.current) {
             router.push({
                 pathname: '/lbw-tracking' as any,
                 params: { videoUri: video.uri }
@@ -74,9 +95,11 @@ export default function LbwRecorder() {
         }
       } catch (error) {
         console.error('Recording error:', error);
-        setIsRecording(false);
-        if (timerRef.current) clearInterval(timerRef.current);
-        Alert.alert('Error', 'Failed to record video');
+        if (isMounted.current) {
+          setIsRecording(false);
+          if (timerRef.current) clearInterval(timerRef.current);
+          Alert.alert('Error', 'Failed to record video properly');
+        }
       }
     }
   };
@@ -94,15 +117,15 @@ export default function LbwRecorder() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <CameraView 
         style={styles.camera} 
         ref={cameraRef}
         mode="video"
       >
-        <View style={styles.overlay}>
+        <View style={[styles.overlay, { paddingTop: Math.max(insets.top, 20) }]}>
           <View style={styles.topBar}>
-            <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
+            <TouchableOpacity style={styles.closeButton} onPress={goBack}>
               <X size={24} color="#fff" />
             </TouchableOpacity>
             {isRecording && (
@@ -137,7 +160,7 @@ export default function LbwRecorder() {
               <View style={[styles.recordButtonOuter, isRecording && styles.recordingOuter]}>
                 <View style={[styles.recordButtonInner, isRecording && styles.recordingInner]} />
               </View>
-              <Text style={[styles.recordLabel, isRecording && { color: '#ef4444' }]}>
+              <Text style={[styles.recordLabel, isMounted.current && isRecording ? { color: '#ef4444' } : { color: '#fff' }]}>
                 {isRecording ? 'STOP' : 'RECORD'}
               </Text>
             </TouchableOpacity>
@@ -154,7 +177,7 @@ export default function LbwRecorder() {
           </View>
         </View>
       </CameraView>
-    </SafeAreaView>
+    </View>
   );
 }
 
