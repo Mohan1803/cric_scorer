@@ -25,6 +25,7 @@ export interface GlobalMatch {
   status: 'live' | 'completed';
   battingTeam: string;
   matchResult?: string;
+  creatorId?: string;
 }
 
 /**

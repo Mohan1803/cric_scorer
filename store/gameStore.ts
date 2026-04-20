@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { syncMatchToCloud, syncFullMatchDetails } from '../services/matchSyncService';
+import { getDeviceId } from '../services/deviceIdService';
 
 export interface Player {
   id: string;
@@ -308,7 +309,7 @@ export const useGameStore = create<GameState>()(
 
 
 
-      updateScore: (record: BallRecord) => {
+      updateScore: async (record: BallRecord) => {
         const state = get();
         if (state.matchCompleted || state.awaitingSecondInningsStart) return;
 
@@ -503,7 +504,8 @@ export const useGameStore = create<GameState>()(
             status: finalUpdates.matchCompleted ? 'completed' : 'live' as any,
             battingTeam: state.battingTeam || '',
             wickets: wicketsCount,
-            matchResult: finalUpdates.matchResult || undefined
+            matchResult: finalUpdates.matchResult || undefined,
+            creatorId: await getDeviceId()
           };
           syncMatchToCloud(state.matchId, summary);
 
@@ -520,7 +522,8 @@ export const useGameStore = create<GameState>()(
               matchId: state.matchId,
               groundName: state.groundName,
               tournamentName: state.tournamentName,
-              currentInningsNumber: state.currentInningsNumber
+              currentInningsNumber: state.currentInningsNumber,
+              creatorId: await getDeviceId()
             };
             syncFullMatchDetails(state.matchId, fullDetails);
           }

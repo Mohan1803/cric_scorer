@@ -1,6 +1,7 @@
 import { collection, query, where, onSnapshot, Timestamp } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 import { sendLocalNotification } from './notificationService';
+import { getDeviceId } from './deviceIdService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const NOTIFIED_MATCHES_KEY = 'notified_match_ids';
@@ -9,6 +10,8 @@ const NOTIFIED_MATCHES_KEY = 'notified_match_ids';
  * Starts a real-time listener that notifies the user when a new match begins
  */
 export async function startBroadcastListener() {
+  const localDeviceId = await getDeviceId();
+  
   // Load existing notified IDs to avoid double notifications
   let notifiedIds: string[] = [];
   try {
@@ -37,8 +40,9 @@ export async function startBroadcastListener() {
         // to avoid notifying about ancient live matches on app restart
         const lastUpdated = matchData.lastUpdated as Timestamp;
         const reflectsRecentStart = lastUpdated && (Date.now() - lastUpdated.toMillis()) < 300000;
+        const isNotLocal = matchData.creatorId !== localDeviceId;
 
-        if (!notifiedIds.includes(matchId) && reflectsRecentStart) {
+        if (!notifiedIds.includes(matchId) && reflectsRecentStart && isNotLocal) {
           sendLocalNotification(
             '🏏 New Match Started!',
             `${matchData.team1} vs ${matchData.team2} at ${matchData.groundName || 'Unknown Ground'}`,
