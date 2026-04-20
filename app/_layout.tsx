@@ -17,6 +17,8 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { requestNotificationPermissions } from '../services/notificationService';
+import { startBroadcastListener } from '../services/broadcastListenerService';
 
 export default function RootLayout() {
   useFrameworkReady();
@@ -25,6 +27,15 @@ export default function RootLayout() {
     // Hide splash screen and set system UI once we are ready
     SplashScreen.hideAsync().catch(() => {});
     SystemUI.setBackgroundColorAsync('#0B0E14').catch(() => {});
+
+    // Notification Setup
+    async function setupNotifications() {
+      const hasPermission = await requestNotificationPermissions();
+      if (hasPermission) {
+        startBroadcastListener();
+      }
+    }
+    setupNotifications();
   }, []);
 
   return (
