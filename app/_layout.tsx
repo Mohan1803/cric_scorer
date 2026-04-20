@@ -129,6 +129,16 @@ export default function RootLayout() {
             headerShown: false,
           }}
         />
+        <Stack.Screen name="live-matches"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen name="match-viewer/[id]"
+          options={{
+            headerShown: false,
+          }}
+        />
       </Stack>
       <StatusBar style="light" />
     </SafeAreaProvider>

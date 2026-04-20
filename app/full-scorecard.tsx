@@ -361,7 +361,7 @@ export default function FullScorecard() {
   const handleNewMatch = () => {
     startNewMatch();
     setShowNewMatchModal(false);
-    router.replace('/');
+    router.replace('/entryPage');
   };
 
   const renderInnings = (
@@ -594,6 +594,12 @@ export default function FullScorecard() {
             </TouchableOpacity>
             <TouchableOpacity style={[styles.exportButton, { backgroundColor: colors.accentGold, marginTop: 12 }]} onPress={() => setShowNewMatchModal(true)}>
               <Text style={styles.buttonText}>🏏  Start New Match</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.exportButton, { backgroundColor: 'rgba(255,255,255,0.05)', marginTop: 12, borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 }]} 
+              onPress={handleNewMatch}
+            >
+              <Text style={[styles.buttonText, { color: colors.textPrimary }]}>🏁  Finish Match</Text>
             </TouchableOpacity>
           </View>
         )}

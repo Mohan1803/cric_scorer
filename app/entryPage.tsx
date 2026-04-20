@@ -6,7 +6,7 @@ import { colors } from './theme';
 import { router } from 'expo-router';
 import { useGameStore } from '../store/gameStore';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Trophy, Users, Hash, Settings2, Shield, Calendar, Zap, Search } from 'lucide-react-native';
+import { Trophy, Users, Hash, Settings2, Shield, Calendar, Zap, Search, MapPin, Award, Activity } from 'lucide-react-native';
 import { useTeamLibraryStore } from '../store/teamLibraryStore';
 import { Team } from '../store/gameStore';
 
@@ -26,7 +26,11 @@ export default function TeamEntry() {
     hasHydrated,
     matchCompleted,
     teams,
-    startNewMatch
+    startNewMatch,
+    groundName,
+    tournamentName,
+    setGroundName,
+    setTournamentName
   } = useGameStore();
 
   // Removed resume logic - now handled in index.tsx
@@ -186,6 +190,36 @@ export default function TeamEntry() {
               maxLength={2}
             />
           </View>
+          
+          <View style={styles.inputGroup}>
+            <View style={styles.labelRow}>
+              <MapPin size={16} color={colors.textSecondary} />
+              <Text style={styles.label}>Ground Name</Text>
+            </View>
+            <TextInput
+              style={styles.input}
+              value={groundName}
+              onChangeText={setGroundName}
+              placeholder="e.g. Lords Cricket Ground"
+              placeholderTextColor="rgba(148, 163, 184, 0.4)"
+              maxLength={40}
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <View style={styles.labelRow}>
+              <Award size={16} color={colors.textSecondary} />
+              <Text style={styles.label}>Tournament Name</Text>
+            </View>
+            <TextInput
+              style={styles.input}
+              value={tournamentName}
+              onChangeText={setTournamentName}
+              placeholder="e.g. World Cup 2024"
+              placeholderTextColor="rgba(148, 163, 184, 0.4)"
+              maxLength={40}
+            />
+          </View>
 
           <View style={styles.settingsRow}>
             <TouchableOpacity
@@ -222,6 +256,17 @@ export default function TeamEntry() {
             >
               <Text style={styles.buttonText}>Continue to Players</Text>
             </LinearGradient>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            activeOpacity={0.8} 
+            style={[styles.button, { marginTop: 16, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }]} 
+            onPress={() => router.push('/live-matches' as any)}
+          >
+            <View style={[styles.buttonGradient, { flexDirection: 'row', gap: 10 }]}>
+              <Activity size={20} color={colors.accentGold} />
+              <Text style={[styles.buttonText, { color: colors.accentGold }]}>Browse Live Matches</Text>
+            </View>
           </TouchableOpacity>
         </View>
 

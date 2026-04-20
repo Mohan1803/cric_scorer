@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { syncMatchToCloud, syncFullMatchDetails } from '../services/matchSyncService';
 
 export interface Player {
   id: string;
@@ -67,6 +68,12 @@ export interface UndoOperation {
   details: any;
 }
 
+export interface MatchSyncData {
+  matchId: string;
+  groundName: string;
+  tournamentName: string;
+}
+
 export interface GameState {
   initialStriker: Player | null;
   initialNonStriker: Player | null;
@@ -96,6 +103,11 @@ export interface GameState {
   enableSounds: boolean;
   enableFieldMap: boolean;
 
+  // New Global Sync fields
+  matchId: string | null;
+  groundName: string;
+  tournamentName: string;
+
   setTeams: (teams: Team[]) => void;
   setTossWinner: (team: string) => void;
   setBattingTeam: (team: string) => void;
@@ -111,6 +123,8 @@ export interface GameState {
   setEnableAnimations: (enabled: boolean) => void;
   setEnableSounds: (enabled: boolean) => void;
   setEnableFieldMap: (enabled: boolean) => void;
+  setGroundName: (name: string) => void;
+  setTournamentName: (name: string) => void;
   startNewMatch: () => void;
   clearMatchResult: () => void;
   checkDuplicateName: (teamIndex: number, name: string) => boolean;
@@ -151,6 +165,9 @@ export const useGameStore = create<GameState>()(
       enableAnimations: true,
       enableSounds: true,
       enableFieldMap: true,
+      matchId: null,
+      groundName: '',
+      tournamentName: '',
 
       target: null,
       matchDate: new Date(),
@@ -191,6 +208,8 @@ export const useGameStore = create<GameState>()(
       setEnableAnimations: (enabled: boolean) => set({ enableAnimations: enabled }),
       setEnableSounds: (enabled: boolean) => set({ enableSounds: enabled }),
       setEnableFieldMap: (enabled: boolean) => set({ enableFieldMap: enabled }),
+      setGroundName: (name: string) => set({ groundName: name }),
+      setTournamentName: (name: string) => set({ tournamentName: name }),
 
       batsmanToReplace: null,
       showNewBatsmanSelection: false,
@@ -247,6 +266,7 @@ export const useGameStore = create<GameState>()(
 
       startNewMatch: () => {
         set({
+          matchId: Math.random().toString(36).substring(2, 11),
           initialStriker: null,
           initialNonStriker: null,
           currentInningsNumber: 1,
@@ -469,6 +489,42 @@ export const useGameStore = create<GameState>()(
         }
 
         set(finalUpdates);
+
+        // -- Global Sync Logic --
+        if (state.matchId) {
+          const summary = {
+            team1: state.teams[0]?.name || 'Team 1',
+            team2: state.teams[1]?.name || 'Team 2',
+            score1: state.currentInningsNumber === 1 ? `${score}/${wicketsCount}` : `${state.target || 0}`,
+            score2: state.currentInningsNumber === 2 ? `${score}/${wicketsCount}` : 'Yet to Bat',
+            overs: `${Math.floor(newLegalBalls / 6)}.${newLegalBalls % 6}`,
+            groundName: state.groundName || 'No Ground',
+            tournamentName: state.tournamentName || 'Local Match',
+            status: finalUpdates.matchCompleted ? 'completed' : 'live' as any,
+            battingTeam: state.battingTeam || '',
+            wickets: wicketsCount,
+            matchResult: finalUpdates.matchResult || undefined
+          };
+          syncMatchToCloud(state.matchId, summary);
+
+          // If match just finished, push EVERYTHING to matchDetails
+          if (finalUpdates.matchCompleted) {
+            const fullDetails = {
+              teams: updatedTeams,
+              ballHistory: newBallHistory,
+              firstInningsBallHistory: finalUpdates.firstInningsBallHistory || state.firstInningsBallHistory,
+              oversData: finalUpdates.oversData || state.oversData,
+              firstInningsOversData: finalUpdates.firstInningsOversData || state.firstInningsOversData,
+              matchResult: finalUpdates.matchResult || state.matchResult,
+              totalOvers: state.totalOvers,
+              matchId: state.matchId,
+              groundName: state.groundName,
+              tournamentName: state.tournamentName,
+              currentInningsNumber: state.currentInningsNumber
+            };
+            syncFullMatchDetails(state.matchId, fullDetails);
+          }
+        }
       },
 
       undoLastBall: () => {
