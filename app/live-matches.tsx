@@ -1,25 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  FlatList, 
-  TouchableOpacity, 
-  SafeAreaView, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  SafeAreaView,
   ActivityIndicator,
   Dimensions,
   RefreshControl
 } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { 
-  ChevronLeft, 
-  Trophy, 
-  MapPin, 
-  Award, 
-  Activity, 
-  Radio, 
-  Users, 
+import {
+  ChevronLeft,
+  Trophy,
+  MapPin,
+  Award,
+  Activity,
+  Radio,
+  Users,
   Clock,
   ArrowRight
 } from 'lucide-react-native';
@@ -60,86 +60,104 @@ export default function LiveMatches() {
     // onSnapshot will handle the update, we just set the UI state
   };
 
-  const renderMatchCard = ({ item }: { item: GlobalMatch }) => (
-    <View style={styles.matchCard}>
-      <LinearGradient
-        colors={['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.02)']}
-        style={styles.cardGradient}
-      />
-      
-      <View style={styles.cardHeader}>
-        <View style={styles.tournamentBadge}>
-          <Award size={12} color={colors.accentGold} />
-          <Text style={styles.tournamentText}>{item.tournamentName || 'Local Match'}</Text>
-        </View>
-        {item.status === 'live' ? (
+  const renderMatchCard = ({ item }: { item: GlobalMatch }) => {
+    if (item.status === 'completed') {
+      return (
+        <TouchableOpacity
+          style={styles.pastMatchCard}
+          activeOpacity={0.7}
+          onPress={() => router.push(`/match-viewer/${item.id}` as any)}
+        >
+          <LinearGradient
+            colors={['rgba(255,255,255,0.04)', 'rgba(255,255,255,0.01)']}
+            style={styles.cardGradient}
+          />
+          <View style={styles.pastMatchInfo}>
+            <Text style={styles.pastMatchTitle}>
+              Match between <Text style={styles.pastMatchTeam}>{item.team1}</Text> and <Text style={styles.pastMatchTeam}>{item.team2}</Text>
+            </Text>
+            {item.matchResult && (
+              <Text style={styles.pastMatchResult}>{item.matchResult}</Text>
+            )}
+            <View style={styles.pastMatchFooter}>
+              <View style={styles.venueItemSmall}>
+                <MapPin size={10} color={colors.textSecondary} />
+                <Text style={styles.venueTextSmall}>{item.groundName || 'Unknown'}</Text>
+              </View>
+              <ArrowRight size={14} color={colors.accentGold} />
+            </View>
+          </View>
+        </TouchableOpacity>
+      );
+    }
+
+    return (
+      <View style={styles.matchCard}>
+        <LinearGradient
+          colors={['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.02)']}
+          style={styles.cardGradient}
+        />
+
+        <View style={styles.cardHeader}>
+          <View style={styles.tournamentBadge}>
+            <Award size={12} color={colors.accentGold} />
+            <Text style={styles.tournamentText}>{item.tournamentName || 'Local Match'}</Text>
+          </View>
           <View style={styles.liveBadge}>
             <View style={styles.liveDot} />
             <Text style={styles.liveText}>LIVE</Text>
           </View>
-        ) : (
-          <View style={[styles.liveBadge, { backgroundColor: 'rgba(255,255,255,0.1)' }]}>
-            <Clock size={10} color={colors.textSecondary} />
-            <Text style={[styles.liveText, { color: colors.textSecondary }]}>FINISHED</Text>
+        </View>
+
+        <View style={styles.scoreSection}>
+          <View style={styles.teamInfo}>
+            <Text style={[styles.teamName, item.battingTeam === item.team1 && styles.activeTeam]} numberOfLines={1}>
+              {item.team1}
+            </Text>
+            <Text style={styles.scoreText}>{item.score1}</Text>
           </View>
-        )}
-      </View>
 
-      <View style={styles.scoreSection}>
-        <View style={styles.teamInfo}>
-          <Text style={[styles.teamName, item.battingTeam === item.team1 && styles.activeTeam]} numberOfLines={1}>
-            {item.team1}
-          </Text>
-          <Text style={styles.scoreText}>{item.score1}</Text>
-        </View>
-        
-        <View style={styles.vsContainer}>
-          <Text style={styles.vsText}>VS</Text>
+          <View style={styles.vsContainer}>
+            <Text style={styles.vsText}>VS</Text>
+          </View>
+
+          <View style={styles.teamInfo}>
+            <Text style={[styles.teamName, item.battingTeam === item.team2 && styles.activeTeam]} numberOfLines={1}>
+              {item.team2}
+            </Text>
+            <Text style={styles.scoreText}>{item.score2}</Text>
+          </View>
         </View>
 
-        <View style={styles.teamInfo}>
-          <Text style={[styles.teamName, item.battingTeam === item.team2 && styles.activeTeam]} numberOfLines={1}>
-            {item.team2}
-          </Text>
-          <Text style={styles.scoreText}>{item.score2}</Text>
+        <View style={styles.statsRow}>
+          <View style={styles.statItem}>
+            <Activity size={14} color={colors.textSecondary} />
+            <Text style={styles.statLabel}>Overs: {item.overs}</Text>
+          </View>
+          <View style={styles.statItem}>
+            <MapPin size={14} color={colors.textSecondary} />
+            <Text style={styles.statLabel} numberOfLines={1}>{item.groundName || 'Unknown Ground'}</Text>
+          </View>
         </View>
-      </View>
 
-      <View style={styles.statsRow}>
-        <View style={styles.statItem}>
-          <Activity size={14} color={colors.textSecondary} />
-          <Text style={styles.statLabel}>Overs: {item.overs}</Text>
-        </View>
-        <View style={styles.statItem}>
-          <MapPin size={14} color={colors.textSecondary} />
-          <Text style={styles.statLabel} numberOfLines={1}>{item.groundName || 'Unknown Ground'}</Text>
-        </View>
-      </View>
-
-      {item.status === 'completed' && item.matchResult && (
-        <View style={styles.resultBadge}>
-          <Trophy size={14} color={colors.accentGold} />
-          <Text style={styles.resultText}>{item.matchResult}</Text>
-        </View>
-      )}
-
-      <TouchableOpacity 
-        style={styles.watchButton}
-        activeOpacity={0.8}
-        onPress={() => router.push(`/match-viewer/${item.id}` as any)}
-      >
-        <LinearGradient
-          colors={[colors.accent, colors.accentAlt]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.watchGradient}
+        <TouchableOpacity
+          style={styles.watchButton}
+          activeOpacity={0.8}
+          onPress={() => router.push(`/match-viewer/${item.id}` as any)}
         >
-          <Text style={styles.watchButtonText}>Watch Scorecard</Text>
-          <ArrowRight size={16} color="#fff" />
-        </LinearGradient>
-      </TouchableOpacity>
-    </View>
-  );
+          <LinearGradient
+            colors={[colors.accent, colors.accentAlt]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.watchGradient}
+          >
+            <Text style={styles.watchButtonText}>Watch Scorecard</Text>
+            <ArrowRight size={16} color="#fff" />
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -149,8 +167,8 @@ export default function LiveMatches() {
       />
 
       <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton} 
+        <TouchableOpacity
+          style={styles.backButton}
           onPress={() => router.canGoBack() ? router.back() : router.replace('/')}
         >
           <ChevronLeft size={24} color={colors.textPrimary} />
@@ -163,15 +181,15 @@ export default function LiveMatches() {
       </View>
 
       <View style={styles.tabsContainer}>
-        <TouchableOpacity 
-          style={[styles.tab, activeTab === 'live' && styles.activeTab]} 
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'live' && styles.activeTab]}
           onPress={() => setActiveTab('live')}
         >
           <Text style={[styles.tabText, activeTab === 'live' && styles.activeTabText]}>Live Now</Text>
           {activeTab === 'live' && <View style={styles.tabIndicator} />}
         </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.tab, activeTab === 'past' && styles.activeTab]} 
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'past' && styles.activeTab]}
           onPress={() => setActiveTab('past')}
         >
           <Text style={[styles.tabText, activeTab === 'past' && styles.activeTabText]}>Recent Results</Text>
@@ -193,13 +211,13 @@ export default function LiveMatches() {
             {activeTab === 'live' ? 'No Live Matches' : 'No Past Matches'}
           </Text>
           <Text style={styles.emptySubtitle}>
-            {activeTab === 'live' 
-              ? 'Be the first to start a match and broadcast it to the world!' 
+            {activeTab === 'live'
+              ? 'Be the first to start a match and broadcast it to the world!'
               : 'Completed matches will appear here once they finish syncing.'}
           </Text>
-          
+
           {activeTab === 'live' && (
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.startMatchButton}
               onPress={() => router.replace('/entryPage')}
             >
@@ -485,5 +503,51 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     flex: 1,
+  },
+  pastMatchCard: {
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+    overflow: 'hidden',
+  },
+  pastMatchInfo: {
+    gap: 6,
+  },
+  pastMatchTitle: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '500',
+    lineHeight: 20,
+  },
+  pastMatchTeam: {
+    color: colors.textPrimary,
+    fontWeight: '700',
+  },
+  pastMatchResult: {
+    color: colors.accentGold,
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  pastMatchFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.03)',
+  },
+  venueItemSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  venueTextSmall: {
+    color: colors.textSecondary,
+    fontSize: 11,
   }
 });
