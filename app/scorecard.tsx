@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Animated, Easing, Dimensions, BackHandler } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Animated, Easing, Dimensions, BackHandler, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -14,7 +14,7 @@ import FieldMapModal from '../components/FieldMapModal';
 import ShotTypeModal from '../components/ShotTypeModal';
 import BatsmanStatsModal from '../components/BatsmanStatsModal';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronRight, RotateCcw, ArrowRightLeft, UserCircle2, Zap, MessageSquare } from 'lucide-react-native';
+import { ChevronRight, RotateCcw, ArrowRightLeft, UserCircle2, Zap, MessageSquare, PlusCircle, Check, X, UserPlus } from 'lucide-react-native';
 import ConfettiCannon from 'react-native-confetti-cannon';
 
 const { width, height } = Dimensions.get('window');
@@ -57,7 +57,11 @@ export default function Scorecard() {
     setShowNewBatsmanSelection,
     enableAnimations,
     enableSounds,
+    addPlayerToTeam,
   } = useGameStore();
+
+  const [addingPlayerFor, setAddingPlayerFor] = useState<'batting' | 'bowling' | null>(null);
+  const [newPlayerName, setNewPlayerName] = useState('');
 
   // useEffect(() => {
   //   const unsubscribe = navigation.addListener('beforeRemove', (e) => {
@@ -487,6 +491,34 @@ export default function Scorecard() {
     }
   };
 
+  const handleSaveNewPlayer = () => {
+    if (!newPlayerName.trim()) {
+      Alert.alert('Error', 'Please enter a player name');
+      return;
+    }
+
+    const teamToAddTo = addingPlayerFor === 'batting' ? battingTeam : bowlingTeam;
+    if (!teamToAddTo) return;
+
+    const newPlayer = addPlayerToTeam(teamToAddTo, newPlayerName.trim());
+
+    if (!newPlayer) {
+      Alert.alert('Error', 'Player already exists or team not found');
+      return;
+    }
+
+    // Auto-select the player
+    if (addingPlayerFor === 'batting') {
+      selectNewBatsman(newPlayer);
+    } else {
+      selectNewBowler(newPlayer);
+    }
+
+    // Reset state
+    setNewPlayerName('');
+    setAddingPlayerFor(null);
+  };
+
   const startNewInnings = () => {
     startSecondInnings();
     router.replace('/select-players');
@@ -800,6 +832,35 @@ export default function Scorecard() {
                 </TouchableOpacity>
               ))}
             </ScrollView>
+
+            <View style={styles.addPlayerContainer}>
+              {addingPlayerFor === 'bowling' ? (
+                <View style={styles.addPlayerInputRow}>
+                  <TextInput
+                    style={styles.addPlayerInput}
+                    placeholder="New Bowler Name"
+                    placeholderTextColor={colors.textSecondary}
+                    value={newPlayerName}
+                    onChangeText={setNewPlayerName}
+                    autoFocus
+                  />
+                  <TouchableOpacity style={styles.addPlayerActionBtn} onPress={handleSaveNewPlayer}>
+                    <Check size={20} color={colors.accent} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.addPlayerActionBtn} onPress={() => { setAddingPlayerFor(null); setNewPlayerName(''); }}>
+                    <X size={20} color={colors.accentWarn} />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.addPlayerBtn}
+                  onPress={() => setAddingPlayerFor('bowling')}
+                >
+                  <PlusCircle size={20} color={colors.accent} />
+                  <Text style={styles.addPlayerBtnText}>Add New Bowler</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         )}
 
@@ -829,6 +890,35 @@ export default function Scorecard() {
                 </TouchableOpacity>
               ))}
             </ScrollView>
+
+            <View style={styles.addPlayerContainer}>
+              {addingPlayerFor === 'batting' ? (
+                <View style={styles.addPlayerInputRow}>
+                  <TextInput
+                    style={styles.addPlayerInput}
+                    placeholder="New Batsman Name"
+                    placeholderTextColor={colors.textSecondary}
+                    value={newPlayerName}
+                    onChangeText={setNewPlayerName}
+                    autoFocus
+                  />
+                  <TouchableOpacity style={styles.addPlayerActionBtn} onPress={handleSaveNewPlayer}>
+                    <Check size={20} color={colors.accent} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.addPlayerActionBtn} onPress={() => { setAddingPlayerFor(null); setNewPlayerName(''); }}>
+                    <X size={20} color={colors.accentWarn} />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.addPlayerBtn}
+                  onPress={() => setAddingPlayerFor('batting')}
+                >
+                  <PlusCircle size={20} color={colors.accent} />
+                  <Text style={styles.addPlayerBtnText}>Add New Batsman</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         )}
 
@@ -1420,5 +1510,52 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.textSecondary,
     fontWeight: '600',
+  },
+  addPlayerContainer: {
+    marginTop: 15,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  addPlayerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    backgroundColor: 'rgba(6, 182, 212, 0.05)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(6, 182, 212, 0.2)',
+    borderStyle: 'dashed',
+  },
+  addPlayerBtnText: {
+    marginLeft: 8,
+    color: colors.accent,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  addPlayerInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  addPlayerInput: {
+    flex: 1,
+    height: 44,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    color: colors.text,
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  addPlayerActionBtn: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 8,
   },
 });

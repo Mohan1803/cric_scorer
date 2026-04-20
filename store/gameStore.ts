@@ -132,6 +132,7 @@ export interface GameState {
   setSecondInningsOver: (overs: number) => void;
   setAwaitingSecondInningsStart: (flag: boolean) => void;
   setPreviousStriker: (player: Player | null) => void;
+  addPlayerToTeam: (teamName: string, playerName: string) => Player | null;
 
   batsmanToReplace: 'striker' | 'non-striker' | null;
   showNewBatsmanSelection: boolean;
@@ -304,6 +305,62 @@ export const useGameStore = create<GameState>()(
         return state.teams[teamIndex]?.players.some(
           (p: any) => p.name.toLowerCase() === name.toLowerCase()
         ) || false;
+      },
+
+      addPlayerToTeam: (teamName: string, playerName: string) => {
+        const state = get();
+        const teamIndex = state.teams.findIndex(t => t.name === teamName);
+        if (teamIndex === -1) return null;
+
+        // Check for duplicates
+        if (state.teams[teamIndex].players.some(p => p.name.toLowerCase() === playerName.toLowerCase())) {
+          return null;
+        }
+
+        const newPlayer: Player = {
+          id: `p_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`,
+          name: playerName,
+          runs: 0,
+          balls: 0,
+          fours: 0,
+          sixes: 0,
+          ballsBowled: 0,
+          wickets: 0,
+          runsGiven: 0,
+          isOut: false,
+          status: 'not_out',
+          role: 'All-Rounder', // Default role
+          battingHand: 'right'
+        };
+
+        const updatedTeams = [...state.teams];
+        updatedTeams[teamIndex] = {
+          ...updatedTeams[teamIndex],
+          players: [...updatedTeams[teamIndex].players, newPlayer]
+        };
+
+        set({ teams: updatedTeams });
+
+        // Trigger sync so spectators see the new player
+        if (state.matchId) {
+          const fullDetails = {
+            teams: updatedTeams,
+            ballHistory: state.ballHistory,
+            firstInningsBallHistory: state.firstInningsBallHistory,
+            oversData: state.oversData,
+            firstInningsOversData: state.firstInningsOversData,
+            matchResult: state.matchResult,
+            totalOvers: state.totalOvers,
+            matchId: state.matchId,
+            groundName: state.groundName,
+            tournamentName: state.tournamentName,
+            currentInningsNumber: state.currentInningsNumber,
+            status: state.matchCompleted ? 'completed' : 'live'
+          };
+          syncFullMatchDetails(state.matchId, fullDetails);
+        }
+
+        return newPlayer;
       },
 
 
@@ -509,24 +566,23 @@ export const useGameStore = create<GameState>()(
           };
           syncMatchToCloud(state.matchId, summary);
 
-          // If match just finished, push EVERYTHING to matchDetails
-          if (finalUpdates.matchCompleted) {
-            const fullDetails = {
-              teams: updatedTeams,
-              ballHistory: newBallHistory,
-              firstInningsBallHistory: finalUpdates.firstInningsBallHistory || state.firstInningsBallHistory,
-              oversData: finalUpdates.oversData || state.oversData,
-              firstInningsOversData: finalUpdates.firstInningsOversData || state.firstInningsOversData,
-              matchResult: finalUpdates.matchResult || state.matchResult,
-              totalOvers: state.totalOvers,
-              matchId: state.matchId,
-              groundName: state.groundName,
-              tournamentName: state.tournamentName,
-              currentInningsNumber: state.currentInningsNumber,
-              creatorId: await getDeviceId()
-            };
-            syncFullMatchDetails(state.matchId, fullDetails);
-          }
+          // Always push detail updates for real-time viewing
+          const fullDetails = {
+            teams: updatedTeams,
+            ballHistory: newBallHistory,
+            firstInningsBallHistory: finalUpdates.firstInningsBallHistory || state.firstInningsBallHistory,
+            oversData: finalUpdates.oversData || state.oversData,
+            firstInningsOversData: finalUpdates.firstInningsOversData || state.firstInningsOversData,
+            matchResult: finalUpdates.matchResult || state.matchResult,
+            totalOvers: state.totalOvers,
+            matchId: state.matchId,
+            groundName: state.groundName,
+            tournamentName: state.tournamentName,
+            currentInningsNumber: state.currentInningsNumber,
+            creatorId: await getDeviceId(),
+            status: finalUpdates.matchCompleted ? 'completed' : 'live'
+          };
+          syncFullMatchDetails(state.matchId, fullDetails);
         }
       },
 

@@ -147,3 +147,17 @@ export const getMatchDetails = async (matchId: string) => {
     return null;
   }
 };
+
+/**
+ * Listens for real-time updates to a specific match's full details
+ */
+export const listenToMatchDetails = (matchId: string, callback: (data: any) => void) => {
+  const detailsDoc = doc(db, 'matchDetails', matchId);
+  return onSnapshot(detailsDoc, (snapshot) => {
+    if (snapshot.exists()) {
+      callback(snapshot.data());
+    } else {
+      callback(null);
+    }
+  });
+};

@@ -12,7 +12,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronLeft, Trophy, MapPin, Award, Activity } from 'lucide-react-native';
 import { colors } from '../theme';
-import { getMatchDetails } from '../../services/matchSyncService';
+import { getMatchDetails, listenToMatchDetails } from '../../services/matchSyncService';
 import BatsmanStatsModal from '../../components/BatsmanStatsModal';
 
 export default function MatchViewer() {
@@ -23,14 +23,18 @@ export default function MatchViewer() {
   const [selectedStatsPlayer, setSelectedStatsPlayer] = useState<any>(null);
 
   useEffect(() => {
-    async function loadData() {
-      if (typeof id === 'string') {
-        const data = await getMatchDetails(id);
+    let unsubscribe: (() => void) | undefined;
+
+    if (typeof id === 'string') {
+      unsubscribe = listenToMatchDetails(id, (data) => {
         setMatchData(data);
-      }
-      setLoading(false);
+        setLoading(false);
+      });
     }
-    loadData();
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, [id]);
 
   if (loading) {
@@ -174,7 +178,15 @@ export default function MatchViewer() {
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
           <Text style={styles.headerTitle}>Match Archive</Text>
-          <Text style={styles.headerSubtitle}>{tournamentName || 'Local Match'}</Text>
+          <View style={styles.headerSubRow}>
+            <Text style={styles.headerSubtitle}>{tournamentName || 'Local Match'}</Text>
+            {matchData.status === 'live' && (
+              <View style={styles.liveIndicator}>
+                <View style={[styles.liveDot, { backgroundColor: '#ef4444' }]} />
+                <Text style={styles.liveLabel}>LIVE</Text>
+              </View>
+            )}
+          </View>
         </View>
         <View style={{ width: 44 }} />
       </View>
@@ -264,7 +276,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.accentGold,
     fontWeight: '600',
+  },
+  headerSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     marginTop: 2,
+  },
+  liveIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    gap: 4,
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  liveLabel: {
+    color: '#ef4444',
+    fontSize: 8,
+    fontWeight: '900',
   },
   scrollContent: {
     padding: 20,

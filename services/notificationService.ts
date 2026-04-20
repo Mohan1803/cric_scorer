@@ -37,11 +37,12 @@ export async function requestNotificationPermissions(): Promise<boolean> {
   }
 
   if (Platform.OS === 'android') {
-    Notifications.setNotificationChannelAsync('default', {
-      name: 'default',
+    await Notifications.setNotificationChannelAsync('match-alerts', {
+      name: 'Match Alerts',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#FF231F7C',
+      sound: 'Wicket.mp3', // Note: For this to work in production, the file must be in res/raw
     });
   }
 
@@ -57,6 +58,7 @@ export async function sendLocalNotification(title: string, body: string, data: a
       title,
       body,
       data,
+      sound: 'Wicket.mp3', // For iOS
     },
     trigger: null, // send immediately
   });
