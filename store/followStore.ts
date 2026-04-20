@@ -7,7 +7,9 @@ interface FollowState {
   followPlayer: (name: string) => void;
   unfollowPlayer: (name: string) => void;
   isFollowing: (name: string) => boolean;
+  toggleFollow: (name: string) => void;
 }
+
 
 export const useFollowStore = create<FollowState>()(
   persist(
@@ -29,6 +31,16 @@ export const useFollowStore = create<FollowState>()(
       isFollowing: (name: string) => {
         return get().followedPlayers.includes(name);
       },
+
+      toggleFollow: (name: string) => {
+        const { isFollowing, followPlayer, unfollowPlayer } = get();
+        if (isFollowing(name)) {
+          unfollowPlayer(name);
+        } else {
+          followPlayer(name);
+        }
+      },
+
     }),
     {
       name: 'cric-scorer-follow-state',

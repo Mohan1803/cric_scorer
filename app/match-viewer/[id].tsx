@@ -10,10 +10,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft, Trophy, MapPin, Award, Activity } from 'lucide-react-native';
+import { ChevronLeft, Trophy, MapPin, Award, Activity, Star } from 'lucide-react-native';
 import { colors } from '../theme';
 import { getMatchDetails, listenToMatchDetails } from '../../services/matchSyncService';
 import BatsmanStatsModal from '../../components/BatsmanStatsModal';
+import { useFollowStore } from '../../store/followStore';
+
 
 export default function MatchViewer() {
   const { id } = useLocalSearchParams();
@@ -21,6 +23,8 @@ export default function MatchViewer() {
   const [loading, setLoading] = useState(true);
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [selectedStatsPlayer, setSelectedStatsPlayer] = useState<any>(null);
+  const { toggleFollow, followedPlayers } = useFollowStore();
+
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
@@ -119,15 +123,28 @@ export default function MatchViewer() {
             <Text style={styles.columnHeader}>4s</Text>
             <Text style={styles.columnHeader}>6s</Text>
           </View>
-          {batters.map((p: any, index: number) => (
-            <View key={p.id || `p-${index}`} style={styles.tableRow}>
-              <Text style={[styles.playerName, { flex: 2 }]}>{p.name}</Text>
-              <Text style={styles.playerStat}>{p.runs}</Text>
-              <Text style={styles.playerStat}>{p.balls}</Text>
-              <Text style={styles.playerStat}>{p.fours}</Text>
-              <Text style={styles.playerStat}>{p.sixes}</Text>
-            </View>
-          ))}
+          {batters.map((p: any, index: number) => {
+            const isFollowing = followedPlayers.includes(p.name);
+            return (
+              <View key={p.id || `p-${index}`} style={styles.tableRow}>
+                <View style={[styles.playerNameContainer, { flex: 2 }]}>
+                  <Text style={styles.playerName}>{p.name}</Text>
+                  <TouchableOpacity onPress={() => toggleFollow(p.name)} style={styles.inlineFollowBtn}>
+                    <Star 
+                      size={14} 
+                      color={isFollowing ? colors.accentGold : colors.textSecondary} 
+                      fill={isFollowing ? colors.accentGold : 'transparent'} 
+                    />
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.playerStat}>{p.runs}</Text>
+                <Text style={styles.playerStat}>{p.balls}</Text>
+                <Text style={styles.playerStat}>{p.fours}</Text>
+                <Text style={styles.playerStat}>{p.sixes}</Text>
+              </View>
+            );
+          })}
+
         </View>
 
         <View style={styles.table}>
@@ -139,12 +156,22 @@ export default function MatchViewer() {
             <Text style={styles.columnHeader}>Econ</Text>
           </View>
           {bowlers.map((p: any, index: number) => {
+            const isFollowing = followedPlayers.includes(p.name);
             const overs = Math.floor(p.ballsBowled / 6);
             const balls = p.ballsBowled % 6;
             const econ = p.ballsBowled > 0 ? (p.runsGiven / (p.ballsBowled / 6)).toFixed(1) : '0.0';
             return (
               <View key={p.id || `b-${index}`} style={styles.tableRow}>
-                <Text style={[styles.playerName, { flex: 2 }]}>{p.name}</Text>
+                <View style={[styles.playerNameContainer, { flex: 2 }]}>
+                  <Text style={styles.playerName}>{p.name}</Text>
+                  <TouchableOpacity onPress={() => toggleFollow(p.name)} style={styles.inlineFollowBtn}>
+                    <Star 
+                      size={14} 
+                      color={isFollowing ? colors.accentGold : colors.textSecondary} 
+                      fill={isFollowing ? colors.accentGold : 'transparent'} 
+                    />
+                  </TouchableOpacity>
+                </View>
                 <Text style={styles.playerStat}>{overs}.{balls}</Text>
                 <Text style={styles.playerStat}>{p.runsGiven}</Text>
                 <Text style={styles.playerStat}>{p.wickets}</Text>
@@ -152,6 +179,7 @@ export default function MatchViewer() {
               </View>
             );
           })}
+
         </View>
       </View>
     );
@@ -406,9 +434,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textPrimary,
     fontWeight: '600',
+  },
+  playerNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingLeft: 5,
   },
+  inlineFollowBtn: {
+    padding: 2,
+  },
   playerStat: {
+
     flex: 1,
     fontSize: 13,
     color: colors.textSecondary,

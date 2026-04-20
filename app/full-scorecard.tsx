@@ -20,6 +20,8 @@ import { router } from 'expo-router';
 import { colors } from './theme';
 import { ChevronLeft, Download, Trophy, Star, Award, Target } from 'lucide-react-native';
 import BatsmanStatsModal from '../components/BatsmanStatsModal';
+import { useFollowStore } from '../store/followStore';
+
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -41,6 +43,8 @@ export default function FullScorecard() {
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [selectedStatsPlayer, setSelectedStatsPlayer] = useState<any>(null);
   const [showNewMatchModal, setShowNewMatchModal] = useState(false);
+  const { toggleFollow, followedPlayers } = useFollowStore();
+
 
   // Safe team name derivation for both ongoing and completed matches
   const firstInningsBattingTeamName = useMemo(() => {
@@ -468,13 +472,23 @@ export default function FullScorecard() {
                   }}
                 >
                   <View style={[styles.cell, styles.playerCell]}>
-                    <Text style={styles.playerCellName}>
-                      {player.name}{player.isCaptain ? ' (C)' : ''}{player.isWicketKeeper ? ' (WK)' : ''}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.playerCellName}>
+                        {player.name}{player.isCaptain ? ' (C)' : ''}{player.isWicketKeeper ? ' (WK)' : ''}
+                      </Text>
+                      <TouchableOpacity onPress={(e) => { e.stopPropagation(); toggleFollow(player.name); }} style={styles.inlineFollowBtn}>
+                        <Star 
+                          size={12} 
+                          color={followedPlayers.includes(player.name) ? colors.accentGold : colors.textSecondary}
+                          fill={followedPlayers.includes(player.name) ? colors.accentGold : 'transparent'}
+                        />
+                      </TouchableOpacity>
+                    </View>
                     {player.isOut && player.dismissalDetail && (
                       <Text style={styles.dismissalText}>{player.dismissalDetail}</Text>
                     )}
                   </View>
+
                   <Text style={styles.cell}>{player.runs}</Text>
                   <Text style={styles.cell}>{player.balls}</Text>
                   <Text style={styles.cell}>{player.fours}</Text>
@@ -504,9 +518,21 @@ export default function FullScorecard() {
                 : '0.0';
               return (
                 <View key={player.id} style={styles.tableRow}>
-                  <Text style={[styles.cell, styles.playerCell]}>
-                    {player.name}{player.isCaptain ? ' (C)' : ''}{player.isWicketKeeper ? ' (WK)' : ''}
-                  </Text>
+                  <View style={[styles.cell, styles.playerCell]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.playerCellName}>
+                        {player.name}{player.isCaptain ? ' (C)' : ''}{player.isWicketKeeper ? ' (WK)' : ''}
+                      </Text>
+                      <TouchableOpacity onPress={(e) => { e.stopPropagation(); toggleFollow(player.name); }} style={styles.inlineFollowBtn}>
+                        <Star 
+                          size={12} 
+                          color={followedPlayers.includes(player.name) ? colors.accentGold : colors.textSecondary}
+                          fill={followedPlayers.includes(player.name) ? colors.accentGold : 'transparent'}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
                   <Text style={styles.cell}>{overs}.{balls}</Text>
                   <Text style={styles.cell}>{player.runsGiven}</Text>
                   <Text style={styles.cell}>{player.wickets}</Text>
@@ -1131,8 +1157,11 @@ const styles = StyleSheet.create({
   },
   playerCellName: {
     color: colors.textPrimary,
-    fontWeight: '600',
-    fontSize: 14,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  inlineFollowBtn: {
+    padding: 2,
   },
   dismissalText: {
     color: colors.textSecondary,

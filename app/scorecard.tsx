@@ -14,8 +14,10 @@ import FieldMapModal from '../components/FieldMapModal';
 import ShotTypeModal from '../components/ShotTypeModal';
 import BatsmanStatsModal from '../components/BatsmanStatsModal';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronRight, RotateCcw, ArrowRightLeft, UserCircle2, Zap, MessageSquare, PlusCircle, Check, X, UserPlus } from 'lucide-react-native';
+import { ChevronRight, RotateCcw, ArrowRightLeft, UserCircle2, Zap, MessageSquare, PlusCircle, Check, X, UserPlus, Star } from 'lucide-react-native';
 import ConfettiCannon from 'react-native-confetti-cannon';
+import { useFollowStore } from '../store/followStore';
+
 
 const { width, height } = Dimensions.get('window');
 
@@ -62,6 +64,8 @@ export default function Scorecard() {
 
   const [addingPlayerFor, setAddingPlayerFor] = useState<'batting' | 'bowling' | null>(null);
   const [newPlayerName, setNewPlayerName] = useState('');
+  const { toggleFollow, followedPlayers } = useFollowStore();
+
 
   // useEffect(() => {
   //   const unsubscribe = navigation.addListener('beforeRemove', (e) => {
@@ -651,13 +655,25 @@ export default function Scorecard() {
                 }}
               >
                 <View style={styles.playerNameCol}>
-                  <Text style={[styles.playerLabel, player?.id === striker?.id && styles.strikerText]}>
-                    {player?.name || 'Batsman'}{player?.isCaptain ? ' (C)' : ''}{player?.isWicketKeeper ? ' (WK)' : ''} {player?.id === striker?.id ? '*' : ''}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={[styles.playerLabel, player?.id === striker?.id && styles.strikerText]}>
+                      {player?.name || 'Batsman'}{player?.isCaptain ? ' (C)' : ''}{player?.isWicketKeeper ? ' (WK)' : ''} {player?.id === striker?.id ? '*' : ''}
+                    </Text>
+                    {player && (
+                      <TouchableOpacity onPress={(e) => { e.stopPropagation(); if (player) toggleFollow(player.name); }} style={styles.inlineFollowBtn}>
+                        <Star
+                          size={12}
+                          color={followedPlayers.includes(player.name) ? colors.accentGold : colors.textSecondary}
+                          fill={followedPlayers.includes(player.name) ? colors.accentGold : 'transparent'}
+                        />
+                      </TouchableOpacity>
+                    )}
+                  </View>
                   {player?.isOut && player?.dismissalDetail && (
                     <Text style={styles.dismissalTextSmall}>{player.dismissalDetail}</Text>
                   )}
                 </View>
+
                 <View style={styles.playerRunsCol}>
                   <Text style={styles.playerRunsText}>
                     {player?.runs || 0} <Text style={styles.playerBallsText}>({player?.balls || 0})</Text>
@@ -672,8 +688,20 @@ export default function Scorecard() {
           <View style={styles.statsBowling}>
             <View style={styles.playerRow}>
               <View style={styles.playerNameCol}>
-                <Text style={styles.bowlerLabel}>{currentBowler?.name || 'Bowler'}{currentBowler?.isCaptain ? ' (C)' : ''}{currentBowler?.isWicketKeeper ? ' (WK)' : ''} *</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.bowlerLabel}>{currentBowler?.name || 'Bowler'}{currentBowler?.isCaptain ? ' (C)' : ''}{currentBowler?.isWicketKeeper ? ' (WK)' : ''} *</Text>
+                  {currentBowler && (
+                    <TouchableOpacity onPress={(e) => { e.stopPropagation(); if (currentBowler) toggleFollow(currentBowler.name); }} style={styles.inlineFollowBtn}>
+                      <Star
+                        size={12}
+                        color={followedPlayers.includes(currentBowler.name) ? colors.accentGold : colors.textSecondary}
+                        fill={followedPlayers.includes(currentBowler.name) ? colors.accentGold : 'transparent'}
+                      />
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
+
               <View style={styles.playerRunsCol}>
                 <Text style={styles.bowlerStatsText}>
                   {currentBowler?.wickets}-{currentBowler?.runsGiven}
@@ -1137,8 +1165,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   strikerText: {
-    color: colors.accent,
-    fontWeight: '700',
+    color: '#fff',
+    fontWeight: '800',
+  },
+  inlineFollowBtn: {
+    padding: 2,
   },
   dismissalTextSmall: {
     fontSize: 10,
