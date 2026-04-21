@@ -13,8 +13,7 @@ import MapView, { Marker, PROVIDER_GOOGLE } from '../components/MapModule';
 import { Ground } from '../store/groundStore';
 
 export default function GroundsNetwork() {
-  const { grounds: localGrounds } = useGroundStore();
-  const [grounds, setGrounds] = useState<(Ground | FirebaseGround)[]>(localGrounds);
+  const [grounds, setGrounds] = useState<(Ground | FirebaseGround)[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCity, setSelectedCity] = useState('All Cities');
   const [viewType, setViewType] = useState<'list' | 'map'>('list');

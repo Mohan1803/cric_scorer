@@ -27,41 +27,30 @@ interface GroundState {
   setHasHydrated: (state: boolean) => void;
 }
 
-export const useGroundStore = create<GroundState>()(
-  persist(
-    (set, get) => ({
-      grounds: [],
-      hasHydrated: false,
-      setHasHydrated: (state) => set({ hasHydrated: state }),
+export const useGroundStore = create<GroundState>((set, get) => ({
+  grounds: [],
+  hasHydrated: true, // Always true since we don't persist
+  setHasHydrated: (state) => set({ hasHydrated: state }),
 
-      addGround: (ground) => {
-        const newGround: Ground = {
-          ...ground,
-          id: `g_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`
-        };
-        set((state) => ({
-          grounds: [newGround, ...state.grounds]
-        }));
-      },
+  addGround: (ground) => {
+    const newGround: Ground = {
+      ...ground,
+      id: `g_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`
+    };
+    set((state) => ({
+      grounds: [newGround, ...state.grounds]
+    }));
+  },
 
-      updateGround: (id, updatedFields) => {
-        set((state) => ({
-          grounds: state.grounds.map((g) => (g.id === id ? { ...g, ...updatedFields } : g))
-        }));
-      },
+  updateGround: (id, updatedFields) => {
+    set((state) => ({
+      grounds: state.grounds.map((g) => (g.id === id ? { ...g, ...updatedFields } : g))
+    }));
+  },
 
-      deleteGround: (id) => {
-        set((state) => ({
-          grounds: state.grounds.filter((g) => g.id !== id)
-        }));
-      }
-    }),
-    {
-      name: 'cric-scorer-grounds-store-v2',
-      storage: createJSONStorage(() => AsyncStorage),
-      onRehydrateStorage: () => (state) => {
-        state?.setHasHydrated(true);
-      }
-    }
-  )
-);
+  deleteGround: (id) => {
+    set((state) => ({
+      grounds: state.grounds.filter((g) => g.id !== id)
+    }));
+  }
+}));
