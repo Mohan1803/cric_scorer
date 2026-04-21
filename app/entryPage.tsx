@@ -3,19 +3,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from './theme';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Trophy, Play, Radio, History, Zap, ChevronRight, LayoutDashboard, Settings, CheckCircle2, XCircle } from 'lucide-react-native';
+import { Trophy, Play, Radio, History, Zap, ChevronRight, LayoutDashboard, Settings, CheckCircle2, XCircle, MapPin } from 'lucide-react-native';
 
 export default function EntryDashboard() {
   const renderActionItem = (
-    icon: React.ReactNode, 
-    title: string, 
-    subtitle: string, 
+    icon: React.ReactNode,
+    title: string,
+    subtitle: string,
     onPress: () => void,
     accentColor: string = colors.accent
   ) => (
-    <TouchableOpacity 
-      activeOpacity={0.7} 
-      style={styles.actionItem} 
+    <TouchableOpacity
+      activeOpacity={0.7}
+      style={styles.actionItem}
       onPress={onPress}
     >
       <View style={[styles.iconContainer, { backgroundColor: `${accentColor}15` }]}>
@@ -63,6 +63,13 @@ export default function EntryDashboard() {
         <View style={styles.mainSection}>
           <Text style={styles.sectionLabel}>Discovery</Text>
           {renderActionItem(
+            <MapPin size={24} color={colors.accentSecondary} />,
+            "Ground Network",
+            "Discover and book cricket grounds nearby",
+            () => router.push('/grounds-network' as any),
+            colors.accentSecondary
+          )}
+          {renderActionItem(
             <Radio size={24} color={colors.accentAlt} />,
             "Live Global Feed",
             "Watch matches in real-time worldwide",
@@ -87,18 +94,18 @@ export default function EntryDashboard() {
             () => router.push('/lbw-recorder' as any),
             "#7C3AED"
           )}
-          
+
           <View style={styles.demoSection}>
-            <TouchableOpacity 
-              style={styles.demoItem} 
+            <TouchableOpacity
+              style={styles.demoItem}
               onPress={() => router.push({ pathname: '/lbw-tracking' as any, params: { videoUri: 'demo_out' } })}
             >
               <XCircle size={18} color="#ef4444" />
               <Text style={styles.demoText}>Simulation: Out</Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.demoItem} 
+
+            <TouchableOpacity
+              style={styles.demoItem}
               onPress={() => router.push({ pathname: '/lbw-tracking' as any, params: { videoUri: 'demo_not_out' } })}
             >
               <CheckCircle2 size={18} color="#22c55e" />
