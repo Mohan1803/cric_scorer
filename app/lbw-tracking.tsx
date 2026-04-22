@@ -110,8 +110,19 @@ export default function LbwTracking() {
     return t;
   };
 
-  // Safe back navigation — redirects to entry page to ensure clean state
+  // Safe back navigation — cancel animations, clear timeouts, then navigate
   const goBack = useCallback(() => {
+    // Clear all pending timeouts first
+    timeouts.current.forEach(t => clearTimeout(t));
+    timeouts.current = [];
+    // Reset animation values to prevent post-unmount updates
+    try {
+      ballOpacity.value = 0;
+      glowPulse.value = 0;
+      scanProgress.value = 0;
+      virtualOpacity.value = 0;
+      stumpReveal.value = 0;
+    } catch (e) { /* ignore animation cleanup errors */ }
     router.replace('/entryPage');
   }, []);
 

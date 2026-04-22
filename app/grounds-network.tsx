@@ -4,19 +4,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { colors, shadows } from './theme';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft, Search, MapPin, SlidersHorizontal, Plus, Globe, Zap, Navigation, Map as MapIcon, List } from 'lucide-react-native';
+import { ChevronLeft, Search, MapPin, SlidersHorizontal, Plus, Globe, Zap, Navigation } from 'lucide-react-native';
 import { useGroundStore } from '../store/groundStore';
 import GroundCard from '../components/GroundCard';
 import { groundService, FirebaseGround } from '../services/groundService';
 import * as Location from 'expo-location';
-import MapView, { Marker, PROVIDER_GOOGLE } from '../components/MapModule';
 import { Ground } from '../store/groundStore';
 
 export default function GroundsNetwork() {
   const [grounds, setGrounds] = useState<(Ground | FirebaseGround)[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCity, setSelectedCity] = useState('All Cities');
-  const [viewType, setViewType] = useState<'list' | 'map'>('list');
+
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
 
@@ -27,11 +26,15 @@ export default function GroundsNetwork() {
   const loadData = async () => {
     setLoading(true);
     try {
-      // 1. Get current location
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        const loc = await Location.getCurrentPositionAsync({});
-        setUserLocation(loc);
+      // 1. Try to get current location (non-blocking)
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({});
+          setUserLocation(loc);
+        }
+      } catch (locError) {
+        console.warn("Location unavailable:", locError);
       }
 
       // 2. Fetch from Firebase
@@ -112,18 +115,7 @@ export default function GroundsNetwork() {
             </View>
           </View>
 
-          <View style={styles.headerActions}>
-            <TouchableOpacity
-              style={[styles.viewToggleBtn, viewType === 'map' && styles.viewToggleActive]}
-              onPress={() => setViewType(viewType === 'list' ? 'map' : 'list')}
-            >
-              {viewType === 'list' ? (
-                <MapIcon size={18} color={colors.textPrimary} />
-              ) : (
-                <List size={18} color={colors.textPrimary} />
-              )}
-            </TouchableOpacity>
-          </View>
+          <View style={styles.headerActions} />
         </View>
 
         <View style={styles.searchBarContainer}>
@@ -143,117 +135,73 @@ export default function GroundsNetwork() {
         </View>
       </View>
 
-      {viewType === 'list' ? (
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.cityFilterContainer}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cityScroll}>
-              {cities.map((city) => (
-                <TouchableOpacity
-                  key={city}
-                  style={[styles.cityChip, selectedCity === city && styles.cityChipActive]}
-                  onPress={() => setSelectedCity(city)}
-                >
-                  <Text style={[styles.cityText, selectedCity === city && styles.cityTextActive]}>{city}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.cityFilterContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cityScroll}>
+            {cities.map((city) => (
+              <TouchableOpacity
+                key={city}
+                style={[styles.cityChip, selectedCity === city && styles.cityChipActive]}
+                onPress={() => setSelectedCity(city)}
+              >
+                <Text style={[styles.cityText, selectedCity === city && styles.cityTextActive]}>{city}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
 
-          {searchQuery === '' && selectedCity === 'All Cities' && (
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <View style={styles.sectionTitleRow}>
-                  <Navigation size={18} color={colors.accent} />
-                  <Text style={styles.sectionTitle}>Nearest To You</Text>
-                </View>
-              </View>
-              {nearbyGrounds.map((ground: any) => (
-                <GroundCard
-                  key={ground.id}
-                  ground={ground}
-                  isNearby={true}
-                  distance={ground.distance}
-                  onDelete={loadData}
-                />
-              ))}
-            </View>
-          )}
-
-          <View style={[styles.section, { marginTop: 10 }]}>
+        {searchQuery === '' && selectedCity === 'All Cities' && (
+          <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionTitleRow}>
-                <Globe size={18} color={colors.accentSecondary} />
-                <Text style={styles.sectionTitle}>
-                  {selectedCity === 'All Cities' ? 'World Network' : `Venues in ${selectedCity}`}
-                </Text>
+                <Navigation size={18} color={colors.accent} />
+                <Text style={styles.sectionTitle}>Nearest To You</Text>
               </View>
-              <Text style={styles.countText}>{filteredGrounds.length} found</Text>
             </View>
-
-            {filteredGrounds.length > 0 ? (
-              filteredGrounds.map((ground: any) => (
-                <GroundCard
-                  key={ground.id}
-                  ground={ground}
-                  distance={ground.distance}
-                  onDelete={loadData}
-                />
-              ))
-            ) : (
-              <View style={styles.emptyState}>
-                <MapPin size={48} color={colors.textMuted} style={{ opacity: 0.3, marginBottom: 16 }} />
-                <Text style={styles.emptyText}>No grounds found in this area</Text>
-                <Text style={styles.emptySubtext}>Try adjusting your search or filters</Text>
-              </View>
-            )}
+            {nearbyGrounds.map((ground: any) => (
+              <GroundCard
+                key={ground.id}
+                ground={ground}
+                isNearby={true}
+                distance={ground.distance}
+                onDelete={loadData}
+              />
+            ))}
           </View>
-        </ScrollView>
-      ) : (
-        <View style={styles.mapViewContainer}>
-          {Platform.OS !== 'web' ? (
-            <MapView
-              style={styles.map}
-              provider={PROVIDER_GOOGLE}
-              initialRegion={userLocation ? {
-                latitude: userLocation.coords.latitude,
-                longitude: userLocation.coords.longitude,
-                latitudeDelta: 0.5,
-                longitudeDelta: 0.5,
-              } : {
-                latitude: 20.5937,
-                longitude: 78.9629,
-                latitudeDelta: 10,
-                longitudeDelta: 10,
-              }}
-            >
-              {filteredGrounds.map((ground: any) => (
-                <Marker
-                  key={ground.id}
-                  coordinate={{ latitude: ground.latitude, longitude: ground.longitude }}
-                  title={ground.name}
-                  description={`${ground.city} - ${ground.pricePerMatch || ''}`}
-                  pinColor={colors.accent}
-                />
-              ))}
-              {userLocation && (
-                <Marker
-                  coordinate={{
-                    latitude: userLocation.coords.latitude,
-                    longitude: userLocation.coords.longitude
-                  }}
-                  title="You are here"
-                  pinColor="#3b82f6"
-                />
-              )}
-            </MapView>
+        )}
+
+        <View style={[styles.section, { marginTop: 10 }]}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleRow}>
+              <Globe size={18} color={colors.accentSecondary} />
+              <Text style={styles.sectionTitle}>
+                {selectedCity === 'All Cities' ? 'World Network' : `Venues in ${selectedCity}`}
+              </Text>
+            </View>
+            <Text style={styles.countText}>{filteredGrounds.length} found</Text>
+          </View>
+
+          {filteredGrounds.length > 0 ? (
+            filteredGrounds.map((ground: any) => (
+              <GroundCard
+                key={ground.id}
+                ground={ground}
+                distance={ground.distance}
+                onDelete={loadData}
+              />
+            ))
           ) : (
-            <MapView style={styles.map} />
+            <View style={styles.emptyState}>
+              <MapPin size={48} color={colors.textMuted} style={{ opacity: 0.3, marginBottom: 16 }} />
+              <Text style={styles.emptyText}>No grounds found in this area</Text>
+              <Text style={styles.emptySubtext}>Try adjusting your search or filters</Text>
+            </View>
           )}
         </View>
-      )}
+      </ScrollView>
 
       <TouchableOpacity
         style={styles.registerFab}

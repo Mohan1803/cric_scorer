@@ -63,6 +63,16 @@ export default function LbwDemo() {
   };
 
   const goBack = () => {
+    // Clear all pending timeouts first
+    timeouts.current.forEach(t => clearTimeout(t));
+    timeouts.current = [];
+    // Reset animation values
+    try {
+      ballOpacity.value = 0;
+      trailOpacity.value = 0;
+      glowPulse.value = 0;
+      scanProgress.value = 0;
+    } catch (e) { /* ignore */ }
     router.replace('/entryPage');
   };
 

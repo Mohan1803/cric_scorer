@@ -48,11 +48,6 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="index" />
-        <Stack.Screen name="teamEntry"
-          options={{
-            title: 'Team Entry',
-            headerTitleAlign: 'center',
-          }} />
 
 
         <Stack.Screen name="players"
@@ -146,6 +141,46 @@ export default function RootLayout() {
           }}
         />
         <Stack.Screen name="match-viewer/[id]"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen name="grounds-network"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen name="add-ground"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen name="entryPage"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen name="lbw-demo"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen name="match-setup"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen name="role-selection"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen name="select-choice"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen name="commentary"
           options={{
             headerShown: false,
           }}

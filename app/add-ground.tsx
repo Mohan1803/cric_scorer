@@ -4,11 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { colors, shadows } from './theme';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft, User, Store, Plus, X, Save, Navigation, Building2, MapPin, Phone } from 'lucide-react-native';
+import { ChevronLeft, User, Store, Plus, X, Save, Navigation, Building2, MapPin, Phone, Crosshair } from 'lucide-react-native';
 import { useGroundStore } from '../store/groundStore';
 import * as Location from 'expo-location';
-import MapView, { Marker, PROVIDER_GOOGLE } from '../components/MapModule';
 import { groundService } from '../services/groundService';
+import OSMMapView from '../components/OSMMapView';
 
 // Fallback for icons that might be missing in this version of lucide-react-native
 const SafeStore = Store || Building2 || Plus;
@@ -33,12 +33,6 @@ export default function AddGround() {
   });
 
   const [loadingLocation, setLoadingLocation] = useState(false);
-  const [region, setRegion] = useState({
-    latitude: 12.9716,
-    longitude: 77.5946,
-    latitudeDelta: 0.01,
-    longitudeDelta: 0.01,
-  });
 
   const [newAmenity, setNewAmenity] = useState('');
 
@@ -72,7 +66,6 @@ export default function AddGround() {
       const { latitude, longitude } = location.coords;
 
       setForm(prev => ({ ...prev, latitude, longitude }));
-      setRegion(prev => ({ ...prev, latitude, longitude }));
 
       // Reverse geocode to get city/address
       let reverseResult = await Location.reverseGeocodeAsync({ latitude, longitude });
@@ -219,34 +212,29 @@ export default function AddGround() {
               </TouchableOpacity>
             </View>
 
-            {Platform.OS !== 'web' ? (
-              <View style={styles.mapContainer}>
-                <MapView
-                  style={styles.map}
-                  provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-                  region={region}
-                  onRegionChangeComplete={(r: any) => setRegion(r)}
-                  onPress={(e: any) => {
-                    const { latitude, longitude } = e.nativeEvent.coordinate;
-                    setForm(prev => ({ ...prev, latitude, longitude }));
-                  }}
-                >
-                  <Marker
-                    coordinate={{ latitude: form.latitude, longitude: form.longitude }}
-                    draggable
-                    onDragEnd={(e: any) => {
-                      const { latitude, longitude } = e.nativeEvent.coordinate;
-                      setForm(prev => ({ ...prev, latitude, longitude }));
-                    }}
-                    pinColor={colors.accent}
-                  />
-                </MapView>
+            <View style={styles.mapContainer}>
+              <OSMMapView
+                latitude={form.latitude}
+                longitude={form.longitude}
+                zoom={15}
+                height={200}
+                markerColor={colors.accent}
+                onLocationSelect={(lat, lng) => {
+                  setForm(prev => ({ ...prev, latitude: lat, longitude: lng }));
+                }}
+              />
+            </View>
+
+            <View style={styles.coordRow}>
+              <View style={styles.coordChip}>
+                <Text style={styles.coordChipLabel}>LAT</Text>
+                <Text style={styles.coordChipValue}>{form.latitude.toFixed(6)}</Text>
               </View>
-            ) : (
-              <View style={styles.mapContainer}>
-                <MapView />
+              <View style={styles.coordChip}>
+                <Text style={styles.coordChipLabel}>LNG</Text>
+                <Text style={styles.coordChipValue}>{form.longitude.toFixed(6)}</Text>
               </View>
-            )}
+            </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>City *</Text>
@@ -416,63 +404,37 @@ const styles = StyleSheet.create({
     color: colors.accent,
   },
   mapContainer: {
-    height: 180,
+    marginBottom: 12,
     borderRadius: 16,
     overflow: 'hidden',
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
   },
-  map: {
+  coordRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 20,
+  },
+  coordChip: {
     flex: 1,
-  },
-  mapOverlay: {
-    position: 'absolute',
-    bottom: 8,
-    left: 8,
-    right: 8,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    padding: 6,
-    borderRadius: 6,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
-  mapHint: {
-    color: colors.textSecondary,
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  webMapPlaceholder: {
-    backgroundColor: 'rgba(255,255,255,0.02)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderStyle: 'dashed',
-  },
-  webMapText: {
-    color: colors.textPrimary,
-    fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  webMapSubtext: {
+  coordChipLabel: {
+    fontSize: 9,
+    fontWeight: '900',
     color: colors.textMuted,
-    fontSize: 12,
-    marginBottom: 16,
+    letterSpacing: 1.5,
   },
-  coordBadge: {
-    flexDirection: 'row',
-    gap: 12,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  coordText: {
+  coordChipValue: {
+    fontSize: 13,
+    fontWeight: '700',
     color: colors.accent,
-    fontSize: 11,
-    fontWeight: '800',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   inputGroup: {
