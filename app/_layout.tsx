@@ -50,6 +50,13 @@ export default function RootLayout() {
         <Stack.Screen name="index" />
 
 
+        <Stack.Screen name="full-map"
+          options={{
+            title: 'Select Pitch Location',
+            headerShown: false,
+            presentation: 'modal'
+          }} />
+
         <Stack.Screen name="players"
           options={{
             title: 'Players',

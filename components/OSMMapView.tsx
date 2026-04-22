@@ -11,9 +11,18 @@ interface OSMMapViewProps {
   onLocationSelect?: (lat: number, lng: number) => void;
   markerColor?: string;
   style?: any;
+  isSatellite?: boolean;
 }
 
-function getMapHTML(latitude: number, longitude: number, zoom: number, markerColor: string): string {
+function getMapHTML(latitude: number, longitude: number, zoom: number, markerColor: string, isSatellite: boolean): string {
+  const tileLayer = isSatellite 
+    ? "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+    : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+  
+  const attribution = isSatellite
+    ? "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EBP, and the GIS User Community"
+    : "&copy; <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors";
+
   return `
 <!DOCTYPE html>
 <html>
@@ -94,8 +103,9 @@ function getMapHTML(latitude: number, longitude: number, zoom: number, markerCol
           zoomControl: false,
         }).setView([${latitude}, ${longitude}], ${zoom});
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        L.tileLayer('${tileLayer}', {
           maxZoom: 19,
+          attribution: "${attribution}"
         }).addTo(map);
 
         var icon = L.divIcon({
@@ -151,6 +161,7 @@ export default function OSMMapView({
   onLocationSelect,
   markerColor = '#E11A22',
   style,
+  isSatellite = false,
 }: OSMMapViewProps) {
   const webViewRef = useRef<WebView>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -196,7 +207,7 @@ export default function OSMMapView({
   }, [onLocationSelect]);
 
   if (Platform.OS === 'web') {
-    const htmlContent = getMapHTML(latitude, longitude, zoom, markerColor);
+    const htmlContent = getMapHTML(latitude, longitude, zoom, markerColor, isSatellite);
     return (
       <View style={[styles.container, { height }, style]}>
         <iframe
@@ -217,7 +228,7 @@ export default function OSMMapView({
     );
   }
 
-  const htmlContent = getMapHTML(latitude, longitude, zoom, markerColor);
+  const htmlContent = getMapHTML(latitude, longitude, zoom, markerColor, isSatellite);
 
   return (
     <View style={[styles.container, { height }, style]}>

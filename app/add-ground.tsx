@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { colors, shadows } from './theme';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft, User, Store, Plus, X, Save, Navigation, Building2, MapPin, Phone, Crosshair } from 'lucide-react-native';
+import { ChevronLeft, User, Store, Plus, X, Save, Navigation, Building2, MapPin, Phone, Crosshair, Maximize2 } from 'lucide-react-native';
 import { useGroundStore } from '../store/groundStore';
 import * as Location from 'expo-location';
+import { useEffect } from 'react';
 import { groundService } from '../services/groundService';
 import OSMMapView from '../components/OSMMapView';
 
@@ -31,6 +32,18 @@ export default function AddGround() {
     pricePerMatch: '',
     amenities: ['Pavilion']
   });
+
+  const { selectedLat, selectedLng } = useLocalSearchParams<{ selectedLat: string; selectedLng: string }>();
+
+  useEffect(() => {
+    if (selectedLat && selectedLng) {
+      setForm(prev => ({
+        ...prev,
+        latitude: parseFloat(selectedLat),
+        longitude: parseFloat(selectedLng)
+      }));
+    }
+  }, [selectedLat, selectedLng]);
 
   const [loadingLocation, setLoadingLocation] = useState(false);
 
@@ -212,18 +225,29 @@ export default function AddGround() {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.mapContainer}>
+            <TouchableOpacity 
+              style={styles.mapContainer}
+              onPress={() => router.push({
+                pathname: '/full-map',
+                params: { lat: form.latitude.toString(), lng: form.longitude.toString(), name: form.name || 'Ground' }
+              })}
+            >
               <OSMMapView
                 latitude={form.latitude}
                 longitude={form.longitude}
                 zoom={15}
                 height={200}
+                isSatellite={true}
                 markerColor={colors.accent}
                 onLocationSelect={(lat, lng) => {
                   setForm(prev => ({ ...prev, latitude: lat, longitude: lng }));
                 }}
               />
-            </View>
+              <View style={styles.mapOverlay}>
+                  <Maximize2 size={16} color="#fff" />
+                  <Text style={styles.mapOverlayText}>Tap for Full Screen Satellite View</Text>
+              </View>
+            </TouchableOpacity>
 
             <View style={styles.coordRow}>
               <View style={styles.coordChip}>
@@ -407,6 +431,25 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderRadius: 16,
     overflow: 'hidden',
+    position: 'relative',
+  },
+  mapOverlay: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      backgroundColor: 'rgba(15, 23, 42, 0.7)',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 8,
+      gap: 8,
+  },
+  mapOverlayText: {
+      color: '#fff',
+      fontSize: 10,
+      fontWeight: '700',
+      letterSpacing: 0.5,
   },
   coordRow: {
     flexDirection: 'row',
