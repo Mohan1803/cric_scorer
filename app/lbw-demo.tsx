@@ -16,6 +16,7 @@ import Animated, {
   interpolate,
   FadeIn,
   FadeOut,
+  cancelAnimation,
 } from 'react-native-reanimated';
 import { colors } from './theme';
 
@@ -63,17 +64,34 @@ export default function LbwDemo() {
   };
 
   const goBack = () => {
+    isMounted.current = false;
     // Clear all pending timeouts first
     timeouts.current.forEach(t => clearTimeout(t));
     timeouts.current = [];
-    // Reset animation values
+    
+    // Explicitly cancel all Reanimated animations
     try {
+      cancelAnimation(ballOpacity);
+      cancelAnimation(ballX);
+      cancelAnimation(ballY);
+      cancelAnimation(ballScale);
+      cancelAnimation(trailOpacity);
+      cancelAnimation(glowPulse);
+      cancelAnimation(scanProgress);
+      
+      // Reset values to safe defaults
       ballOpacity.value = 0;
       trailOpacity.value = 0;
       glowPulse.value = 0;
       scanProgress.value = 0;
-    } catch (e) { /* ignore */ }
-    router.replace('/entryPage');
+    } catch (e) {
+      console.warn('Animation cleanup error:', e);
+    }
+
+    // Small delay to ensure bridge cleanup before navigation
+    setTimeout(() => {
+      router.replace('/entryPage');
+    }, 100);
   };
 
   // DRS status data

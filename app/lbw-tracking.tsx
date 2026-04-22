@@ -17,6 +17,7 @@ import Svg, { Path, Rect, Polygon, Circle, Text as SvgText, G, Defs, LinearGradi
 import Animated, {
   useSharedValue, useAnimatedStyle, withTiming,
   withSequence, withDelay, withRepeat, Easing, runOnJS, interpolate,
+  cancelAnimation,
 } from 'react-native-reanimated';
 import { useGameStore } from '../store/gameStore';
 import { colors } from './theme';
@@ -110,20 +111,52 @@ export default function LbwTracking() {
     return t;
   };
 
+  const isMounted = useRef(true);
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
   // Safe back navigation — cancel animations, clear timeouts, then navigate
-  const goBack = useCallback(() => {
-    // Clear all pending timeouts first
+  const goBack = useCallback(async () => {
+    isMounted.current = false;
+
+    // 1. Unload video immediately to free up native resources
+    if (videoRef.current) {
+      try {
+        await videoRef.current.unloadAsync();
+      } catch (e) { /* ignore */ }
+    }
+
+    // 2. Clear all pending timeouts
     timeouts.current.forEach(t => clearTimeout(t));
     timeouts.current = [];
-    // Reset animation values to prevent post-unmount updates
+
+    // 3. Explicitly cancel all Reanimated animations
     try {
+      cancelAnimation(ballOpacity);
+      cancelAnimation(ballX);
+      cancelAnimation(ballY);
+      cancelAnimation(ballScale);
+      cancelAnimation(glowPulse);
+      cancelAnimation(scanProgress);
+      cancelAnimation(virtualOpacity);
+      cancelAnimation(stumpReveal);
+
+      // Reset to safe defaults
       ballOpacity.value = 0;
       glowPulse.value = 0;
       scanProgress.value = 0;
       virtualOpacity.value = 0;
       stumpReveal.value = 0;
-    } catch (e) { /* ignore animation cleanup errors */ }
-    router.replace('/entryPage');
+    } catch (e) { /* ignore */ }
+
+    // 4. Navigate back with a small delay
+    setTimeout(() => {
+      router.replace('/entryPage');
+    }, 100);
   }, []);
 
   // ── Flow state ──
@@ -195,6 +228,7 @@ export default function LbwTracking() {
 
     if (isDemo) {
       await new Promise(r => setTimeout(r, 1500));
+      if (!isMounted.current) return;
       // Modify detection based on demo type
       let pitchInfo = { x: 95, y: 95, frame: 7 };
       let impactInfo = { x: 97, y: 80, frame: 10 };
@@ -232,6 +266,7 @@ export default function LbwTracking() {
 
       if (!isDemo && videoRef.current) {
         await new Promise(r => setTimeout(r, 500));
+        if (!isMounted.current) return;
         try {
           const status = await videoRef.current.getStatusAsync();
           if (status.isLoaded && status.durationMillis) {
@@ -260,6 +295,7 @@ export default function LbwTracking() {
           console.warn(`Frame ${i} extraction failed`);
         }
         setExtractProgress((i + 1) / FRAME_COUNT);
+        if (!isMounted.current) return;
       }
 
       if (base64Frames.length < 5) {
@@ -275,6 +311,7 @@ export default function LbwTracking() {
       const result = await detectorRef.current?.processFrames(
         base64Frames, 200, 150
       );
+      if (!isMounted.current) return;
 
       if (result) {
         processDetectionResult(result);
@@ -1154,8 +1191,8 @@ export default function LbwTracking() {
         </View>
       )}
 
-      <TouchableOpacity 
-        style={[styles.closeBtn, { top: Math.max(insets.top, 10) }]} 
+      <TouchableOpacity
+        style={[styles.closeBtn, { top: Math.max(insets.top, 10) }]}
         onPress={() => goBack()}
       >
         <X size={22} color="#fff" />

@@ -24,7 +24,14 @@ function getMapHTML(latitude: number, longitude: number, zoom: number, markerCol
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1a2e; }
     #map { width: 100%; height: 100%; }
-    .leaflet-control-attribution { display: none !important; }
+    .leaflet-control-attribution { 
+      background: rgba(15, 23, 42, 0.8) !important; 
+      color: #94A3B8 !important;
+      font-size: 8px !important;
+    }
+    .leaflet-control-attribution a {
+      color: #38BDF8 !important;
+    }
     .custom-pin {
       width: 24px; height: 24px;
       background: ${markerColor};
@@ -85,7 +92,6 @@ function getMapHTML(latitude: number, longitude: number, zoom: number, markerCol
 
         var map = L.map('map', {
           zoomControl: false,
-          attributionControl: false
         }).setView([${latitude}, ${longitude}], ${zoom});
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -107,18 +113,22 @@ function getMapHTML(latitude: number, longitude: number, zoom: number, markerCol
         window._map = map;
         window._marker = marker;
 
+        function post(msg) {
+          if (window.ReactNativeWebView) {
+            window.ReactNativeWebView.postMessage(JSON.stringify(msg));
+          } else {
+            window.parent.postMessage(JSON.stringify(msg), "*");
+          }
+        }
+
         marker.on('dragend', function(e) {
           var p = e.target.getLatLng();
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'loc', lat: p.lat, lng: p.lng
-          }));
+          post({ type: 'loc', lat: p.lat, lng: p.lng });
         });
 
         map.on('click', function(e) {
           marker.setLatLng(e.latlng);
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'loc', lat: e.latlng.lat, lng: e.latlng.lng
-          }));
+          post({ type: 'loc', lat: e.latlng.lat, lng: e.latlng.lng });
         });
 
         // Force a resize after render to fix tile loading
@@ -168,12 +178,32 @@ export default function OSMMapView({
     } catch (e) { /* ignore */ }
   };
 
-  // Web platform fallback
+  // Web platform implementation using iframe
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const handleWebMessage = (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.type === 'loc' && onLocationSelect) {
+            onLocationSelect(data.lat, data.lng);
+          }
+        } catch (err) { /* ignore */ }
+      };
+      window.addEventListener('message', handleWebMessage);
+      setIsLoading(false);
+      return () => window.removeEventListener('message', handleWebMessage);
+    }
+  }, [onLocationSelect]);
+
   if (Platform.OS === 'web') {
+    const htmlContent = getMapHTML(latitude, longitude, zoom, markerColor);
     return (
-      <View style={[styles.fallback, { height }, style]}>
-        <Text style={styles.fallbackText}>📍 {latitude.toFixed(4)}, {longitude.toFixed(4)}</Text>
-        <Text style={styles.fallbackSub}>Map available on mobile</Text>
+      <View style={[styles.container, { height }, style]}>
+        <iframe
+          srcDoc={htmlContent}
+          style={{ width: '100%', height: '100%', border: 'none' }}
+          title="OSM Map"
+        />
       </View>
     );
   }
@@ -199,7 +229,11 @@ export default function OSMMapView({
       )}
       <WebView
         ref={webViewRef}
-        source={{ html: htmlContent, baseUrl: 'https://openstreetmap.org' }}
+        source={{ 
+          html: htmlContent, 
+          baseUrl: 'https://www.openstreetmap.org' 
+        }}
+        userAgent="OneScorer/1.0 (com.ededin.cricket; Mobile; contact: support@ededin.com)"
         style={[styles.webview, isLoading && { opacity: 0 }]}
         scrollEnabled={false}
         bounces={false}
