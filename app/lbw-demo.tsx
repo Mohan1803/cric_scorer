@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Dimensions, Image, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { X, TrendingUp, Cpu, RotateCcw } from 'lucide-react-native';
+import { X, TrendingUp, Cpu, RotateCcw, Plus } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useSharedValue,
@@ -35,16 +35,29 @@ export default function LbwDemo() {
   const [phase, setPhase] = useState<Phase>('processing');
   const insets = useSafeAreaInsets();
   const timeouts = useRef<NodeJS.Timeout[]>([]);
+  const isMounted = useRef(true);
+
+  // Safe icon fallbacks
+  const SafeX = X || Plus;
+  const SafeTrendingUp = TrendingUp || Plus;
+  const SafeCpu = Cpu || Plus;
+  const SafeRotateCcw = RotateCcw || Plus;
 
   // Cleanup timeouts on unmount
   useEffect(() => {
+    isMounted.current = true;
     return () => {
+      isMounted.current = false;
       timeouts.current.forEach(t => clearTimeout(t));
     };
   }, []);
 
   const addTimeout = (fn: () => void, ms: number) => {
-    const t = setTimeout(fn, ms);
+    const t = setTimeout(() => {
+      if (isMounted.current) {
+        fn();
+      }
+    }, ms);
     timeouts.current.push(t);
     return t;
   };
@@ -310,7 +323,7 @@ export default function LbwDemo() {
               <Animated.View style={[styles.scanLine, animScan]} />
             </View>
             <View style={styles.processingIcon}>
-              <Cpu size={44} color="#818cf8" />
+              <SafeCpu size={44} color="#818cf8" />
             </View>
             <Text style={styles.processingTitle}>BALL TRACKING</Text>
             <Text style={styles.processingSubtitle}>
@@ -445,7 +458,7 @@ export default function LbwDemo() {
             {/* Action Buttons */}
             <View style={styles.actionRow}>
               <TouchableOpacity style={styles.replayBtn} onPress={restart}>
-                <RotateCcw size={18} color="#fff" />
+                <SafeRotateCcw size={18} color="#fff" />
                 <Text style={styles.replayText}>REPLAY</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.doneBtn} onPress={goBack}>
@@ -461,7 +474,7 @@ export default function LbwDemo() {
         style={[styles.closeBtn, { top: Math.max(insets.top, 10) }]} 
         onPress={goBack}
       >
-        <X size={22} color="#fff" />
+        <SafeX size={22} color="#fff" />
       </TouchableOpacity>
     </View>
   );

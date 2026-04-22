@@ -4,11 +4,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { colors, shadows } from './theme';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft, MapPin, Phone, User, Store, Plus, X, Save, DollarSign, Navigation, Info } from 'lucide-react-native';
+import { ChevronLeft, User, Store, Plus, X, Save, Navigation, Building2, MapPin, Phone } from 'lucide-react-native';
 import { useGroundStore } from '../store/groundStore';
 import * as Location from 'expo-location';
 import MapView, { Marker, PROVIDER_GOOGLE } from '../components/MapModule';
 import { groundService } from '../services/groundService';
+
+// Fallback for icons that might be missing in this version of lucide-react-native
+const SafeStore = Store || Building2 || Plus;
+const SafeMapPin = MapPin || Plus;
+const SafeNavigation = Navigation || Plus;
+const SafePhone = Phone || Plus;
+const SafeUser = User || Plus;
 
 export default function AddGround() {
   const { addGround } = useGroundStore();
@@ -158,7 +165,7 @@ export default function AddGround() {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Ground Name *</Text>
               <View style={styles.inputWrapper}>
-                <Store size={18} color={colors.textMuted} />
+                <SafeStore size={18} color={colors.textMuted} />
                 <TextInput
                   style={styles.input}
                   placeholder="e.g. Green Park Stadium"
@@ -172,7 +179,7 @@ export default function AddGround() {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Owner/Manager Name</Text>
               <View style={styles.inputWrapper}>
-                <User size={18} color={colors.textMuted} />
+                <SafeUser size={18} color={colors.textMuted} />
                 <TextInput
                   style={styles.input}
                   placeholder="Your Name"
@@ -186,7 +193,7 @@ export default function AddGround() {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Contact Phone *</Text>
               <View style={styles.inputWrapper}>
-                <Phone size={18} color={colors.textMuted} />
+                <SafePhone size={18} color={colors.textMuted} />
                 <TextInput
                   style={styles.input}
                   placeholder="+91 98765 43210"
@@ -207,7 +214,7 @@ export default function AddGround() {
                 onPress={getCurrentLocation}
                 disabled={loadingLocation}
               >
-                <Navigation size={14} color={colors.accent} />
+                <SafeNavigation size={14} color={colors.accent} />
                 <Text style={styles.gpsText}>{loadingLocation ? 'Detecting...' : 'Detect GPS'}</Text>
               </TouchableOpacity>
             </View>
@@ -216,7 +223,7 @@ export default function AddGround() {
               <View style={styles.mapContainer}>
                 <MapView
                   style={styles.map}
-                  provider={PROVIDER_GOOGLE}
+                  provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
                   region={region}
                   onRegionChangeComplete={(r: any) => setRegion(r)}
                   onPress={(e: any) => {
@@ -244,7 +251,7 @@ export default function AddGround() {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>City *</Text>
               <View style={styles.inputWrapper}>
-                <MapPin size={18} color={colors.textMuted} />
+                <SafeMapPin size={18} color={colors.textMuted} />
                 <TextInput
                   style={styles.input}
                   placeholder="e.g. Mumbai"
