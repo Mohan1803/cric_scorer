@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, TouchableOpacity, Dimensions, Alert, Platform }
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { router } from 'expo-router';
-import { X, Video, Circle, RotateCcw } from 'lucide-react-native';
+import { X, Video, Circle, RotateCcw, ChevronLeft } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from './theme';
 
@@ -125,8 +125,8 @@ export default function LbwRecorder() {
       >
         <View style={[styles.overlay, { paddingTop: Math.max(insets.top, 20) }]}>
           <View style={styles.topBar}>
-            <TouchableOpacity style={styles.closeButton} onPress={goBack}>
-              <X size={24} color="#fff" />
+            <TouchableOpacity style={styles.backButton} onPress={goBack}>
+              <ChevronLeft size={28} color="#fff" />
             </TouchableOpacity>
             {isRecording && (
               <View style={styles.timerContainer}>
@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  closeButton: {
+  backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,

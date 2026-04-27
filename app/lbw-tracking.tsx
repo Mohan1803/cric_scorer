@@ -7,7 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { useLocalSearchParams, router, useNavigation } from 'expo-router';
 import {
-  X, RotateCcw, Save, Cpu, Eye, Crosshair, Target, Circle as LucideCircle,
+  X, RotateCcw, Save, Cpu, Eye, Crosshair, Target, Circle as LucideCircle, ChevronLeft
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as VideoThumbnails from 'expo-video-thumbnails';
@@ -17,7 +17,7 @@ import Svg, { Path, Rect, Polygon, Circle, Text as SvgText, G, Defs, LinearGradi
 import Animated, {
   useSharedValue, useAnimatedStyle, withTiming,
   withSequence, withDelay, withRepeat, Easing, runOnJS, interpolate,
-  cancelAnimation,
+  cancelAnimation, FadeIn, FadeOut,
 } from 'react-native-reanimated';
 import { useGameStore } from '../store/gameStore';
 import { colors } from './theme';
@@ -41,8 +41,10 @@ function quadraticBezier(p0: Point, p1: Point, p2: Point, t: number): Point {
 }
 
 function generateTrajectoryPoints(
-  release: Point, pitch: Point, impact: Point, segments = 40
+  release: Point, pitch: Point, impact: Point, segments = 40,
+  pathPoints?: Point[]
 ): Point[] {
+  if (pathPoints && pathPoints.length >= 3) return pathPoints;
   const pts: Point[] = [];
   for (let i = 0; i <= segments; i++) {
     pts.push(quadraticBezier(release, pitch, impact, i / segments));
@@ -160,8 +162,10 @@ export default function LbwTracking() {
   }, []);
 
   // ── Flow state ──
-  type FlowStep = 'extracting' | 'detecting' | 'analyzing' | 'pitching' | 'impact' | 'wickets' | 'decision';
+  type FlowStep = 'extracting' | 'detecting' | 'manual' | 'analyzing' | 'pitching' | 'impact' | 'wickets' | 'decision';
   const [step, setStep] = useState<FlowStep>('extracting');
+  const [manualPoints, setManualPoints] = useState<{ pitch: Point | null, impact: Point | null, stumps: Point | null }>({ pitch: null, impact: null, stumps: null });
+  const [manualStep, setManualStep] = useState<'pitch' | 'impact' | 'stumps' | 'done'>('pitch');
 
   // ── Frame extraction ──
   const [extractProgress, setExtractProgress] = useState(0);
@@ -178,6 +182,7 @@ export default function LbwTracking() {
     widthPx: number; heightPx: number;
     widthInches: number; heightInches: number;
   } | null>(null);
+  const [allScaledPositions, setAllScaledPositions] = useState<{x: number; y: number; frame: number}[]>([]);
 
   // ── DRS result ──
   const [drsResult, setDrsResult] = useState({
@@ -187,6 +192,11 @@ export default function LbwTracking() {
   const [isSaving, setIsSaving] = useState(false);
   const [handedness, setHandedness] = useState<'RH' | 'LH'>('RH');
   const [shotOffered, setShotOffered] = useState(true);
+  const [verdictBanner, setVerdictBanner] = useState<{
+    label: string;
+    status: string;
+    color: string;
+  } | null>(null);
 
   // ── Sync Handedness with Store ──
   useEffect(() => {
@@ -206,6 +216,12 @@ export default function LbwTracking() {
   const scanProgress = useSharedValue(0);
   const virtualOpacity = useSharedValue(0); // For video-to-virtual fade
   const stumpReveal = useSharedValue(0);   // For 3D stump animation
+  const pathProgress = useSharedValue(0);   // For growing trail
+  const cameraScale = useSharedValue(1);
+  const cameraY = useSharedValue(0);
+
+  const [ghostPitch, setGhostPitch] = useState<null | Point>(null);
+  const [ghostImpact, setGhostImpact] = useState<null | Point>(null);
 
 
   // ── src dimensions for coordinate scaling ──
@@ -254,7 +270,7 @@ export default function LbwTracking() {
         impactPoint: impactInfo,
         detectedHand: 'RH',
       };
-      srcW.current = 200; srcH.current = 150;
+      srcW.current = 320; srcH.current = 240;
       processDetectionResult(demoDetection);
       return;
     }
@@ -286,7 +302,7 @@ export default function LbwTracking() {
         try {
           const thumb = await VideoThumbnails.getThumbnailAsync(targetUri, {
             time,
-            quality: 0.4,
+            quality: 0.6,
           });
           // Convert to base64 using new Expo File API
           const b64 = await FileSystem.readAsStringAsync(thumb.uri, { encoding: 'base64' });
@@ -309,21 +325,81 @@ export default function LbwTracking() {
       setDetectProgress(0);
 
       const result = await detectorRef.current?.processFrames(
-        base64Frames, 200, 150
+        base64Frames, 320, 240
       );
       if (!isMounted.current) return;
 
       if (result) {
         processDetectionResult(result);
       } else {
-        Alert.alert('Detection Failed', 'Could not detect ball or stumps. Please try again with a clearer video.');
-        goBack();
+        setStep('manual');
       }
     } catch (err) {
       console.error('Auto-detection error:', err);
-      Alert.alert('Error', 'Ball tracking failed.');
-      goBack();
+      setStep('manual');
     }
+  };
+
+  const handleManualSelection = (e: any) => {
+    if (step !== 'manual') return;
+    const { locationX, locationY } = e.nativeEvent;
+    const pt = { x: locationX, y: locationY };
+
+    if (manualStep === 'pitch') {
+      setManualPoints(prev => ({ ...prev, pitch: pt }));
+      setManualStep('impact');
+    } else if (manualStep === 'impact') {
+      setManualPoints(prev => ({ ...prev, impact: pt }));
+      setManualStep('stumps');
+    } else if (manualStep === 'stumps') {
+      setManualPoints(prev => ({ ...prev, stumps: pt }));
+      setManualStep('done');
+      addTimeout(() => {
+        startAnalysis();
+      }, 500);
+    }
+  };
+
+  const startAnalysis = () => {
+    let pit: Point, imp: Point, rel: Point, stp: any;
+
+    if (step === 'manual' || manualPoints.pitch) {
+      pit = manualPoints.pitch!;
+      imp = manualPoints.impact!;
+      stp = { 
+        left: manualPoints.stumps!.x - 20, 
+        right: manualPoints.stumps!.x + 20, 
+        top: manualPoints.stumps!.y - 40, 
+        bottom: manualPoints.stumps!.y 
+      };
+      rel = { x: pit.x, y: SH * 0.2 };
+    } else if (detection) {
+      pit = scalePoint(detection.pitchPoint!, srcW.current, srcH.current);
+      imp = scalePoint(detection.impactPoint!, srcW.current, srcH.current);
+      rel = scalePoint(detection.releasePoint!, srcW.current, srcH.current);
+      stp = detection.stumps;
+    } else {
+      pit = { x: SW * 0.48, y: SH * 0.62 };
+      imp = { x: SW * 0.52, y: SH * 0.48 };
+      rel = { x: SW / 2, y: SH * 0.15 };
+      stp = { left: SW * 0.44, right: SW * 0.56, top: SH * 0.38, bottom: SH * 0.52 };
+    }
+    
+    // Convert to expected types and continue logic
+    setScaledPitch(pit);
+    setScaledImpact(imp);
+    setScaledRelease(rel);
+    
+    let stump = {
+      left: stp.left, right: stp.right,
+      top: stp.top, bottom: stp.bottom,
+      widthPx: Math.abs(stp.right - stp.left),
+      heightPx: Math.abs(stp.bottom - stp.top),
+      widthInches: 9, heightInches: 28,
+    };
+    setStumpRect(stump);
+    
+    computeDecision(rel, pit, imp, stump);
   };
 
   // ═══════════════════════════════════════════════
@@ -385,6 +461,17 @@ export default function LbwTracking() {
     } else if (striker?.battingHand) {
       console.log(`[DRS] Using store batting hand: ${handedness}`);
     }
+
+    // Scale ALL detected ball positions for trajectory animation
+    const validBallPos = result.ballPositions.filter(
+      (p: any) => typeof p.x === 'number' && typeof p.y === 'number' && !isNaN(p.x)
+    );
+    const scaledAll = validBallPos.map((p: any) => ({
+      ...scalePoint(p, sw, sh),
+      frame: p.frame,
+    }));
+    setAllScaledPositions(scaledAll);
+    console.log(`[DRS] Detected ${scaledAll.length} ball positions for trajectory`);
 
     // Compute DRS decision
     computeDecision(release, pitch, impact, stump);
@@ -604,8 +691,29 @@ export default function LbwTracking() {
   };
 
   // ═══════════════════════════════════════════════
-  //  DRS ANIMATION SEQUENCE
+  //  DRS ANIMATION SEQUENCE — BROADCAST STYLE
+  //  Each phase: animate ball → freeze → verdict banner → pause → next
+  //  Matches international cricket TV broadcast pacing
   // ═══════════════════════════════════════════════
+
+  // Helper: show verdict banner with dramatic freeze, then proceed
+  const showVerdictAndProceed = (
+    label: string,
+    status: string,
+    phase: string,
+    nextFn: () => void,
+    holdMs: number = 2500
+  ) => {
+    const color = getPhaseStatusColor(phase, status);
+    addTimeout(() => {
+      setVerdictBanner({ label, status, color });
+    }, 500); // slight delay after ball arrives for dramatic beat
+    addTimeout(() => {
+      setVerdictBanner(null);
+      nextFn();
+    }, 500 + holdMs);
+  };
+
   const beginAnalysisPhase = () => {
     // Start scan animation
     scanProgress.value = withRepeat(
@@ -615,10 +723,12 @@ export default function LbwTracking() {
       ), -1, false
     );
 
-    // Cinematic fade to virtual reconstruction
-    virtualOpacity.value = withDelay(1000, withTiming(1, { duration: 1500 }));
+    // Subtle dim — keep video visible behind trajectory overlay
+    virtualOpacity.value = withDelay(1000, withTiming(0.5, { duration: 1500 }));
     stumpReveal.value = withDelay(1500, withTiming(1, { duration: 1000, easing: Easing.out(Easing.back(1)) }));
 
+    cameraScale.value = withDelay(1000, withTiming(1.08, { duration: 3000 }));
+    cameraY.value = withDelay(1000, withTiming(-15, { duration: 3000 }));
 
     addTimeout(() => {
       setStep('pitching');
@@ -626,41 +736,132 @@ export default function LbwTracking() {
     }, 2800);
   };
 
+  // ── Helper: animate ball along a series of detected positions ──
+  const animateAlongPath = (
+    points: {x: number; y: number}[],
+    totalMs: number,
+    scaleStart: number,
+    scaleEnd: number,
+  ) => {
+    if (points.length < 2) return;
+    const segMs = totalMs / (points.length - 1);
+    for (let i = 1; i < points.length; i++) {
+      const delay = segMs * (i - 1);
+      const progress = i / (points.length - 1);
+      const sc = scaleStart + (scaleEnd - scaleStart) * progress;
+      addTimeout(() => {
+        ballX.value = withTiming(points[i].x, { duration: segMs * 1.05, easing: Easing.linear });
+        ballY.value = withTiming(points[i].y, { duration: segMs * 1.05, easing: Easing.linear });
+        ballScale.value = withTiming(sc, { duration: segMs * 1.05 });
+      }, delay);
+    }
+  };
+
+  // ── Get ball positions for a phase segment ──
+  const getPathSegment = (fromFrame: number, toFrame: number) => {
+    if (allScaledPositions.length < 3) return [];
+    return allScaledPositions.filter(p => p.frame >= fromFrame && p.frame <= toFrame);
+  };
+
   const startPitchingAnimation = () => {
     const rel = scaledRelease || { x: SW / 2, y: SH * 0.15 };
     const pit = scaledPitch || { x: SW * 0.48, y: SH * 0.62 };
 
+    // Get detected positions from release to pitch
+    const pitchFrame = detection?.pitchPoint?.frame ?? -1;
+    const releaseFrame = detection?.releasePoint?.frame ?? 0;
+    const pathPoints = getPathSegment(releaseFrame, pitchFrame);
+    const usePathAnim = pathPoints.length >= 3;
+
     ballOpacity.value = 0;
-    ballX.value = rel.x;
-    ballY.value = rel.y;
+    ballX.value = usePathAnim ? pathPoints[0].x : rel.x;
+    ballY.value = usePathAnim ? pathPoints[0].y : rel.y;
     ballScale.value = 0.5;
     glowPulse.value = 0;
 
     ballOpacity.value = withTiming(1, { duration: 250 });
-    ballX.value = withTiming(pit.x, { duration: 1600, easing: Easing.bezier(0.2, 0, 0.4, 1) });
-    ballY.value = withTiming(pit.y, { duration: 1600, easing: Easing.bezier(0.2, 0, 0.4, 1) });
-    ballScale.value = withTiming(1.4, { duration: 1600 });
 
-    glowPulse.value = withDelay(1600,
+    const animDuration = 1800;
+    pathProgress.value = withTiming(0.4, { duration: animDuration });
+
+    if (usePathAnim) {
+      // Follow actual detected ball positions
+      animateAlongPath(pathPoints, animDuration, 0.5, 1.4);
+    } else {
+      // Fallback: simple 2-point animation
+      ballX.value = withTiming(pit.x, { duration: animDuration, easing: Easing.bezier(0.2, 0, 0.4, 1) });
+      ballY.value = withTiming(pit.y, { duration: animDuration, easing: Easing.bezier(0.2, 0, 0.4, 1) });
+      ballScale.value = withTiming(1.4, { duration: animDuration });
+    }
+
+    // Impact glow when ball pitches
+    glowPulse.value = withDelay(animDuration,
       withSequence(withTiming(1, { duration: 80 }), withTiming(0, { duration: 400 }))
     );
 
-    addTimeout(() => { setStep('impact'); startImpactAnimation(); }, 2800);
+    // FREEZE → verdict → proceed
+    addTimeout(() => {
+      if (scaledPitch) setGhostPitch(scaledPitch);
+      if (drsResult.pitching === 'OUTSIDE LEG') {
+        showVerdictAndProceed('PITCHING', drsResult.pitching, 'pitching', () => {
+          setVerdictBanner(null);
+          setStep('decision');
+        }, 3000);
+      } else {
+        showVerdictAndProceed('PITCHING', drsResult.pitching, 'pitching', () => {
+          setStep('impact');
+          startImpactAnimation();
+        });
+      }
+    }, animDuration + 300);
   };
 
   const startImpactAnimation = () => {
     const imp = scaledImpact || { x: SW * 0.5, y: SH * 0.52 };
+
+    // Get detected positions from pitch to impact
+    const pitchFrame = detection?.pitchPoint?.frame ?? -1;
+    const impactFrame = detection?.impactPoint?.frame ?? -1;
+    const pathPoints = getPathSegment(pitchFrame, impactFrame);
+    const usePathAnim = pathPoints.length >= 2;
+
     glowPulse.value = 0;
 
-    ballX.value = withTiming(imp.x, { duration: 1200, easing: Easing.bezier(0.25, 0.1, 0.25, 1) });
-    ballY.value = withTiming(imp.y, { duration: 1200, easing: Easing.out(Easing.quad) });
-    ballScale.value = withTiming(1.5, { duration: 1200 });
+    const animDuration = 1200;
+    pathProgress.value = withTiming(0.7, { duration: animDuration });
 
-    glowPulse.value = withDelay(1200,
+    if (usePathAnim) {
+      animateAlongPath(pathPoints, animDuration, 1.4, 1.5);
+    } else {
+      ballX.value = withTiming(imp.x, { duration: animDuration, easing: Easing.bezier(0.25, 0.1, 0.25, 1) });
+      ballY.value = withTiming(imp.y, { duration: animDuration, easing: Easing.out(Easing.quad) });
+      ballScale.value = withTiming(1.5, { duration: animDuration });
+    }
+
+    // Impact glow
+    glowPulse.value = withDelay(animDuration,
       withSequence(withTiming(1, { duration: 60 }), withTiming(0.3, { duration: 500 }))
     );
 
-    addTimeout(() => { setStep('wickets'); startWicketsAnimation(); }, 2500);
+    // FREEZE → verdict → proceed
+    addTimeout(() => {
+      if (scaledImpact) setGhostImpact(scaledImpact);
+      const shouldTerminate =
+        (drsResult.impact === 'OUTSIDE OFF' && shotOffered) ||
+        drsResult.impact === 'OUTSIDE LEG';
+
+      if (shouldTerminate) {
+        showVerdictAndProceed('IMPACT', drsResult.impact, 'impact', () => {
+          setVerdictBanner(null);
+          setStep('decision');
+        }, 3000);
+      } else {
+        showVerdictAndProceed('IMPACT', drsResult.impact, 'impact', () => {
+          setStep('wickets');
+          startWicketsAnimation();
+        });
+      }
+    }, animDuration + 300);
   };
 
   const startWicketsAnimation = () => {
@@ -672,10 +873,13 @@ export default function LbwTracking() {
     glowPulse.value = 0;
     ballOpacity.value = withTiming(0.65, { duration: 200 });
 
+    // Predicted path: animate from impact to projected stump position
     ballX.value = withTiming(projected.x, { duration: 1400, easing: Easing.bezier(0.25, 0.1, 0.25, 1) });
     ballY.value = withTiming(projected.y, { duration: 1400, easing: Easing.bezier(0.25, 0.1, 0.25, 1) });
     ballScale.value = withTiming(1, { duration: 1400 });
+    pathProgress.value = withTiming(1, { duration: 1400 });
 
+    // Stump hit glow (only when HITTING)
     if (drsResult.wickets === 'HITTING') {
       glowPulse.value = withDelay(1400,
         withSequence(
@@ -685,18 +889,27 @@ export default function LbwTracking() {
       );
     }
 
+    // FREEZE → verdict → decision
     addTimeout(() => {
-      setStep('decision');
-      // Potential to play final drumroll/hit sound here
-    }, 3500); // 3.5s delay for tension
+      showVerdictAndProceed('WICKETS', drsResult.wickets, 'wickets', () => {
+        setVerdictBanner(null);
+        setStep('decision');
+      }, 3000);
+    }, 1700);
   };
 
   // ── Reset ──
   const resetAll = useCallback(() => {
     ballOpacity.value = 0;
     glowPulse.value = 0;
+    setVerdictBanner(null);
     setStep('extracting');
     setDetection(null);
+    setGhostPitch(null);
+    setGhostImpact(null);
+    pathProgress.value = 0;
+    cameraScale.value = 1;
+    cameraY.value = 0;
     setExtractProgress(0);
     setDetectProgress(0);
     addTimeout(() => startAutoFlow(), 300);
@@ -719,9 +932,10 @@ export default function LbwTracking() {
   //  TRAJECTORY POINTS
   // ═══════════════════════════════════════════════
   const trajectoryPoints = useMemo(() => {
+    if (allScaledPositions.length >= 3) return allScaledPositions;
     if (!scaledRelease || !scaledPitch || !scaledImpact) return [];
     return generateTrajectoryPoints(scaledRelease, scaledPitch, scaledImpact, 40);
-  }, [scaledRelease, scaledPitch, scaledImpact]);
+  }, [allScaledPositions, scaledRelease, scaledPitch, scaledImpact]);
 
   const projectedPoint = useMemo(() => {
     if (!scaledPitch || !scaledImpact) return null;
@@ -765,6 +979,12 @@ export default function LbwTracking() {
     return '#ef4444';
   };
 
+  // Context-aware: "OUTSIDE OFF" is legal at pitching (green), illegal at impact (red)
+  const getPhaseStatusColor = (phase: string, status: string) => {
+    if (phase === 'pitching' && status === 'OUTSIDE OFF') return '#22c55e';
+    return getStatusColor(status);
+  };
+
   // ═══════════════════════════════════════════════
   //  CINEMATIC VISUALS (SVG)
   // ═══════════════════════════════════════════════
@@ -776,22 +996,22 @@ export default function LbwTracking() {
     const width = right - left;
 
     // Perspective Pitch calculation (Virtual)
-    const pitchWidthTop = width * 2;
-    const pitchWidthBottom = SW * 1.5;
-    const pitchTop = top - 100;
+    const pitchWidthTop = width * 1.8;
+    const pitchWidthBottom = SW * 1.2;
+    const pitchTop = top - 120;
     const pitchBottom = SH;
 
     // 3D Stump reconstruction
     const render3DStump = (x: number, isHit: boolean) => {
-      const sWidth = width / 6;
+      const sWidth = width / 5.5;
       const sHeight = bottom - top;
       return (
         <G key={`stump-${x}`}>
           <Defs>
             <SvgGradient id={`stumpGrad-${x}`} x1="0%" y1="0%" x2="100%" y2="0%">
-              <Stop offset="0%" stopColor="rgba(255,255,255,0.1)" />
-              <Stop offset="50%" stopColor="rgba(255,255,255,0.3)" />
-              <Stop offset="100%" stopColor="rgba(255,255,255,0.1)" />
+              <Stop offset="0%" stopColor="#1e293b" />
+              <Stop offset="50%" stopColor="#475569" />
+              <Stop offset="100%" stopColor="#1e293b" />
             </SvgGradient>
           </Defs>
           {/* Main Stump Cylinder */}
@@ -800,18 +1020,19 @@ export default function LbwTracking() {
             y={top}
             width={sWidth}
             height={sHeight}
-            rx={2}
-            fill="rgba(148, 163, 184, 0.4)"
-            stroke={isHit ? "#EF4444" : "rgba(255,255,255,0.2)"}
+            rx={sWidth / 2}
+            fill={`url(#stumpGrad-${x})`}
+            stroke={isHit ? "#EF4444" : "rgba(255,255,255,0.05)"}
             strokeWidth={1}
           />
+          {/* Reflection Highlight */}
           <Rect
-            x={x - sWidth / 2}
-            y={top}
-            width={sWidth}
-            height={sHeight}
-            rx={2}
-            fill={`url(#stumpGrad-${x})`}
+            x={x - sWidth / 4}
+            y={top + 10}
+            width={2}
+            height={sHeight - 20}
+            rx={1}
+            fill="rgba(255,255,255,0.15)"
           />
         </G>
       );
@@ -840,7 +1061,8 @@ export default function LbwTracking() {
             stroke={color}
             strokeWidth={5}
             fill="none"
-            strokeDasharray="15,10"
+            strokeDasharray="2000"
+            strokeDashoffset={interpolate(pathProgress.value, [0, 1], [2000, 0])}
             strokeLinecap="round"
             opacity={0.9}
           />
@@ -871,15 +1093,34 @@ export default function LbwTracking() {
           <Polygon
             points={`${centerX - pitchWidthTop / 2},${pitchTop} ${centerX + pitchWidthTop / 2},${pitchTop} ${centerX + pitchWidthBottom / 2},${pitchBottom} ${centerX - pitchWidthBottom / 2},${pitchBottom}`}
             fill="url(#virtualPitchGrad)"
-            opacity={0.8}
+            opacity={0.6}
           />
 
           {/* In-Line Mat */}
           <Polygon
             points={`${left},${top} ${right},${top} ${right + 80},${SH} ${left - 80},${SH}`}
-            fill={drsResult.pitching === 'IN LINE' ? "rgba(34, 197, 94, 0.15)" : "rgba(239, 68, 68, 0.1)"}
+            fill={drsResult.pitching === 'IN LINE' ? "rgba(34, 197, 94, 0.2)" : "rgba(239, 68, 68, 0.15)"}
             opacity={0.4}
           />
+
+          {/* Ball Shadow */}
+          {isTracking && (
+            <Circle
+              cx={ballX.value}
+              cy={SH * 0.65}
+              r={12}
+              fill="rgba(0,0,0,0.4)"
+              transform={`scale(${interpolate(ballY.value, [SH * 0.2, SH * 0.65], [0.5, 1.2])}, 0.3)`}
+            />
+          )}
+
+          {/* Ghost Balls */}
+          {ghostPitch && (
+            <Circle cx={ghostPitch.x} cy={ghostPitch.y} r={10} fill="rgba(255,255,255,0.1)" stroke="#38BDF8" strokeWidth={1.5} opacity={0.6} />
+          )}
+          {ghostImpact && (
+            <Circle cx={ghostImpact.x} cy={ghostImpact.y} r={10} fill="rgba(255,255,255,0.1)" stroke="#EF4444" strokeWidth={1.5} opacity={0.6} />
+          )}
 
           {/* Trajectory Ribbons */}
           {renderRibbon(trajectoryPoints, '#38BDF8', '#818CF8')}
@@ -897,18 +1138,24 @@ export default function LbwTracking() {
 
 
 
-          {/* International Broadcast Labels */}
+          {/* International Broadcast Labels & Markers */}
           {scaledPitch && (step === 'pitching' || step === 'impact' || step === 'wickets') && (
-            <G transform={`translate(${scaledPitch.x}, ${scaledPitch.y - 30})`}>
-              <Rect x={-40} y={-15} width={80} height={20} rx={4} fill="rgba(0,0,0,0.85)" stroke="#38BDF8" strokeWidth={1} />
-              <SvgText fill="#38BDF8" fontSize="10" fontWeight="bold" fontStyle="italic" x={0} y={0} textAnchor="middle">PITCHING</SvgText>
+            <G>
+              <Circle cx={scaledPitch.x} cy={scaledPitch.y} r={6} fill="none" stroke="#38BDF8" strokeWidth={2} />
+              <G transform={`translate(${scaledPitch.x}, ${scaledPitch.y - 30})`}>
+                <Rect x={-40} y={-15} width={80} height={20} rx={4} fill="rgba(0,0,0,0.85)" stroke="#38BDF8" strokeWidth={1} />
+                <SvgText fill="#38BDF8" fontSize="10" fontWeight="bold" fontStyle="italic" x={0} y={0} textAnchor="middle">PITCHING</SvgText>
+              </G>
             </G>
           )}
 
           {scaledImpact && (step === 'impact' || step === 'wickets') && (
-            <G transform={`translate(${scaledImpact.x}, ${scaledImpact.y - 40})`}>
-              <Rect x={-35} y={-15} width={70} height={20} rx={4} fill="rgba(0,0,0,0.85)" stroke="#EF4444" strokeWidth={1} />
-              <SvgText fill="#EF4444" fontSize="10" fontWeight="bold" fontStyle="italic" x={0} y={0} textAnchor="middle">IMPACT</SvgText>
+            <G>
+              <Circle cx={scaledImpact.x} cy={scaledImpact.y} r={6} fill="none" stroke="#EF4444" strokeWidth={2} />
+              <G transform={`translate(${scaledImpact.x}, ${scaledImpact.y - 40})`}>
+                <Rect x={-35} y={-15} width={70} height={20} rx={4} fill="rgba(0,0,0,0.85)" stroke="#EF4444" strokeWidth={1} />
+                <SvgText fill="#EF4444" fontSize="10" fontWeight="bold" fontStyle="italic" x={0} y={0} textAnchor="middle">IMPACT</SvgText>
+              </G>
             </G>
           )}
 
@@ -927,8 +1174,19 @@ export default function LbwTracking() {
   //  RENDER
   // ═══════════════════════════════════════════════
   const videoAnimStyle = useAnimatedStyle(() => ({
-    opacity: 1 - (virtualOpacity.value * 0.3), // Keep video visible in background (dims to 70%)
-    transform: [{ scale: 1 }], // Do not scale so coordinates align
+    opacity: 1 - (virtualOpacity.value * 0.4), // Keep video visible in background (dims to 60%)
+    transform: [
+      { scale: cameraScale.value },
+      { translateY: cameraY.value },
+    ],
+  }));
+
+  const virtualAnimStyle = useAnimatedStyle(() => ({
+    opacity: virtualOpacity.value,
+    transform: [
+      { scale: cameraScale.value },
+      { translateY: cameraY.value },
+    ],
   }));
 
   return (
@@ -951,19 +1209,66 @@ export default function LbwTracking() {
           isLooping={true}
         />
 
-        {isDemo && step === 'extracting' && (
+        {/* ── Broadcast Watermarks ── */}
+        <View style={styles.broadcastOverlay} pointerEvents="none">
+          <View style={styles.replayBadge}>
+            <Text style={styles.replayText}>● REPLAY</Text>
+          </View>
+          <View style={styles.drsBadge}>
+            <Text style={styles.drsText}>DRS TECHNOLOGY</Text>
+          </View>
+        </View>
+
+        {/* ── Manual Selection Overlay ── */}
+        {step === 'manual' && (
+          <TouchableOpacity 
+            activeOpacity={1} 
+            onPress={handleManualSelection} 
+            style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.2)' }]}
+          >
+            <View style={styles.manualHeader}>
+              <Text style={styles.manualStepText}>
+                {manualStep === 'pitch' ? 'TAP WHERE BALL PITCHED' :
+                 manualStep === 'impact' ? 'TAP WHERE BALL HIT PAD' :
+                 'TAP CENTER OF STUMPS'}
+              </Text>
+              <Text style={styles.manualSubText}>Manual Tracking Mode</Text>
+            </View>
+
+            {/* Selection Markers */}
+            {manualPoints.pitch && <View style={[styles.manualMarker, { left: manualPoints.pitch.x - 15, top: manualPoints.pitch.y - 15, borderColor: '#38BDF8' }]} />}
+            {manualPoints.impact && <View style={[styles.manualMarker, { left: manualPoints.impact.x - 15, top: manualPoints.impact.y - 15, borderColor: '#EF4444' }]} />}
+            {manualPoints.stumps && <View style={[styles.manualMarker, { left: manualPoints.stumps.x - 15, top: manualPoints.stumps.y - 15, borderColor: '#fff' }]} />}
+          </TouchableOpacity>
+        )}
+
+        {step === 'extracting' && (
           <View style={StyleSheet.absoluteFill}>
             <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }]} />
             <LinearGradient
               colors={['rgba(0,0,0,0.5)', 'transparent', 'rgba(0,0,0,0.7)']}
               style={StyleSheet.absoluteFill}
             />
+            <View style={styles.extractionOverlay}>
+              <ActivityIndicator size="large" color="#7C3AED" />
+              <Text style={styles.extractionText}>Extracting High-Def Frames...</Text>
+              <Text style={styles.extractionSubText}>{Math.round(extractProgress * 100)}% Complete</Text>
+              
+              <TouchableOpacity 
+                style={styles.manualShortcutBtn} 
+                onPress={() => setStep('manual')}
+              >
+                <Text style={styles.manualShortcutText}>SKIP TO MANUAL TRACKING</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </Animated.View>
 
       {/* ── Hawk-Eye Overlay ── */}
-      <HawkEyeVisuals />
+      <Animated.View style={[StyleSheet.absoluteFill, virtualAnimStyle]} pointerEvents="none">
+        <HawkEyeVisuals />
+      </Animated.View>
 
       {/* ══════════ EXTRACTING FRAMES ══════════ */}
       {step === 'extracting' && (
@@ -1081,19 +1386,19 @@ export default function LbwTracking() {
           <View style={styles.drsRow}>
             <View style={[styles.drsBox, step === 'pitching' && styles.drsBoxActive]}>
               <Text style={styles.drsLabel}>PITCHING</Text>
-              <Text style={[styles.drsValue, { color: getStatusColor(drsResult.pitching) }]}>
+              <Text style={[styles.drsValue, { color: getPhaseStatusColor('pitching', drsResult.pitching) }]}>
                 {['pitching', 'impact', 'wickets'].includes(step) ? drsResult.pitching : 'WAITING...'}
               </Text>
             </View>
             <View style={[styles.drsBox, step === 'impact' && styles.drsBoxActive]}>
               <Text style={styles.drsLabel}>IMPACT</Text>
-              <Text style={[styles.drsValue, { color: getStatusColor(drsResult.impact) }]}>
+              <Text style={[styles.drsValue, { color: getPhaseStatusColor('impact', drsResult.impact) }]}>
                 {['impact', 'wickets'].includes(step) ? drsResult.impact : 'WAITING...'}
               </Text>
             </View>
             <View style={[styles.drsBox, step === 'wickets' && styles.drsBoxActive]}>
               <Text style={styles.drsLabel}>WICKETS</Text>
-              <Text style={[styles.drsValue, { color: getStatusColor(drsResult.wickets) }]}>
+              <Text style={[styles.drsValue, { color: getPhaseStatusColor('wickets', drsResult.wickets) }]}>
                 {step === 'wickets' ? drsResult.wickets : 'WAITING...'}
               </Text>
             </View>
@@ -1120,6 +1425,30 @@ export default function LbwTracking() {
       )}
 
 
+      {/* ══════════ VERDICT BANNER (broadcast-style freeze-frame) ══════════ */}
+      {verdictBanner && (
+        <Animated.View
+          entering={FadeIn.duration(300)}
+          exiting={FadeOut.duration(200)}
+          style={styles.verdictBannerOverlay}
+        >
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.88)', 'transparent']}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.verdictBannerContent}>
+            <Text style={styles.verdictBannerLabel}>{verdictBanner.label}</Text>
+            <View style={[
+              styles.verdictBannerPill,
+              { backgroundColor: verdictBanner.color + '20', borderColor: verdictBanner.color }
+            ]}>
+              <Text style={[styles.verdictBannerStatus, { color: verdictBanner.color }]}>
+                {verdictBanner.status}
+              </Text>
+            </View>
+          </View>
+        </Animated.View>
+      )}
 
       {/* ══════════ DECISION PANEL ══════════ */}
       {step === 'decision' && (
@@ -1132,22 +1461,26 @@ export default function LbwTracking() {
             <View style={styles.professionalMatrix}>
               <View style={styles.matrixRow}>
                 <Text style={styles.matrixLabel}>PITCHING</Text>
-                <View style={[styles.matrixPill, { backgroundColor: getStatusColor(drsResult.pitching) + '20', borderColor: getStatusColor(drsResult.pitching) }]}>
-                  <Text style={[styles.matrixValue, { color: getStatusColor(drsResult.pitching) }]}>{drsResult.pitching}</Text>
+                <View style={[styles.matrixPill, { backgroundColor: getPhaseStatusColor('pitching', drsResult.pitching) + '20', borderColor: getPhaseStatusColor('pitching', drsResult.pitching) }]}>
+                  <Text style={[styles.matrixValue, { color: getPhaseStatusColor('pitching', drsResult.pitching) }]}>{drsResult.pitching}</Text>
                 </View>
               </View>
+              {drsResult.impact ? (
               <View style={styles.matrixRow}>
                 <Text style={styles.matrixLabel}>IMPACT</Text>
-                <View style={[styles.matrixPill, { backgroundColor: getStatusColor(drsResult.impact) + '20', borderColor: getStatusColor(drsResult.impact) }]}>
-                  <Text style={[styles.matrixValue, { color: getStatusColor(drsResult.impact) }]}>{drsResult.impact}</Text>
+                <View style={[styles.matrixPill, { backgroundColor: getPhaseStatusColor('impact', drsResult.impact) + '20', borderColor: getPhaseStatusColor('impact', drsResult.impact) }]}>
+                  <Text style={[styles.matrixValue, { color: getPhaseStatusColor('impact', drsResult.impact) }]}>{drsResult.impact}</Text>
                 </View>
               </View>
+              ) : null}
+              {drsResult.wickets ? (
               <View style={styles.matrixRow}>
                 <Text style={styles.matrixLabel}>WICKETS</Text>
-                <View style={[styles.matrixPill, { backgroundColor: getStatusColor(drsResult.wickets) + '20', borderColor: getStatusColor(drsResult.wickets) }]}>
-                  <Text style={[styles.matrixValue, { color: getStatusColor(drsResult.wickets) }]}>{drsResult.wickets}</Text>
+                <View style={[styles.matrixPill, { backgroundColor: getPhaseStatusColor('wickets', drsResult.wickets) + '20', borderColor: getPhaseStatusColor('wickets', drsResult.wickets) }]}>
+                  <Text style={[styles.matrixValue, { color: getPhaseStatusColor('wickets', drsResult.wickets) }]}>{drsResult.wickets}</Text>
                 </View>
               </View>
+              ) : null}
               <View style={styles.matrixRow}>
                 <Text style={styles.matrixLabel}>BATSMAN STANCE</Text>
                 <View style={[styles.matrixPill, { backgroundColor: 'rgba(99, 102, 241, 0.15)', borderColor: 'rgba(99, 102, 241, 0.3)' }]}>
@@ -1192,10 +1525,10 @@ export default function LbwTracking() {
       )}
 
       <TouchableOpacity
-        style={[styles.closeBtn, { top: Math.max(insets.top, 10) }]}
+        style={[styles.backBtn, { top: Math.max(insets.top, 10) }]}
         onPress={() => goBack()}
       >
-        <X size={22} color="#fff" />
+        <ChevronLeft size={24} color="#fff" />
       </TouchableOpacity>
     </SafeAreaView>
   );
@@ -1485,10 +1818,92 @@ const styles = StyleSheet.create({
   doneText: { color: '#fff', fontSize: 14, fontWeight: '800', letterSpacing: 1 },
 
   // ── Close ──
-  closeBtn: {
-    position: 'absolute', top: 18, right: 18,
+  backBtn: {
+    position: 'absolute', top: 18, left: 18,
     width: 40, height: 40, borderRadius: 20,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center', alignItems: 'center', zIndex: 200,
+  },
+
+  // ── Manual Mode ──
+  manualHeader: {
+    position: 'absolute', top: 120, left: 0, right: 0,
+    alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingVertical: 20,
+  },
+  manualStepText: {
+    color: '#fff', fontSize: 18, fontWeight: '900', letterSpacing: 1,
+    textAlign: 'center', marginBottom: 4,
+  },
+  manualSubText: {
+    color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '700', letterSpacing: 2,
+  },
+  manualMarker: {
+    position: 'absolute', width: 30, height: 30, borderRadius: 15,
+    borderWidth: 2, backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  broadcastOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    padding: 20,
+    justifyContent: 'space-between',
+  },
+  replayBadge: {
+    position: 'absolute', top: 60, left: 20,
+    backgroundColor: 'rgba(239, 68, 68, 0.8)',
+    paddingHorizontal: 12, paddingVertical: 4,
+    borderRadius: 4,
+  },
+  replayText: {
+    color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 2,
+  },
+  drsBadge: {
+    position: 'absolute', top: 60, right: 20,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    paddingHorizontal: 10, paddingVertical: 4,
+    borderRadius: 4,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+  },
+  drsText: {
+    color: 'rgba(255,255,255,0.8)', fontSize: 9, fontWeight: '800', letterSpacing: 1.5,
+  },
+  extractionOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  extractionText: {
+    color: '#fff', fontSize: 16, fontWeight: '800', marginTop: 20,
+  },
+  extractionSubText: {
+    color: 'rgba(255,255,255,0.5)', fontSize: 12, marginTop: 4,
+  },
+  manualShortcutBtn: {
+    marginTop: 40,
+    paddingHorizontal: 24, paddingVertical: 12,
+    borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+  },
+  manualShortcutText: {
+    color: 'rgba(255,255,255,0.8)', fontSize: 10, fontWeight: '900', letterSpacing: 1.5,
+  },
+  verdictBannerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center', alignItems: 'center',
+    zIndex: 45,
+  },
+  verdictBannerContent: {
+    alignItems: 'center', gap: 12,
+    paddingVertical: 28, paddingHorizontal: 40,
+  },
+  verdictBannerLabel: {
+    color: 'rgba(255,255,255,0.5)', fontSize: 13,
+    fontWeight: '900', letterSpacing: 6,
+  },
+  verdictBannerPill: {
+    paddingHorizontal: 32, paddingVertical: 12,
+    borderRadius: 12, borderWidth: 2,
+    minWidth: 180, alignItems: 'center',
+  },
+  verdictBannerStatus: {
+    fontSize: 22, fontWeight: '900', letterSpacing: 3,
   },
 });

@@ -142,7 +142,7 @@ export default function EntryDashboard() {
             <View style={styles.demoPreview}>
               <TouchableOpacity
                 style={styles.demoPill}
-                onPress={() => router.push({ pathname: '/lbw-tracking' as any, params: { videoUri: 'demo_out' } })}
+                onPress={() => router.push('/lbw-demo' as any)}
               // onPress={() => router.push('/coming-soon' as any)}
               >
                 <XCircle size={12} color="#ef4444" />

@@ -268,8 +268,8 @@ const AutoBallDetector = forwardRef<AutoBallDetectorRef>((_, ref) => {
         const msg = JSON.stringify({
           type: 'process',
           frames: base64Frames,
-          width: Math.min(frameW, 200),
-          height: Math.min(frameH, 150),
+          width: Math.min(frameW, 320),
+          height: Math.min(frameH, 240),
         });
         webviewRef.current?.postMessage(msg);
         // Timeout fallback after 30s
