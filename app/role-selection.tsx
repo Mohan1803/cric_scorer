@@ -6,6 +6,7 @@ import {
   StyleSheet,
   ScrollView,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -60,7 +61,22 @@ export default function RoleSelection() {
     });
 
     setTeams(updatedTeams);
-    router.push('/toss');
+
+    Alert.alert(
+      'Ready to Sync?',
+      'Do you want to sync this match with the opposing captain before starting?',
+      [
+        {
+          text: 'Direct Start',
+          onPress: () => router.push('/toss')
+        },
+        {
+          text: 'Sync & Start (QR/Tap)',
+          style: 'default',
+          onPress: () => router.push('/match-pairing')
+        }
+      ]
+    );
   };
 
   const renderTeamSection = (teamIndex: number, roles: any) => {
@@ -77,45 +93,45 @@ export default function RoleSelection() {
         <View style={styles.rolePickerContainer}>
           <View style={styles.roleRow}>
             <View style={styles.roleIconBox}>
-                <Shield size={20} color={colors.accent} />
+              <Shield size={20} color={colors.accent} />
             </View>
             <View style={{ flex: 1 }}>
-                <Text style={styles.roleTitle}>Captain (C)</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.playerScroll}>
-                    {team.players.map(p => (
-                        <TouchableOpacity
-                            key={p.id}
-                            onPress={() => handleToggle(teamIndex, p.id, 'captain')}
-                            style={[styles.playerChip, roles.captainId === p.id && styles.playerChipActive]}
-                        >
-                            <Text style={[styles.playerChipText, roles.captainId === p.id && styles.playerChipTextActive]}>
-                                {p.name}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
+              <Text style={styles.roleTitle}>Captain (C)</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.playerScroll}>
+                {team.players.map(p => (
+                  <TouchableOpacity
+                    key={p.id}
+                    onPress={() => handleToggle(teamIndex, p.id, 'captain')}
+                    style={[styles.playerChip, roles.captainId === p.id && styles.playerChipActive]}
+                  >
+                    <Text style={[styles.playerChipText, roles.captainId === p.id && styles.playerChipTextActive]}>
+                      {p.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
           </View>
 
           <View style={[styles.roleRow, { marginTop: 20 }]}>
             <View style={styles.roleIconBox}>
-                <User size={20} color={colors.accentSecondary} />
+              <User size={20} color={colors.accentSecondary} />
             </View>
             <View style={{ flex: 1 }}>
-                <Text style={styles.roleTitle}>Wicket Keeper (WK)</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.playerScroll}>
-                    {team.players.map(p => (
-                        <TouchableOpacity
-                            key={p.id}
-                            onPress={() => handleToggle(teamIndex, p.id, 'wicketKeeper')}
-                            style={[styles.playerChip, roles.wicketKeeperId === p.id && styles.playerChipActiveSecondary]}
-                        >
-                            <Text style={[styles.playerChipText, roles.wicketKeeperId === p.id && styles.playerChipTextActive]}>
-                                {p.name}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
+              <Text style={styles.roleTitle}>Wicket Keeper (WK)</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.playerScroll}>
+                {team.players.map(p => (
+                  <TouchableOpacity
+                    key={p.id}
+                    onPress={() => handleToggle(teamIndex, p.id, 'wicketKeeper')}
+                    style={[styles.playerChip, roles.wicketKeeperId === p.id && styles.playerChipActiveSecondary]}
+                  >
+                    <Text style={[styles.playerChipText, roles.wicketKeeperId === p.id && styles.playerChipTextActive]}>
+                      {p.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
           </View>
         </View>
@@ -126,14 +142,14 @@ export default function RoleSelection() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={() => {
             if (router.canGoBack()) {
               router.back();
             } else {
               router.replace('/players');
             }
-          }} 
+          }}
           style={styles.backBtn}
         >
           <ChevronLeft size={28} color={colors.accent} />
@@ -144,7 +160,7 @@ export default function RoleSelection() {
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.introBox}>
-            <Text style={styles.introText}>Assign leadership and keeping roles for both teams before starting the match.</Text>
+          <Text style={styles.introText}>Assign leadership and keeping roles for both teams before starting the match.</Text>
         </View>
 
         {renderTeamSection(0, team1Roles)}

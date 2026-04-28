@@ -1,20 +1,18 @@
 import { db } from './firebaseConfig';
-import { 
-  doc, 
-  setDoc, 
+import {
+  doc,
+  setDoc,
   getDoc,
-  collection, 
-  query, 
-  where, 
-  onSnapshot, 
+  collection,
+  query,
+  where,
+  onSnapshot,
   Timestamp,
   deleteDoc
 } from 'firebase/firestore';
 
 export interface GlobalMatch {
   id: string; // Using a unique device/match ID
-  team1: string;
-  team2: string;
   score1: string;
   score2: string;
   overs: string;
@@ -26,7 +24,22 @@ export interface GlobalMatch {
   battingTeam: string;
   matchResult?: string;
   creatorId?: string;
+  creatorEmail?: string;
   playerNames?: string[];
+  team1?: {
+    name: string;
+    score: number;
+    wickets: number;
+    overs: string;
+    ballData: any[]; // Detailed ball records for analytics
+  };
+  team2?: {
+    name: string;
+    score: number;
+    wickets: number;
+    overs: string;
+    ballData: any[]; // Detailed ball records for analytics
+  };
 }
 
 /**
@@ -97,7 +110,7 @@ export const removeMatchFromCloud = async (matchId: string) => {
  */
 export const listenForLiveMatches = (callback: (matches: GlobalMatch[]) => void) => {
   const q = query(
-    collection(db, 'matches'), 
+    collection(db, 'matches'),
     where('status', '==', 'live')
   );
 
@@ -117,7 +130,7 @@ export const listenForLiveMatches = (callback: (matches: GlobalMatch[]) => void)
  */
 export const listenForPastMatches = (limitCount: number = 20, callback: (matches: GlobalMatch[]) => void) => {
   const q = query(
-    collection(db, 'matches'), 
+    collection(db, 'matches'),
     where('status', '==', 'completed')
   );
 
@@ -161,4 +174,51 @@ export const listenToMatchDetails = (matchId: string, callback: (data: any) => v
       callback(null);
     }
   });
+};
+
+/**
+ * Registers a device as 'Available' for pairing
+ */
+export const registerPairingNode = async (deviceId: string, data: any) => {
+  try {
+    const nodeDoc = doc(db, 'pairingNodes', deviceId);
+    await setDoc(nodeDoc, {
+      ...data,
+      deviceId,
+      lastSeen: Timestamp.now(),
+      status: 'searching'
+    }, { merge: true });
+  } catch (error) {
+    console.error('Error registering pairing node:', error);
+  }
+};
+
+/**
+ * Listens for other devices currently in pairing mode
+ */
+export const listenForNearbyNodes = (callback: (nodes: any[]) => void) => {
+  const q = query(
+    collection(db, 'pairingNodes'),
+    where('status', '==', 'searching')
+  );
+
+  return onSnapshot(q, (snapshot) => {
+    const nodes: any[] = [];
+    snapshot.forEach((doc) => {
+      // Filter by last 5 minutes locally if needed, but for now take all active
+      nodes.push({ id: doc.id, ...doc.data() });
+    });
+    callback(nodes);
+  });
+};
+
+/**
+ * Removes a pairing node when leaving the screen
+ */
+export const removePairingNode = async (deviceId: string) => {
+  try {
+    await deleteDoc(doc(db, 'pairingNodes', deviceId));
+  } catch (error) {
+    console.error('Error removing pairing node:', error);
+  }
 };

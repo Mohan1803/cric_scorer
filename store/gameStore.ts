@@ -4,6 +4,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { syncMatchToCloud, syncFullMatchDetails } from '../services/matchSyncService';
 import { getDeviceId } from '../services/deviceIdService';
+import { useAuthStore } from './authStore';
 
 export interface Player {
   id: string;
@@ -143,6 +144,7 @@ export interface GameState {
   setShowNewBowlerSelection: (show: boolean) => void;
 
   undoStack: UndoOperation[];
+  setMatchId: (id: string) => void;
   clearUndoStack: () => void;
   hasHydrated: boolean;
 }
@@ -214,6 +216,7 @@ export const useGameStore = create<GameState>()(
       setEnableFieldMap: (enabled: boolean) => set({ enableFieldMap: enabled }),
       setGroundName: (name: string) => set({ groundName: name }),
       setTournamentName: (name: string) => set({ tournamentName: name }),
+      setMatchId: (id: string) => set({ matchId: id }),
 
       batsmanToReplace: null,
       showNewBatsmanSelection: false,
@@ -357,7 +360,9 @@ export const useGameStore = create<GameState>()(
             groundName: state.groundName,
             tournamentName: state.tournamentName,
             currentInningsNumber: state.currentInningsNumber,
-            status: state.matchCompleted ? 'completed' : 'live'
+            status: state.matchCompleted ? 'completed' : 'live',
+            creatorId: useAuthStore.getState().user?.id,
+            creatorEmail: useAuthStore.getState().user?.email
           };
           syncFullMatchDetails(state.matchId, fullDetails);
         }
@@ -552,9 +557,8 @@ export const useGameStore = create<GameState>()(
 
         // -- Global Sync Logic --
         if (state.matchId) {
+          const authState = useAuthStore.getState();
           const summary = {
-            team1: state.teams[0]?.name || 'Team 1',
-            team2: state.teams[1]?.name || 'Team 2',
             score1: state.currentInningsNumber === 1 ? `${score}/${wicketsCount}` : `${state.target || 0}`,
             score2: state.currentInningsNumber === 2 ? `${score}/${wicketsCount}` : 'Yet to Bat',
             overs: `${Math.floor(newLegalBalls / 6)}.${newLegalBalls % 6}`,
@@ -564,8 +568,35 @@ export const useGameStore = create<GameState>()(
             battingTeam: state.battingTeam || '',
             wickets: wicketsCount,
             matchResult: finalUpdates.matchResult || undefined,
-            creatorId: await getDeviceId(),
-            playerNames: state.teams.flatMap(t => t.players.map(p => p.name))
+            creatorId: authState.user?.id || await getDeviceId(),
+            creatorEmail: authState.user?.email || '',
+            playerNames: state.teams.flatMap(t => t.players.map(p => p.name)),
+            team1: {
+              name: state.teams[0]?.name || 'Team 1',
+              score: state.currentInningsNumber === 1
+                ? (state.battingTeam === state.teams[0]?.name ? score : 0)
+                : (state.battingTeam === state.teams[0]?.name ? score : state.target || 0),
+              wickets: state.currentInningsNumber === 1
+                ? (state.battingTeam === state.teams[0]?.name ? wicketsCount : 0)
+                : (state.battingTeam === state.teams[0]?.name ? wicketsCount : (finalUpdates.firstInningsBallHistory || state.firstInningsBallHistory).filter(b => b.isWicket).length),
+              overs: state.currentInningsNumber === 1
+                ? (state.battingTeam === state.teams[0]?.name ? `${Math.floor(newLegalBalls / 6)}.${newLegalBalls % 6}` : '0.0')
+                : (state.battingTeam === state.teams[0]?.name ? `${Math.floor(newLegalBalls / 6)}.${newLegalBalls % 6}` : `${state.totalOvers}.0`),
+              ballData: state.battingTeam === state.teams[0]?.name ? newBallHistory : (state.currentInningsNumber === 2 ? state.firstInningsBallHistory : [])
+            },
+            team2: {
+              name: state.teams[1]?.name || 'Team 2',
+              score: state.currentInningsNumber === 1
+                ? (state.battingTeam === state.teams[1]?.name ? score : 0)
+                : (state.battingTeam === state.teams[1]?.name ? score : state.target || 0),
+              wickets: state.currentInningsNumber === 1
+                ? (state.battingTeam === state.teams[1]?.name ? wicketsCount : 0)
+                : (state.battingTeam === state.teams[1]?.name ? wicketsCount : (finalUpdates.firstInningsBallHistory || state.firstInningsBallHistory).filter(b => b.isWicket).length),
+              overs: state.currentInningsNumber === 1
+                ? (state.battingTeam === state.teams[1]?.name ? `${Math.floor(newLegalBalls / 6)}.${newLegalBalls % 6}` : '0.0')
+                : (state.battingTeam === state.teams[1]?.name ? `${Math.floor(newLegalBalls / 6)}.${newLegalBalls % 6}` : `${state.totalOvers}.0`),
+              ballData: state.battingTeam === state.teams[1]?.name ? newBallHistory : (state.currentInningsNumber === 2 ? state.firstInningsBallHistory : [])
+            }
           };
           syncMatchToCloud(state.matchId, summary);
 
@@ -582,7 +613,8 @@ export const useGameStore = create<GameState>()(
             groundName: state.groundName,
             tournamentName: state.tournamentName,
             currentInningsNumber: state.currentInningsNumber,
-            creatorId: await getDeviceId(),
+            creatorId: authState.user?.id || await getDeviceId(),
+            creatorEmail: authState.user?.email || '',
             status: finalUpdates.matchCompleted ? 'completed' : 'live'
           };
           syncFullMatchDetails(state.matchId, fullDetails);

@@ -7,26 +7,28 @@ import * as SplashScreen from 'expo-splash-screen';
 
 // Instantly force the HTML body background to dark on Web to prevent flashes
 if (Platform.OS === 'web' && typeof document !== 'undefined') {
-    document.body.style.backgroundColor = '#0B0E14';
-    document.documentElement.style.backgroundColor = '#0B0E14';
+  document.body.style.backgroundColor = '#0B0E14';
+  document.documentElement.style.backgroundColor = '#0B0E14';
 }
 
 // Keep the native splash screen visible while we initialize
-SplashScreen.preventAutoHideAsync().catch(() => {});
+SplashScreen.preventAutoHideAsync().catch(() => { });
 
 
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { requestNotificationPermissions } from '../services/notificationService';
 import { startBroadcastListener } from '../services/broadcastListenerService';
+import { useAuthStore } from '../store/authStore';
+import { useRouter, useSegments } from 'expo-router';
 
 export default function RootLayout() {
   useFrameworkReady();
 
   useEffect(() => {
     // Hide splash screen and set system UI once we are ready
-    SplashScreen.hideAsync().catch(() => {});
-    SystemUI.setBackgroundColorAsync('#0B0E14').catch(() => {});
+    SplashScreen.hideAsync().catch(() => { });
+    SystemUI.setBackgroundColorAsync('#0B0E14').catch(() => { });
 
     // Notification Setup
     async function setupNotifications() {
@@ -38,6 +40,53 @@ export default function RootLayout() {
     setupNotifications();
   }, []);
 
+  const { isAuthenticated, hasHydrated, user } = useAuthStore();
+  const segments = useSegments();
+  const router = useRouter();
+
+  // Real-time Cloud Sync Check
+  useEffect(() => {
+    if (hasHydrated && isAuthenticated && user) {
+      const verifyCloudProfile = async () => {
+        try {
+          const { getUserProfile } = await import('../services/userService');
+          const cloudProfile = await getUserProfile(user.id);
+          
+          if (!cloudProfile) {
+            // Profile was deleted in Firebase console, clear local state
+            useAuthStore.getState().logout();
+          } else if (JSON.stringify(cloudProfile) !== JSON.stringify(user)) {
+            // Update local state if cloud data has changed
+            useAuthStore.getState().updateProfile(cloudProfile as any);
+          }
+        } catch (e) {
+          console.error('Cloud sync failed:', e);
+        }
+      };
+      verifyCloudProfile();
+    }
+  }, [hasHydrated, isAuthenticated]);
+
+  useEffect(() => {
+    if (!hasHydrated) return; // Wait for storage to load
+
+    const inAuthGroup = segments[0] === 'login';
+
+    if (!isAuthenticated && !inAuthGroup) {
+      router.replace('/login');
+    } else if (isAuthenticated) {
+      const isProfileSetup = segments[0] === 'profile-setup';
+
+      if (!user?.hasProfile && !isProfileSetup) {
+        // Force profile setup if missing
+        router.replace('/profile-setup');
+      } else if (user?.hasProfile && inAuthGroup) {
+        // Go to dashboard if profile exists but user is on login
+        router.replace('/entryPage');
+      }
+    }
+  }, [isAuthenticated, segments, hasHydrated, user?.hasProfile]);
+
   return (
     <SafeAreaProvider>
       <Stack
@@ -48,6 +97,8 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="index" />
+        <Stack.Screen name="profile-setup" options={{ headerShown: false }} />
+        <Stack.Screen name="login" options={{ headerShown: false }} />
 
 
         <Stack.Screen name="full-map"

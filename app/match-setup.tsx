@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, shadows } from './theme';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useGameStore } from '../store/gameStore';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Trophy, Users, Hash, Settings2, Shield, Search, MapPin, Award, Zap, ChevronLeft, Plus } from 'lucide-react-native';
-import { useTeamLibraryStore } from '../store/teamLibraryStore';
-import { Team } from '../store/gameStore';
+import { Trophy, Users, ChevronLeft, Plus, MapPin, Search, Zap } from 'lucide-react-native';
 import { groundService, FirebaseGround } from '../services/groundService';
+import { getMyTeams, Team as FirestoreTeam } from '../services/teamService';
+import { useAuthStore } from '../store/authStore';
 
 export default function MatchSetup() {
+  const { teamId } = useLocalSearchParams<{ teamId?: string }>();
+  const { user } = useAuthStore();
   const [team1Name, setTeam1Name] = useState('');
   const [team2Name, setTeam2Name] = useState('');
   const [overs, setOvers] = useState('');
@@ -31,26 +33,53 @@ export default function MatchSetup() {
     setTournamentName
   } = useGameStore();
 
-  const { getTeamsByQuery } = useTeamLibraryStore();
-  const [team1Suggestions, setTeam1Suggestions] = useState<Team[]>([]);
-  const [team2Suggestions, setTeam2Suggestions] = useState<Team[]>([]);
+  const [allMyTeams, setAllMyTeams] = useState<FirestoreTeam[]>([]);
+  const [team1Suggestions, setTeam1Suggestions] = useState<FirestoreTeam[]>([]);
+  const [team2Suggestions, setTeam2Suggestions] = useState<FirestoreTeam[]>([]);
   const [team1Players, setTeam1Players] = useState<any[]>([]);
   const [team2Players, setTeam2Players] = useState<any[]>([]);
-
+  
   const [allGrounds, setAllGrounds] = useState<FirebaseGround[]>([]);
   const [groundSuggestions, setGroundSuggestions] = useState<FirebaseGround[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchGrounds = async () => {
+    const initSetup = async () => {
+      setLoading(true);
       try {
+        // Fetch Grounds
         const grounds = await groundService.getGrounds();
         setAllGrounds(grounds);
+
+        // Fetch User's Teams from Firebase
+        if (user) {
+          const teams = await getMyTeams(user.id);
+          setAllMyTeams(teams);
+
+          // If navigated from a specific team in the drawer
+          if (teamId) {
+            const selectedTeam = teams.find(t => t.id === teamId);
+            if (selectedTeam) {
+              setTeam1Name(selectedTeam.name);
+              setTeam1Players(selectedTeam.players);
+            }
+          }
+        }
       } catch (error) {
-        console.error("Error fetching grounds for setup:", error);
+        console.error("Setup initialization failed:", error);
+      } finally {
+        setLoading(false);
       }
     };
-    fetchGrounds();
-  }, []);
+    initSetup();
+  }, [user, teamId]);
+
+  const searchTeams = (query: string) => {
+    if (!query) return [];
+    return allMyTeams.filter(t => 
+      t.name.toLowerCase().includes(query.toLowerCase())
+    ).slice(0, 5);
+  };
 
   const getGroundsByQuery = (query: string) => {
     if (!query) return [];
@@ -83,7 +112,7 @@ export default function MatchSetup() {
       if (!exists) {
         Alert.alert(
           'Venue Not Found',
-          `The ground "${groundName}" is not registered in the global directory. Record quality is better with verified venues.`,
+          `The ground "${groundName}" is not registered in the global directory.`,
           [
             { text: 'Register Now', onPress: () => router.push('/add-ground') },
             {
@@ -110,6 +139,15 @@ export default function MatchSetup() {
     router.push('/players');
   };
 
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
+        <Text style={{ color: '#fff', marginTop: 20, fontWeight: '700' }}>LOADING ROSTERS...</Text>
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <LinearGradient
@@ -117,7 +155,7 @@ export default function MatchSetup() {
         style={StyleSheet.absoluteFill}
       />
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <View style={styles.simpleHeader}>
           <TouchableOpacity
             style={styles.backBtn}
@@ -132,28 +170,51 @@ export default function MatchSetup() {
           {/* Tournament Section */}
           <View style={styles.inputSection}>
             <Text style={styles.inputLabel}>Tournament Name</Text>
-            <TextInput
-              style={styles.simpleInput}
-              value={tournamentName}
-              onChangeText={setTournamentName}
-              placeholder="e.g. Dream 11 Series"
-              placeholderTextColor="rgba(255,255,255,0.2)"
-            />
+            <View style={styles.inputWrapper}>
+              <Trophy size={18} color="rgba(255,255,255,0.2)" />
+              <TextInput
+                style={styles.simpleInput}
+                value={tournamentName}
+                onChangeText={setTournamentName}
+                placeholder="e.g. World Championship"
+                placeholderTextColor="rgba(255,255,255,0.2)"
+              />
+            </View>
           </View>
 
           {/* Teams Section */}
           <View style={styles.inputSection}>
-            <Text style={styles.inputLabel}>Team 1 Name</Text>
-            <TextInput
-              style={styles.simpleInput}
-              value={team1Name}
-              onChangeText={(text) => {
-                setTeam1Name(text);
-                setTeam1Suggestions(getTeamsByQuery(text));
-              }}
-              placeholder="Search or enter team..."
-              placeholderTextColor="rgba(255,255,255,0.2)"
-            />
+            <Text style={styles.inputLabel}>Team 1 (Your Roster)</Text>
+            
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.suggestionsScroll}>
+              {allMyTeams.map(team => (
+                <TouchableOpacity 
+                  key={team.id} 
+                  style={[styles.teamChip, team1Name === team.name && styles.activeChip]}
+                  onPress={() => {
+                    setTeam1Name(team.name);
+                    setTeam1Players(team.players);
+                  }}
+                >
+                  <Users size={14} color={team1Name === team.name ? '#000' : colors.accent} />
+                  <Text style={[styles.teamChipText, team1Name === team.name && styles.activeChipText]}>{team.name.toUpperCase()}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <View style={styles.inputWrapper}>
+              <Users size={18} color={colors.accent} />
+              <TextInput
+                style={styles.simpleInput}
+                value={team1Name}
+                onChangeText={(text) => {
+                  setTeam1Name(text);
+                  setTeam1Suggestions(searchTeams(text));
+                }}
+                placeholder="Search your teams..."
+                placeholderTextColor="rgba(255,255,255,0.2)"
+              />
+            </View>
             {team1Suggestions.length > 0 && (
               <View style={styles.simpleSuggestions}>
                 {team1Suggestions.map((team, idx) => (
@@ -163,6 +224,7 @@ export default function MatchSetup() {
                     setTeam1Suggestions([]);
                   }}>
                     <Text style={styles.simpleSuggestionText}>{team.name}</Text>
+                    <Text style={styles.suggestionSubtext}>{team.players.length} Players Registered</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -170,17 +232,20 @@ export default function MatchSetup() {
           </View>
 
           <View style={styles.inputSection}>
-            <Text style={styles.inputLabel}>Team 2 Name</Text>
-            <TextInput
-              style={styles.simpleInput}
-              value={team2Name}
-              onChangeText={(text) => {
-                setTeam2Name(text);
-                setTeam2Suggestions(getTeamsByQuery(text));
-              }}
-              placeholder="Search or enter team..."
-              placeholderTextColor="rgba(255,255,255,0.2)"
-            />
+            <Text style={styles.inputLabel}>Team 2 (Opponent)</Text>
+            <View style={styles.inputWrapper}>
+              <Users size={18} color="#38bdf8" />
+              <TextInput
+                style={styles.simpleInput}
+                value={team2Name}
+                onChangeText={(text) => {
+                  setTeam2Name(text);
+                  setTeam2Suggestions(searchTeams(text));
+                }}
+                placeholder="Search or enter name..."
+                placeholderTextColor="rgba(255,255,255,0.2)"
+              />
+            </View>
             {team2Suggestions.length > 0 && (
               <View style={styles.simpleSuggestions}>
                 {team2Suggestions.map((team, idx) => (
@@ -190,6 +255,7 @@ export default function MatchSetup() {
                     setTeam2Suggestions([]);
                   }}>
                     <Text style={styles.simpleSuggestionText}>{team.name}</Text>
+                    <Text style={styles.suggestionSubtext}>{team.players.length} Players Registered</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -199,16 +265,19 @@ export default function MatchSetup() {
           {/* Venue Section */}
           <View style={styles.inputSection}>
             <Text style={styles.inputLabel}>Ground / Venue</Text>
-            <TextInput
-              style={styles.simpleInput}
-              value={groundName}
-              onChangeText={(text) => {
-                setGroundName(text);
-                setGroundSuggestions(getGroundsByQuery(text));
-              }}
-              placeholder="Search registered grounds..."
-              placeholderTextColor="rgba(255,255,255,0.2)"
-            />
+            <View style={styles.inputWrapper}>
+              <MapPin size={18} color="rgba(255,255,255,0.2)" />
+              <TextInput
+                style={styles.simpleInput}
+                value={groundName}
+                onChangeText={(text) => {
+                  setGroundName(text);
+                  setGroundSuggestions(getGroundsByQuery(text));
+                }}
+                placeholder="Search registered grounds..."
+                placeholderTextColor="rgba(255,255,255,0.2)"
+              />
+            </View>
             {groundSuggestions.length > 0 && (
               <View style={styles.simpleSuggestions}>
                 {groundSuggestions.map((ground, idx) => (
@@ -224,23 +293,13 @@ export default function MatchSetup() {
                 ))}
               </View>
             )}
-
-            {groundName.length > 2 && groundSuggestions.length === 0 && !allGrounds.some(g => g.name.toLowerCase() === groundName.toLowerCase()) && (
-              <TouchableOpacity
-                style={styles.simpleRegisterLink}
-                onPress={() => router.push('/add-ground')}
-              >
-                <Plus size={16} color={colors.accent} />
-                <Text style={styles.simpleRegisterText}>New ground? Register here</Text>
-              </TouchableOpacity>
-            )}
           </View>
 
           {/* Mechanics Section */}
           <View style={styles.inputSection}>
             <Text style={styles.inputLabel}>Match Overs</Text>
             <TextInput
-              style={styles.simpleInput}
+              style={styles.simpleInputStandalone}
               value={overs}
               onChangeText={setOvers}
               placeholder="20"
@@ -280,7 +339,15 @@ export default function MatchSetup() {
           style={styles.primaryBtn}
           onPress={handleContinue}
         >
-          <Text style={styles.primaryBtnText}>START MATCH</Text>
+          <Text style={styles.primaryBtnText}>CONTINUE TO PLAYERS</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.joinBtn}
+          onPress={() => router.push('/match-pairing')}
+        >
+          <Zap size={18} color={colors.accent} style={{ marginRight: 8 }} />
+          <Text style={styles.joinBtnText}>JOIN EXISTING MATCH</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -288,123 +355,33 @@ export default function MatchSetup() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-  },
-  simpleHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingTop: 48,
-    marginBottom: 32,
-    gap: 16,
-  },
-  backBtn: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  formContainer: {
-    gap: 24,
-  },
-  inputSection: {
-    gap: 8,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginLeft: 4,
-  },
-  simpleInput: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    height: 54,
-    fontSize: 16,
-    color: '#fff',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  simpleSuggestions: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    marginTop: 4,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  simpleSuggestionRow: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
-  },
-  simpleSuggestionText: {
-    fontSize: 15,
-    color: '#fff',
-    fontWeight: '600',
-  },
-  simpleSuggestionCity: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  simpleRegisterLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 8,
-    paddingLeft: 4,
-  },
-  simpleRegisterText: {
-    fontSize: 14,
-    color: colors.accent,
-    fontWeight: '600',
-  },
-  togglesRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 8,
-  },
-  simpleToggle: {
-    flex: 1,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
-  },
-  toggleActive: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-  },
-  toggleText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  primaryBtn: {
-    marginTop: 40,
-    backgroundColor: colors.accent,
-    height: 56,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.medium,
-  },
-  primaryBtnText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#fff',
-    letterSpacing: 1,
-  },
+  container: { flex: 1, backgroundColor: colors.background },
+  scrollContent: { paddingHorizontal: 20, paddingBottom: 40 },
+  simpleHeader: { flexDirection: 'row', alignItems: 'center', paddingTop: 48, marginBottom: 32, gap: 16 },
+  backBtn: { padding: 4 },
+  headerTitle: { fontSize: 24, fontWeight: '700', color: '#fff' },
+  formContainer: { gap: 24 },
+  inputSection: { gap: 8 },
+  inputLabel: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.4)', marginLeft: 4 },
+  inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, paddingHorizontal: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  simpleInput: { flex: 1, height: 54, fontSize: 16, color: '#fff', marginLeft: 12 },
+  simpleInputStandalone: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, paddingHorizontal: 16, height: 54, fontSize: 16, color: '#fff', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  simpleSuggestions: { backgroundColor: '#1E293B', borderRadius: 12, marginTop: 4, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', ...shadows.medium },
+  simpleSuggestionRow: { padding: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
+  simpleSuggestionText: { fontSize: 15, color: '#fff', fontWeight: '600' },
+  suggestionSubtext: { fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 2 },
+  simpleSuggestionCity: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 2 },
+  togglesRow: { flexDirection: 'row', gap: 10, marginTop: 8 },
+  simpleToggle: { flex: 1, height: 44, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.03)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  toggleActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  toggleText: { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.4)' },
+  primaryBtn: { marginTop: 40, backgroundColor: colors.accent, height: 56, borderRadius: 14, alignItems: 'center', justifyContent: 'center', ...shadows.medium },
+  primaryBtnText: { fontSize: 16, fontWeight: '800', color: '#fff', letterSpacing: 1 },
+  joinBtn: { marginTop: 15, height: 56, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', borderWidth: 1, borderColor: 'rgba(249, 205, 5, 0.3)', backgroundColor: 'rgba(249, 205, 5, 0.05)' },
+  joinBtnText: { fontSize: 14, fontWeight: '700', color: colors.accent, letterSpacing: 1 },
+  suggestionsScroll: { marginBottom: 15, paddingVertical: 5 },
+  teamChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 100, marginRight: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', gap: 8 },
+  activeChip: { backgroundColor: colors.accent, borderColor: colors.accent },
+  teamChipText: { color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
+  activeChipText: { color: '#000' },
 });

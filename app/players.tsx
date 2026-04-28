@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Platform,
   Dimensions,
   TextInput as RNTextInput,
+  ActivityIndicator
 } from 'react-native';
 
 import { router } from 'expo-router';
@@ -18,29 +19,31 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useGameStore } from '../store/gameStore';
 import { colors, shadows } from './theme';
 import { LinearGradient } from 'expo-linear-gradient';
-import { User, Users, Trash2, Plus, CheckCircle2, ChevronRight, ChevronLeft, Save } from 'lucide-react-native';
+import { User, Users, Trash2, Plus, CheckCircle2, ChevronRight, ChevronLeft, Save, Mail, Search } from 'lucide-react-native';
 import { useTeamLibraryStore } from '../store/teamLibraryStore';
+import { findUserProfileByEmail } from '../services/userService';
 
 export default function PlayersEntry() {
   const teams = useGameStore((state) => state.teams);
   const setTeams = useGameStore((state) => state.setTeams);
 
-  const defaultPlayers = Array.from({ length: 15 }, () => ({ name: '', role: 'both', isCaptain: false, isWicketKeeper: false, battingHand: 'right' as const }));
-  const defaultPlayers1 = Array.from({ length: 15 }, () => ({ name: '', role: 'both', isCaptain: false, isWicketKeeper: false, battingHand: 'right' as const }));
+  const defaultPlayers = Array.from({ length: 15 }, () => ({ name: '', email: '', role: 'both', isCaptain: false, isWicketKeeper: false, battingHand: 'right' as const }));
 
   const [activeTab, setActiveTab] = useState(0);
-  
+  const [searching, setSearching] = useState<{ [key: string]: boolean }>({});
+
   const [team1Players, setTeam1Players] = useState(() => {
     const existing = teams[0]?.players || [];
     if (existing.length > 0) {
       const mapped = existing.map(p => ({
         name: p.name,
+        email: (p as any).email || '',
         role: p.role || 'both',
         isCaptain: p.isCaptain || false,
         isWicketKeeper: p.isWicketKeeper || false,
         battingHand: (p as any).battingHand || 'right'
       }));
-      while (mapped.length < 15) mapped.push({ name: '', role: 'both', isCaptain: false, isWicketKeeper: false, battingHand: 'right' });
+      while (mapped.length < 15) mapped.push({ name: '', email: '', role: 'both', isCaptain: false, isWicketKeeper: false, battingHand: 'right' });
       return mapped;
     }
     return defaultPlayers;
@@ -51,15 +54,16 @@ export default function PlayersEntry() {
     if (existing.length > 0) {
       const mapped = existing.map(p => ({
         name: p.name,
+        email: (p as any).email || '',
         role: p.role || 'both',
         isCaptain: p.isCaptain || false,
         isWicketKeeper: p.isWicketKeeper || false,
         battingHand: (p as any).battingHand || 'right'
       }));
-      while (mapped.length < 15) mapped.push({ name: '', role: 'both', isCaptain: false, isWicketKeeper: false, battingHand: 'right' });
+      while (mapped.length < 15) mapped.push({ name: '', email: '', role: 'both', isCaptain: false, isWicketKeeper: false, battingHand: 'right' });
       return mapped;
     }
-    return defaultPlayers1;
+    return [...defaultPlayers];
   });
 
   const inputRefs = useRef<{ [key: number]: RNTextInput[] }>({ 0: [], 1: [] });
@@ -69,27 +73,44 @@ export default function PlayersEntry() {
     if (input) input.focus();
   };
 
-  const isDuplicate = (name: string, list: { name: string }[], index: number) => {
-    const trimmed = name.trim().toLowerCase();
-    return (
-      trimmed &&
-      list.some((n, i) => i !== index && n.name.trim().toLowerCase() === trimmed)
-    );
+  const lookupPlayerByEmail = async (teamIndex: number, playerIndex: number, email: string) => {
+    if (!email.includes('@') || email.length < 5) return;
+
+    const key = `${teamIndex}-${playerIndex}`;
+    setSearching(prev => ({ ...prev, [key]: true }));
+
+    try {
+      const profile = await findUserProfileByEmail(email);
+      if (profile) {
+        const list = teamIndex === 0 ? [...team1Players] : [...team2Players];
+        list[playerIndex] = {
+          ...list[playerIndex],
+          name: profile.name ?? email.split('@')[0],
+          battingHand: profile.battingHand ?? 'right',
+        };
+        teamIndex === 0 ? setTeam1Players(list) : setTeam2Players(list);
+      }
+    } catch (error) {
+      console.error('Lookup failed:', error);
+    } finally {
+      setSearching(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const updatePlayerEmail = (teamIndex: number, playerIndex: number, email: string) => {
+    const list = teamIndex === 0 ? [...team1Players] : [...team2Players];
+    list[playerIndex] = { ...list[playerIndex], email };
+    teamIndex === 0 ? setTeam1Players(list) : setTeam2Players(list);
+
+    if (email.endsWith('.com')) {
+      lookupPlayerByEmail(teamIndex, playerIndex, email);
+    }
   };
 
   const updatePlayerName = (teamIndex: number, playerIndex: number, name: string) => {
     const list = teamIndex === 0 ? team1Players : team2Players;
-    // Duplicate name check removed as per requirement
-    
     const updated = [...list];
     updated[playerIndex].name = name;
-    teamIndex === 0 ? setTeam1Players(updated) : setTeam2Players(updated);
-  };
-
-  const updatePlayerRole = (teamIndex: number, index: number, role: string) => {
-    const list = teamIndex === 0 ? team1Players : team2Players;
-    const updated = [...list];
-    updated[index].role = role;
     teamIndex === 0 ? setTeam1Players(updated) : setTeam2Players(updated);
   };
 
@@ -99,7 +120,6 @@ export default function PlayersEntry() {
     updated[index] = { ...updated[index], battingHand: hand };
     teamIndex === 0 ? setTeam1Players(updated) : setTeam2Players(updated);
   };
-
 
   const handleContinue = () => {
     const validTeam1 = team1Players.filter(p => p.name.trim());
@@ -116,6 +136,7 @@ export default function PlayersEntry() {
         players: validTeam1.map((p: any, i) => ({
           id: `t1-p-${i}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
           name: p.name.trim(),
+          email: p.email,
           runs: 0,
           balls: 0,
           fours: 0,
@@ -137,6 +158,7 @@ export default function PlayersEntry() {
         players: validTeam2.map((p: any, i) => ({
           id: `t2-p-${i}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
           name: p.name.trim(),
+          email: p.email,
           runs: 0,
           balls: 0,
           fours: 0,
@@ -156,12 +178,9 @@ export default function PlayersEntry() {
     ];
 
     setTeams(updatedTeams);
-
-    // Save teams to local library for future use
     const { saveTeam } = useTeamLibraryStore.getState();
     saveTeam(updatedTeams[0]);
     saveTeam(updatedTeams[1]);
-
     router.push('/role-selection');
   };
 
@@ -174,9 +193,9 @@ export default function PlayersEntry() {
   const handleAddPlayer = (teamIndex: number) => {
     const list = teamIndex === 0 ? team1Players : team2Players;
     if (list.length < 15) {
-      const updated = [...list, { name: '', role: 'both', isCaptain: false, isWicketKeeper: false, battingHand: 'right' as const }];
+      const updated = [...list, { name: '', email: '', role: 'both', isCaptain: false, isWicketKeeper: false, battingHand: 'right' as const }];
       teamIndex === 0 ? setTeam1Players(updated) : setTeam2Players(updated);
-      setTimeout(() => focusInput(teamIndex, list.length), 100);
+      setTimeout(() => focusInput(teamIndex, list.length - 1), 100);
     }
   };
 
@@ -211,6 +230,9 @@ export default function PlayersEntry() {
   const renderPlayerRow = (p: any, i: number, teamIndex: number, isSub: boolean) => {
     const actualIndex = i + (isSub ? 11 : 0);
     const isLeft = p.battingHand === 'left';
+    const searchKey = `${teamIndex}-${actualIndex}`;
+    const isSearching = searching[searchKey];
+
     return (
       <View key={i} style={[styles.playerCard, isSub ? styles.subCard : styles.activeCard]}>
         <View style={styles.cardHeader}>
@@ -218,30 +240,48 @@ export default function PlayersEntry() {
           {p.name.trim().length > 0 && <CheckCircle2 size={12} color={colors.success} />}
         </View>
         <View style={styles.cardMain}>
-          <TextInput
-            ref={(ref) => {
-              if (!inputRefs.current[teamIndex]) inputRefs.current[teamIndex] = [];
-              inputRefs.current[teamIndex][actualIndex] = ref!;
-            }}
-            placeholder="Enter Player Name"
-            style={styles.playerInput}
-            value={p.name}
-            onChangeText={(text) => updatePlayerName(teamIndex, actualIndex, text)}
-            returnKeyType="next"
-            placeholderTextColor="rgba(148, 163, 184, 0.4)"
-          />
+          <View style={{ flex: 1, gap: 8 }}>
+            <View style={styles.inputWithIcon}>
+              <User size={14} color="rgba(255,255,255,0.3)" />
+              <TextInput
+                ref={(ref) => {
+                  if (!inputRefs.current[teamIndex]) inputRefs.current[teamIndex] = [];
+                  inputRefs.current[teamIndex][actualIndex] = ref!;
+                }}
+                placeholder="Name"
+                style={styles.playerInputCompact}
+                value={p.name}
+                onChangeText={(text) => updatePlayerName(teamIndex, actualIndex, text)}
+                returnKeyType="next"
+                placeholderTextColor="rgba(148, 163, 184, 0.4)"
+              />
+            </View>
+            <View style={styles.inputWithIcon}>
+              <Mail size={14} color={p.email ? colors.accent : "rgba(255,255,255,0.3)"} />
+              <TextInput
+                placeholder="Email (Auto-lookup)"
+                style={styles.playerInputCompact}
+                value={p.email}
+                onChangeText={(text) => updatePlayerEmail(teamIndex, actualIndex, text)}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                placeholderTextColor="rgba(148, 163, 184, 0.4)"
+              />
+              {isSearching && <ActivityIndicator size="small" color={colors.accent} />}
+            </View>
+          </View>
           <View style={styles.handToggle}>
             <TouchableOpacity
               style={[styles.handBtn, !isLeft && styles.handBtnActive]}
               onPress={() => updateBattingHand(teamIndex, actualIndex, 'right')}
             >
-              <Text style={[styles.handBtnText, !isLeft && styles.handBtnTextActive]}>RIGHT</Text>
+              <Text style={[styles.handBtnText, !isLeft && styles.handBtnTextActive]}>RHB</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.handBtn, isLeft && styles.handBtnActiveLH]}
               onPress={() => updateBattingHand(teamIndex, actualIndex, 'left')}
             >
-              <Text style={[styles.handBtnText, isLeft && styles.handBtnTextActive]}>LEFT</Text>
+              <Text style={[styles.handBtnText, isLeft && styles.handBtnTextActive]}>LHB</Text>
             </TouchableOpacity>
           </View>
           <TouchableOpacity
@@ -255,7 +295,7 @@ export default function PlayersEntry() {
     );
   };
 
-  const renderTeamForm = (teamIndex: number, players: typeof team1Players) => {
+  const renderTeamForm = (teamIndex: number, players: any[]) => {
     const starters = players.slice(0, 11);
     const subs = players.slice(11);
 
@@ -374,7 +414,6 @@ export default function PlayersEntry() {
 }
 
 const styles = StyleSheet.create({
-
   container: {
     padding: 16,
     paddingBottom: 40,
@@ -539,19 +578,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  playerInput: {
+  playerInputCompact: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.15)',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
     fontSize: 13,
     color: colors.textPrimary,
+    paddingVertical: 4,
+  },
+  inputWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    gap: 8,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.03)',
   },
   deleteBtn: {
     padding: 6,
+    marginLeft: 4,
   },
   handToggle: {
     flexDirection: 'row',
@@ -569,7 +615,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
   },
   handBtnActiveLH: {
-    backgroundColor: '#3b82f6', // Distinct blue for Left handers
+    backgroundColor: '#3b82f6',
   },
   handBtnText: {
     fontSize: 8,
@@ -617,4 +663,3 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
 });
-

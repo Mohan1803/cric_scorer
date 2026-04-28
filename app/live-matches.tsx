@@ -26,13 +26,15 @@ import {
 } from 'lucide-react-native';
 import { colors } from './theme';
 import { listenForLiveMatches, listenForPastMatches, type GlobalMatch } from '../services/matchSyncService';
+import { useAuthStore } from '../store/authStore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function LiveMatches() {
   const { tab } = useLocalSearchParams();
   const [matches, setMatches] = useState<GlobalMatch[]>([]);
-  const [activeTab, setActiveTab] = useState<'live' | 'past'>((tab as 'live' | 'past') || 'live');
+  const [activeTab, setActiveTab] = useState<'live' | 'past' | 'my'>((tab as any) || 'live');
+  const { user } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -46,16 +48,28 @@ export default function LiveMatches() {
         setLoading(false);
         setRefreshing(false);
       });
-    } else {
+    } else if (activeTab === 'past') {
       unsubscribe = listenForPastMatches(20, (data) => {
         setMatches(data);
         setLoading(false);
         setRefreshing(false);
       });
+    } else {
+      // My Matches - Combine live and past that belong to this user
+      // For simplicity, we filter all matches we can get
+      unsubscribe = listenForLiveMatches((liveData) => {
+        const myLive = liveData.filter(m => m.creatorId === user?.id || m.creatorEmail === user?.email);
+        listenForPastMatches(50, (pastData) => {
+          const myPast = pastData.filter(m => m.creatorId === user?.id || m.creatorEmail === user?.email);
+          setMatches([...myLive, ...myPast]);
+          setLoading(false);
+          setRefreshing(false);
+        });
+      });
     }
 
     return () => unsubscribe();
-  }, [activeTab]);
+  }, [activeTab, user]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -203,6 +217,13 @@ export default function LiveMatches() {
           >
             <Text style={[styles.tabText, activeTab === 'past' && styles.activeTabText]}>Recent Results</Text>
             {activeTab === 'past' && <View style={styles.tabIndicator} />}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'my' && styles.activeTab]}
+            onPress={() => setActiveTab('my')}
+          >
+            <Text style={[styles.tabText, activeTab === 'my' && styles.activeTabText]}>My Matches</Text>
+            {activeTab === 'my' && <View style={styles.tabIndicator} />}
           </TouchableOpacity>
         </View>
       )}
