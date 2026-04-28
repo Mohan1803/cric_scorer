@@ -8,7 +8,7 @@ const { width } = Dimensions.get('window');
 interface WicketModalProps {
   visible: boolean;
   onClose: () => void;
-  onConfirm: (wicketType: string, runOutBatsman?: string, runOutBatsmanId?: string, runOutRuns?: number, fielderName?: string, fielderId?: string) => void;
+  onConfirm: (wicketType: string, runOutBatsman?: string, runOutBatsmanId?: string, runOutRuns?: number, fielderName?: string, fielderId?: string, isWide?: boolean) => void;
   strikerName: string;
   strikerId: string;
   nonStrikerName: string;
@@ -34,6 +34,7 @@ export default function WicketModal({
   const [runOutBatsmanId, setRunOutBatsmanId] = useState(strikerId);
   const [runOutRuns, setRunOutRuns] = useState(0);
   const [selectedFielderId, setSelectedFielderId] = useState<string | null>(null);
+  const [isWide, setIsWide] = useState(false);
 
   const handleConfirm = () => {
     let finalFielderName = fielders.find(f => f.id === selectedFielderId)?.name;
@@ -49,9 +50,9 @@ export default function WicketModal({
 
     if (wicketType === 'run-out') {
       const name = runOutBatsmanId === strikerId ? strikerName : nonStrikerName;
-      onConfirm(wicketType, name, runOutBatsmanId, runOutRuns, finalFielderName, finalFielderId);
+      onConfirm(wicketType, name, runOutBatsmanId, runOutRuns, finalFielderName, finalFielderId, isWide);
     } else {
-      onConfirm(wicketType, undefined, undefined, undefined, finalFielderName, finalFielderId);
+      onConfirm(wicketType, undefined, undefined, undefined, finalFielderName, finalFielderId, isWide);
     }
   };
 
@@ -149,6 +150,25 @@ export default function WicketModal({
                       </Text>
                     </TouchableOpacity>
                   ))}
+                </View>
+              </View>
+            )}
+            {wicketType === 'stumped' && (
+              <View style={styles.stumpingSection}>
+                <Text style={styles.sectionLabel}>Was it a wide ball?</Text>
+                <View style={styles.toggleRow}>
+                  <TouchableOpacity
+                    style={[styles.toggleBtn, !isWide && styles.toggleBtnActive]}
+                    onPress={() => setIsWide(false)}
+                  >
+                    <Text style={[styles.toggleBtnText, !isWide && styles.toggleBtnTextActive]}>Legal Ball</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.toggleBtn, isWide && styles.toggleBtnActive]}
+                    onPress={() => setIsWide(true)}
+                  >
+                    <Text style={[styles.toggleBtnText, isWide && styles.toggleBtnTextActive]}>Wide Ball</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             )}
@@ -398,4 +418,10 @@ const styles = StyleSheet.create({
     color: colors.textDark,
     fontWeight: '700',
   },
+  stumpingSection: { marginBottom: 24, padding: 16, backgroundColor: 'rgba(249, 205, 5, 0.05)', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(249, 205, 5, 0.1)' },
+  toggleRow: { flexDirection: 'row', gap: 10 },
+  toggleBtn: { flex: 1, height: 44, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  toggleBtnActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  toggleBtnText: { color: colors.textSecondary, fontSize: 13, fontWeight: '700' },
+  toggleBtnTextActive: { color: colors.textDark },
 });

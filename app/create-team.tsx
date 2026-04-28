@@ -48,6 +48,21 @@ export default function CreateTeam() {
   const [showQRModal, setShowQRModal] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
+  const [hasInitializedOwner, setHasInitializedOwner] = useState(false);
+
+  // Auto-add the owner (current user) to the team by default
+  React.useEffect(() => {
+    if (user && !hasInitializedOwner) {
+      setPlayers([{
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        photoURL: user.photoURL,
+        role: user.role || 'Captain'
+      }]);
+      setHasInitializedOwner(true);
+    }
+  }, [user, hasInitializedOwner]);
 
   const handleAddByEmail = async () => {
     if (!lookupEmail.includes('@')) {
@@ -131,10 +146,8 @@ export default function CreateTeam() {
 
       if (teamId) {
         setSavedTeamId(teamId);
-        Alert.alert('Success', 'Team created successfully!', [
-          { text: 'View QR', onPress: () => setShowQRModal(true) },
-          { text: 'Done', onPress: () => router.replace('/entryPage') }
-        ]);
+        // Instant redirect for professional speed
+        router.replace('/entryPage');
       } else {
         throw new Error('Save failed');
       }
@@ -172,31 +185,42 @@ export default function CreateTeam() {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        {/* Team Identity */}
-        <View style={styles.section}>
-          <Text style={styles.label}>TEAM IDENTITY</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        {/* Team Identity Card */}
+        <View style={styles.identityCard}>
+          <LinearGradient
+            colors={['rgba(6, 182, 212, 0.1)', 'rgba(0, 0, 0, 0.5)']}
+            style={styles.cardGradient}
+          />
+          <Text style={styles.label}>TEAM FRANCHISE IDENTITY</Text>
           <View style={styles.inputWrapper}>
             <Users size={20} color={colors.accent} style={{ marginRight: 12 }} />
             <TextInput
               style={styles.input}
-              placeholder="Team Name (e.g. Mumbai Indians)"
-              placeholderTextColor="rgba(255,255,255,0.3)"
+              placeholder="Enter Team Name"
+              placeholderTextColor="rgba(255,255,255,0.2)"
               value={teamName}
               onChangeText={setTeamName}
             />
           </View>
         </View>
 
-        {/* Add Players Section */}
+        {/* Recruitment Hub */}
         <View style={styles.section}>
-          <Text style={styles.label}>ADD PLAYERS</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.label}>PLAYER RECRUITMENT</Text>
+            <TouchableOpacity style={styles.scanBtnMini} onPress={startScanner}>
+              <Scan size={18} color={colors.accent} />
+              <Text style={styles.scanBtnText}>SCAN PROFILE</Text>
+            </TouchableOpacity>
+          </View>
+          
           <View style={styles.searchRow}>
-            <View style={[styles.inputWrapper, { flex: 1, marginBottom: 0 }]}>
+            <View style={styles.searchWrapper}>
               <Mail size={18} color="rgba(255,255,255,0.4)" style={{ marginRight: 10 }} />
               <TextInput
-                style={styles.input}
-                placeholder="Search by Email"
+                style={styles.searchInput}
+                placeholder="Search by Registered Email"
                 placeholderTextColor="rgba(255,255,255,0.2)"
                 value={lookupEmail}
                 onChangeText={setLookupEmail}
@@ -206,39 +230,33 @@ export default function CreateTeam() {
               {isSearching ? (
                 <ActivityIndicator size="small" color={colors.accent} />
               ) : (
-                <TouchableOpacity onPress={handleAddByEmail}>
-                  <Search size={20} color={colors.accent} />
+                <TouchableOpacity onPress={handleAddByEmail} style={styles.searchActionBtn}>
+                  <Search size={20} color="#fff" />
                 </TouchableOpacity>
               )}
             </View>
-            <TouchableOpacity 
-              style={styles.scanBtn}
-              onPress={startScanner}
-            >
-              <Scan size={24} color="#fff" />
-            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Player List */}
+        {/* Pro Roster Display */}
         <View style={styles.listSection}>
           <View style={styles.listHeader}>
-            <Text style={styles.listTitle}>ROSTER ({players.length})</Text>
+            <Text style={styles.listTitle}>SQUAD ROSTER ({players.length})</Text>
             <View style={styles.listLine} />
           </View>
 
           {players.length === 0 ? (
             <View style={styles.emptyState}>
-              <UserPlus size={48} color="rgba(255,255,255,0.05)" />
-              <Text style={styles.emptyText}>No players added yet</Text>
-              <Text style={styles.emptySub}>Add players by email or scan their profile QR</Text>
+              <Users size={48} color="rgba(6, 182, 212, 0.1)" />
+              <Text style={styles.emptyText}>Roster is Empty</Text>
+              <Text style={styles.emptySub}>Recruit players to build your championship squad</Text>
             </View>
           ) : (
             <View style={styles.playerList}>
               {players.map((player) => (
                 <View key={player.id} style={styles.playerCard}>
                   <View style={styles.playerInfo}>
-                    <View style={styles.playerAvatar}>
+                    <View style={styles.playerAvatarContainer}>
                       {player.photoURL ? (
                         <Image source={{ uri: player.photoURL }} style={styles.avatarImg} />
                       ) : (
@@ -246,42 +264,43 @@ export default function CreateTeam() {
                           <Text style={styles.avatarLetter}>{player.name[0].toUpperCase()}</Text>
                         </View>
                       )}
+                      <View style={styles.statusIndicator} />
                     </View>
-                    <View>
+                    <View style={styles.playerDetails}>
                       <Text style={styles.playerName}>{player.name}</Text>
-                      <Text style={styles.playerRole}>{(player.role || 'Player').toUpperCase()}</Text>
+                      <View style={styles.roleTag}>
+                        <Text style={styles.roleTagText}>{(player.role || 'Player').toUpperCase()}</Text>
+                      </View>
                     </View>
                   </View>
-                  <View style={styles.playerActions}>
-                    <View style={styles.playerQR}>
-                      <QRCode value={player.id} size={30} color={colors.accent} backgroundColor="transparent" />
-                    </View>
-                    <TouchableOpacity onPress={() => removePlayer(player.id)} style={styles.removeBtn}>
-                      <Trash2 size={18} color="rgba(239, 68, 68, 0.6)" />
-                    </TouchableOpacity>
-                  </View>
+                  <TouchableOpacity onPress={() => removePlayer(player.id)} style={styles.removeBtn}>
+                    <Trash2 size={18} color={colors.accentWarn} />
+                  </TouchableOpacity>
                 </View>
               ))}
             </View>
           )}
         </View>
 
-        {/* Save Button */}
+        {/* Finalize Action */}
         <TouchableOpacity 
           style={styles.saveBtn}
           onPress={handleSaveTeam}
           disabled={loading}
+          activeOpacity={0.8}
         >
           <LinearGradient
-            colors={[colors.accent, colors.accentAlt]}
+            colors={[colors.accent, '#0891b2']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
             style={styles.btnGradient}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <>
-                <Text style={styles.btnText}>CREATE PROFESSIONAL TEAM</Text>
-                <Check size={20} color="#fff" />
+                <Text style={styles.btnText}>REGISTER FRANCHISE</Text>
+                <Check size={22} color="#fff" />
               </>
             )}
           </LinearGradient>
@@ -361,56 +380,106 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '900',
     letterSpacing: 2,
   },
   scrollContent: {
-    padding: 24,
+    padding: 20,
+  },
+  identityCard: {
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 32,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+    overflow: 'hidden',
+  },
+  cardGradient: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.5,
   },
   section: {
     marginBottom: 32,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   label: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '900',
     color: colors.accent,
     letterSpacing: 1.5,
-    marginBottom: 12,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 16,
     paddingHorizontal: 16,
+    marginTop: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    marginBottom: 12,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   input: {
     flex: 1,
-    paddingVertical: 16,
+    paddingVertical: 14,
     color: '#fff',
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '600',
   },
-  searchRow: {
+  scanBtnMini: {
     flexDirection: 'row',
-    gap: 12,
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(6, 182, 212, 0.2)',
   },
-  scanBtn: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
+  scanBtnText: {
+    color: colors.accent,
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  searchRow: {
+    marginTop: 8,
+  },
+  searchWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 20,
+    paddingLeft: 16,
+    paddingRight: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 14,
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  searchActionBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
     backgroundColor: colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
-    ...shadows.medium,
+    marginVertical: 4,
   },
   listSection: {
     flex: 1,
-    marginBottom: 40,
+    marginBottom: 30,
   },
   listHeader: {
     flexDirection: 'row',
@@ -421,8 +490,8 @@ const styles = StyleSheet.create({
   listTitle: {
     fontSize: 11,
     fontWeight: '900',
-    color: 'rgba(255,255,255,0.3)',
-    letterSpacing: 1.5,
+    color: 'rgba(255,255,255,0.4)',
+    letterSpacing: 2,
   },
   listLine: {
     flex: 1,
@@ -430,16 +499,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.05)',
   },
   emptyState: {
-    paddingVertical: 40,
+    paddingVertical: 50,
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.01)',
-    borderRadius: 30,
+    borderRadius: 32,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.03)',
     borderStyle: 'dashed',
   },
   emptyText: {
-    color: 'rgba(255,255,255,0.4)',
+    color: 'rgba(255,255,255,0.5)',
     fontSize: 16,
     fontWeight: '700',
     marginTop: 16,
@@ -447,8 +516,9 @@ const styles = StyleSheet.create({
   emptySub: {
     color: 'rgba(255,255,255,0.2)',
     fontSize: 12,
-    marginTop: 4,
+    marginTop: 6,
     textAlign: 'center',
+    paddingHorizontal: 40,
   },
   playerList: {
     gap: 12,
@@ -457,64 +527,83 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 12,
     backgroundColor: 'rgba(255,255,255,0.03)',
-    borderRadius: 20,
+    padding: 14,
+    borderRadius: 22,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   playerInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
   },
-  playerAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.05)',
+  playerAvatarContainer: {
+    position: 'relative',
   },
   avatarImg: {
-    width: '100%',
-    height: '100%',
+    width: 50,
+    height: 50,
+    borderRadius: 18,
   },
   avatarPlaceholder: {
-    width: '100%',
-    height: '100%',
+    width: 50,
+    height: 50,
+    borderRadius: 18,
+    backgroundColor: 'rgba(6, 182, 212, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(6, 182, 212, 0.2)',
   },
   avatarLetter: {
     color: colors.accent,
-    fontSize: 18,
-    fontWeight: '900',
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  statusIndicator: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: colors.success,
+    borderWidth: 3,
+    borderColor: '#080A0F',
+  },
+  playerDetails: {
+    gap: 4,
   },
   playerName: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
   },
-  playerRole: {
-    color: colors.accent,
+  roleTag: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  roleTagText: {
+    color: 'rgba(255,255,255,0.4)',
     fontSize: 9,
     fontWeight: '900',
-    marginTop: 2,
-  },
-  playerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  playerQR: {
-    padding: 4,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 8,
+    letterSpacing: 1,
   },
   removeBtn: {
-    padding: 8,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(239, 68, 68, 0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   saveBtn: {
+    marginTop: 10,
     borderRadius: 22,
     overflow: 'hidden',
     ...shadows.large,
@@ -523,85 +612,91 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 20,
+    paddingVertical: 18,
     gap: 12,
   },
   btnText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '900',
-    letterSpacing: 1,
+    letterSpacing: 1.5,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.85)',
+    backgroundColor: 'rgba(0,0,0,0.9)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 30,
+    padding: 20,
   },
   qrModal: {
-    width: '100%',
-    backgroundColor: '#1E293B',
-    borderRadius: 30,
+    backgroundColor: colors.surface,
+    borderRadius: 32,
     padding: 30,
     alignItems: 'center',
+    width: '100%',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
   },
   modalTitle: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: '900',
-    letterSpacing: 1,
-  },
-  modalSub: {
     color: colors.accent,
     fontSize: 12,
-    fontWeight: '700',
-    marginTop: 8,
+    fontWeight: '900',
+    letterSpacing: 3,
+    marginBottom: 8,
+  },
+  modalSub: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: '900',
     marginBottom: 30,
   },
   qrContainer: {
     padding: 20,
     backgroundColor: '#fff',
-    borderRadius: 20,
+    borderRadius: 24,
     marginBottom: 30,
   },
   closeBtn: {
     backgroundColor: 'rgba(255,255,255,0.05)',
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 40,
+    paddingVertical: 16,
+    borderRadius: 20,
   },
   closeBtnText: {
     color: '#fff',
     fontSize: 12,
     fontWeight: '900',
-    letterSpacing: 1,
+    letterSpacing: 2,
   },
   scannerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#000',
+    position: 'absolute',
+    top: 40,
+    left: 0,
+    right: 0,
+    zIndex: 10,
   },
   scannerTitle: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '900',
-    letterSpacing: 1,
+    letterSpacing: 2,
   },
   scannerFooter: {
-    padding: 30,
-    backgroundColor: '#000',
+    position: 'absolute',
+    bottom: 60,
+    left: 0,
+    right: 0,
     alignItems: 'center',
+    paddingHorizontal: 40,
   },
   scannerInfo: {
     color: 'rgba(255,255,255,0.6)',
-    fontSize: 12,
+    fontSize: 13,
     textAlign: 'center',
-  }
+    fontWeight: '500',
+  },
 });

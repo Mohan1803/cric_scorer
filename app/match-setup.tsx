@@ -38,7 +38,7 @@ export default function MatchSetup() {
   const [team2Suggestions, setTeam2Suggestions] = useState<FirestoreTeam[]>([]);
   const [team1Players, setTeam1Players] = useState<any[]>([]);
   const [team2Players, setTeam2Players] = useState<any[]>([]);
-  
+
   const [allGrounds, setAllGrounds] = useState<FirebaseGround[]>([]);
   const [groundSuggestions, setGroundSuggestions] = useState<FirebaseGround[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,10 +74,11 @@ export default function MatchSetup() {
     initSetup();
   }, [user, teamId]);
 
-  const searchTeams = (query: string) => {
+  const searchTeams = (query: string, otherTeamName: string) => {
     if (!query) return [];
-    return allMyTeams.filter(t => 
-      t.name.toLowerCase().includes(query.toLowerCase())
+    return allMyTeams.filter(t =>
+      t.name.toLowerCase().includes(query.toLowerCase()) &&
+      t.name.toLowerCase() !== otherTeamName.toLowerCase()
     ).slice(0, 5);
   };
 
@@ -185,21 +186,35 @@ export default function MatchSetup() {
           {/* Teams Section */}
           <View style={styles.inputSection}>
             <Text style={styles.inputLabel}>Team 1 (Your Roster)</Text>
-            
+
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.suggestionsScroll}>
-              {allMyTeams.map(team => (
-                <TouchableOpacity 
-                  key={team.id} 
-                  style={[styles.teamChip, team1Name === team.name && styles.activeChip]}
-                  onPress={() => {
-                    setTeam1Name(team.name);
-                    setTeam1Players(team.players);
-                  }}
-                >
-                  <Users size={14} color={team1Name === team.name ? '#000' : colors.accent} />
-                  <Text style={[styles.teamChipText, team1Name === team.name && styles.activeChipText]}>{team.name.toUpperCase()}</Text>
-                </TouchableOpacity>
-              ))}
+              {allMyTeams.map(team => {
+                const isSelectedForTeam2 = team.name === team2Name;
+                const isActive = team1Name === team.name;
+                return (
+                  <TouchableOpacity
+                    key={team.id}
+                    style={[
+                      styles.teamChip,
+                      isActive && styles.activeChip,
+                      isSelectedForTeam2 && styles.disabledChip
+                    ]}
+                    onPress={() => {
+                      if (isSelectedForTeam2) return;
+                      setTeam1Name(team.name);
+                      setTeam1Players(team.players);
+                    }}
+                    disabled={isSelectedForTeam2}
+                  >
+                    <Users size={14} color={isActive ? '#000' : (isSelectedForTeam2 ? 'rgba(255,255,255,0.1)' : colors.accent)} />
+                    <Text style={[
+                      styles.teamChipText,
+                      isActive && styles.activeChipText,
+                      isSelectedForTeam2 && styles.disabledChipText
+                    ]}>{team.name.toUpperCase()}</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
 
             <View style={styles.inputWrapper}>
@@ -209,7 +224,7 @@ export default function MatchSetup() {
                 value={team1Name}
                 onChangeText={(text) => {
                   setTeam1Name(text);
-                  setTeam1Suggestions(searchTeams(text));
+                  setTeam1Suggestions(searchTeams(text, team2Name));
                 }}
                 placeholder="Search your teams..."
                 placeholderTextColor="rgba(255,255,255,0.2)"
@@ -240,7 +255,7 @@ export default function MatchSetup() {
                 value={team2Name}
                 onChangeText={(text) => {
                   setTeam2Name(text);
-                  setTeam2Suggestions(searchTeams(text));
+                  setTeam2Suggestions(searchTeams(text, team1Name));
                 }}
                 placeholder="Search or enter name..."
                 placeholderTextColor="rgba(255,255,255,0.2)"
@@ -384,4 +399,12 @@ const styles = StyleSheet.create({
   activeChip: { backgroundColor: colors.accent, borderColor: colors.accent },
   teamChipText: { color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
   activeChipText: { color: '#000' },
+  disabledChip: {
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    borderColor: 'rgba(255,255,255,0.05)',
+    opacity: 0.4,
+  },
+  disabledChipText: {
+    color: 'rgba(255,255,255,0.1)',
+  },
 });

@@ -388,7 +388,7 @@ export default function Scorecard() {
     setShowWicketModal(true);
   };
 
-  const handleWicketConfirm = (wicketType: string, runOutBatsman?: string, runOutBatsmanId?: string, runOutRuns?: number, fielderName?: string, fielderId?: string) => {
+  const handleWicketConfirm = (wicketType: string, runOutBatsman?: string, runOutBatsmanId?: string, runOutRuns?: number, fielderName?: string, fielderId?: string, isWide?: boolean) => {
     if (!striker || !currentBowler) return;
     const outBatsman = runOutBatsmanId ?
       (runOutBatsmanId === striker.id ? striker : nonStriker) :
@@ -433,8 +433,9 @@ export default function Scorecard() {
     }
 
     updateScore({
-      runs: runOutRuns || 0,
-      isExtra: false,
+      runs: (wicketType === 'run-out') ? (runOutRuns || 0) : (isWide ? 1 : 0),
+      isExtra: isWide || false,
+      extraType: isWide ? 'wide' : undefined,
       isNoBall: false,
       batsmanName: runOutBatsman || striker.name,
       batsmanId: runOutBatsmanId || striker.id,
