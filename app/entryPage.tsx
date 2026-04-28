@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image, Dimensions, Animated, Easing, Pressable, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image, Dimensions, Animated, Easing, Pressable, ActivityIndicator, Modal, TextInput, Alert } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, shadows } from './theme';
@@ -22,11 +22,15 @@ import {
   CheckCircle2,
   BarChart2,
   TrendingUp,
-  QrCode
+  QrCode,
+  RefreshCw
 } from 'lucide-react-native';
 import { useAuthStore } from '../store/authStore';
 import { useRef, useState, useEffect } from 'react';
-import { getMyTeams, Team } from '../services/teamService';
+import { getMyTeams, Team, repairTeamIndices, TeamPlayer } from '../services/teamService';
+import { getUserProfile } from '../services/userService';
+import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { db } from '../services/firebaseConfig';
 import { matchService, FirebaseMatch } from '../services/matchService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -43,6 +47,9 @@ export default function EntryDashboard() {
   const [loading, setLoading] = useState(true);
   const [loadingTeams, setLoadingTeams] = useState(false);
   const [selectedTeamForQR, setSelectedTeamForQR] = useState<Team | null>(null);
+  const [selectedTeamForRoster, setSelectedTeamForRoster] = useState<Team | null>(null);
+  const [newPlayerEmail, setNewPlayerEmail] = useState('');
+  const [isAddingPlayer, setIsAddingPlayer] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -67,9 +74,10 @@ export default function EntryDashboard() {
   };
 
   const fetchTeams = async () => {
+    if (!user) return;
     setLoadingTeams(true);
     try {
-      const teams = await getMyTeams(user!.id);
+      const teams = await getMyTeams(user.id, user.email);
       setMyTeams(teams);
     } catch (e) {
       console.error('Failed to fetch teams:', e);
@@ -92,6 +100,56 @@ export default function EntryDashboard() {
       easing: Easing.bezier(0.4, 0, 0.2, 1),
       useNativeDriver: true,
     }).start();
+  };
+
+  const handleAddPlayerToTeam = async () => {
+    if (!selectedTeamForRoster || !newPlayerEmail.includes('@')) {
+      Alert.alert('Invalid Email', 'Please enter a valid player email.');
+      return;
+    }
+
+    setIsAddingPlayer(true);
+    try {
+      const playerProfile = await getUserProfile(`user_${newPlayerEmail.split('@')[0]}`);
+
+      const newPlayerData: TeamPlayer = {
+        id: playerProfile?.id || `user_${newPlayerEmail.split('@')[0]}`,
+        name: playerProfile?.name || newPlayerEmail.split('@')[0],
+        email: newPlayerEmail.toLowerCase(),
+        photoURL: playerProfile?.photoURL || '',
+        role: 'Player'
+      };
+
+      // Check if already in team
+      if (selectedTeamForRoster.players.find(p => p.email.toLowerCase() === newPlayerEmail.toLowerCase())) {
+        Alert.alert('Duplicate', 'This player is already in the squad.');
+        return;
+      }
+
+      const teamRef = doc(db, 'teams', selectedTeamForRoster.id!);
+      await updateDoc(teamRef, {
+        players: arrayUnion(newPlayerData)
+      });
+
+      // Update local state for immediate feedback
+      const updatedTeam = {
+        ...selectedTeamForRoster,
+        players: [...selectedTeamForRoster.players, newPlayerData]
+      };
+
+      // Auto-repair indices so the new player sees the team immediately
+      await repairTeamIndices(updatedTeam);
+
+      setSelectedTeamForRoster(updatedTeam);
+      setMyTeams(prev => prev.map(t => t.id === updatedTeam.id ? updatedTeam : t));
+      setNewPlayerEmail('');
+      Alert.alert('Success', `${newPlayerData.name} has been drafted into the squad!`);
+    } catch (e) {
+      console.error('Add player failed:', e);
+      Alert.alert('Error', 'Failed to add player to squad.');
+    } finally {
+      setIsAddingPlayer(false);
+    }
   };
 
   return (
@@ -191,9 +249,12 @@ export default function EntryDashboard() {
                 <Text style={styles.drawerItemText}>Tournament Hub</Text>
               </TouchableOpacity>
 
-              <View style={styles.drawerDivider} />
-
-              <Text style={styles.drawerSectionTitle}>MY TEAMS ({myTeams.length})</Text>
+              <View style={styles.drawerSectionHeader}>
+                <Text style={styles.drawerSectionTitle}>MY TEAMS ({myTeams.length})</Text>
+                <TouchableOpacity onPress={fetchTeams} disabled={loadingTeams}>
+                  <RefreshCw size={12} color={colors.accent} style={{ transform: [{ rotate: loadingTeams ? '180deg' : '0deg' }] }} />
+                </TouchableOpacity>
+              </View>
 
               {loadingTeams ? (
                 <View style={{ padding: 20 }}>
@@ -204,27 +265,33 @@ export default function EntryDashboard() {
                   <Text style={styles.drawerEmptyText}>No teams created yet</Text>
                 </View>
               ) : (
-                myTeams.map((team) => (
-                  <TouchableOpacity
-                    key={team.id}
-                    style={styles.drawerItem}
-                    onPress={() => { toggleDrawer(false); router.push({ pathname: '/match-setup', params: { teamId: team.id } } as any); }}
-                  >
-                    <View style={[styles.drawerItemIconBox, { backgroundColor: 'rgba(249, 205, 5, 0.1)' }]}>
-                      <Users size={18} color={colors.accent} />
-                    </View>
-                    <Text style={[styles.drawerItemText, { flex: 1 }]}>{team.name}</Text>
-                    <TouchableOpacity 
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        setSelectedTeamForQR(team);
-                      }}
-                      style={{ padding: 10 }}
+                myTeams.map((team) => {
+                  const isOwner = team.ownerId === user?.id;
+                  return (
+                    <TouchableOpacity
+                      key={team.id}
+                      style={styles.drawerItem}
+                      onPress={() => setSelectedTeamForRoster(team)}
                     >
-                      <QrCode size={18} color={colors.accent} />
+                      <View style={[styles.drawerItemIconBox, { backgroundColor: isOwner ? 'rgba(249, 205, 5, 0.1)' : 'rgba(56, 189, 248, 0.1)' }]}>
+                        <Users size={18} color={isOwner ? colors.accent : '#38bdf8'} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.drawerItemText}>{team.name}</Text>
+                        {isOwner && <Text style={styles.ownerBadgeText}>CAPTAIN</Text>}
+                      </View>
+                      <TouchableOpacity
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setSelectedTeamForQR(team);
+                        }}
+                        style={{ padding: 10 }}
+                      >
+                        <QrCode size={18} color={colors.accent} />
+                      </TouchableOpacity>
                     </TouchableOpacity>
-                  </TouchableOpacity>
-                ))
+                  );
+                })
               )}
 
               <View style={styles.drawerDivider} />
@@ -298,6 +365,8 @@ export default function EntryDashboard() {
         </LinearGradient>
 
         {/* Main Actions */}
+
+
         <View style={styles.actionGrid}>
           <TouchableOpacity
             style={styles.actionCard}
@@ -391,28 +460,127 @@ export default function EntryDashboard() {
         </View>
       </ScrollView>
 
+      {/* Team Roster Modal */}
+      <Modal
+        visible={!!selectedTeamForRoster}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedTeamForRoster(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.rosterModal}>
+            <View style={styles.rosterHeader}>
+              <View>
+                <Text style={styles.rosterTitle}>{selectedTeamForRoster?.name.toUpperCase()}</Text>
+                <Text style={styles.rosterSub}>SQUAD ROSTER ({selectedTeamForRoster?.players.length})</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.rosterCloseBtn}
+                onPress={() => setSelectedTeamForRoster(null)}
+              >
+                <X color="#fff" size={24} />
+              </TouchableOpacity>
+            </View>
+
+            {selectedTeamForRoster?.ownerId === user?.id && (
+              <View style={styles.rosterAddSection}>
+                <View style={styles.rosterInputWrapper}>
+                  <Plus size={16} color="rgba(255,255,255,0.4)" />
+                  <TextInput
+                    style={styles.rosterInput}
+                    value={newPlayerEmail}
+                    onChangeText={setNewPlayerEmail}
+                    placeholder="Recruit by Email..."
+                    placeholderTextColor="rgba(255,255,255,0.2)"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity
+                    style={styles.rosterAddBtn}
+                    onPress={handleAddPlayerToTeam}
+                    disabled={isAddingPlayer}
+                  >
+                    {isAddingPlayer ? (
+                      <ActivityIndicator size="small" color="#000" />
+                    ) : (
+                      <Text style={styles.rosterAddBtnText}>DRAFT</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            <ScrollView style={styles.rosterList} showsVerticalScrollIndicator={false}>
+              {selectedTeamForRoster?.players.map((player, idx) => (
+                <View key={player.id || idx} style={styles.rosterItem}>
+                  <View style={styles.rosterPlayerInfo}>
+                    <View style={styles.rosterAvatar}>
+                      {player.photoURL ? (
+                        <Image source={{ uri: player.photoURL }} style={styles.rosterAvatarImg} />
+                      ) : (
+                        <View style={styles.rosterAvatarPlaceholder}>
+                          <Text style={styles.rosterAvatarLetter}>{player.name[0].toUpperCase()}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <View>
+                      <Text style={styles.rosterPlayerName}>{player.name}</Text>
+                      <Text style={styles.rosterPlayerRole}>{(player.role || 'Player').toUpperCase()}</Text>
+                    </View>
+                  </View>
+                  {player.id === selectedTeamForRoster.ownerId && (
+                    <View style={styles.captainBadge}>
+                      <Trophy size={10} color={colors.accent} />
+                      <Text style={styles.captainBadgeText}>OWNER</Text>
+                    </View>
+                  )}
+                </View>
+              ))}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.rosterActionBtn}
+              onPress={() => {
+                const teamId = selectedTeamForRoster?.id;
+                setSelectedTeamForRoster(null);
+                toggleDrawer(false);
+                router.push({ pathname: '/match-setup', params: { teamId } } as any);
+              }}
+            >
+              <LinearGradient
+                colors={[colors.accent, '#b45309']}
+                style={styles.rosterActionGradient}
+              >
+                <Text style={styles.rosterActionText}>START MATCH WITH THIS TEAM</Text>
+                <Play size={18} color="#000" fill="#000" />
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Team QR Modal */}
-      <Modal 
-        visible={!!selectedTeamForQR} 
-        transparent 
+      <Modal
+        visible={!!selectedTeamForQR}
+        transparent
         animationType="fade"
         onRequestClose={() => setSelectedTeamForQR(null)}
       >
-        <Pressable 
-          style={styles.modalOverlay} 
+        <Pressable
+          style={styles.modalOverlay}
           onPress={() => setSelectedTeamForQR(null)}
         >
           <View style={styles.qrModal} onStartShouldSetResponder={() => true}>
             <Text style={styles.modalTitle}>TEAM IDENTITY</Text>
             <Text style={styles.modalSub}>{selectedTeamForQR?.name.toUpperCase()}</Text>
-            
+
             <View style={styles.qrContainer}>
               {selectedTeamForQR && (
-                <QRCode 
-                  value={selectedTeamForQR.id} 
-                  size={200} 
-                  color={colors.accent} 
-                  backgroundColor="#fff" 
+                <QRCode
+                  value={selectedTeamForQR.id}
+                  size={200}
+                  color={colors.accent}
+                  backgroundColor="#fff"
                 />
               )}
             </View>
@@ -421,7 +589,7 @@ export default function EntryDashboard() {
               Other captains can scan this QR to instantly import your squad for a match.
             </Text>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.closeBtn}
               onPress={() => setSelectedTeamForQR(null)}
             >
@@ -503,5 +671,175 @@ const styles = StyleSheet.create({
   footerFlex: { flex: 1 },
   emptyMatchCard: { backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 24, padding: 40, alignItems: 'center', gap: 12, borderStyle: 'dashed', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   emptyMatchText: { color: 'rgba(255,255,255,0.4)', fontSize: 14, fontWeight: '600' },
-  emptyMatchAction: { color: colors.accent, fontSize: 14, fontWeight: '800', textDecorationLine: 'underline' }
+  emptyMatchAction: { color: colors.accent, fontSize: 14, fontWeight: '800', textDecorationLine: 'underline' },
+  drawerSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+    marginTop: 10,
+    paddingRight: 10,
+  },
+  ownerBadgeText: {
+    color: colors.accent,
+    fontSize: 9,
+    fontWeight: '900',
+    marginTop: 2,
+    letterSpacing: 1,
+  },
+  rosterModal: {
+    width: '100%',
+    maxHeight: '80%',
+    backgroundColor: '#1E293B',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    position: 'absolute',
+    bottom: 0,
+  },
+  rosterHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  rosterTitle: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  rosterSub: {
+    color: colors.accent,
+    fontSize: 10,
+    fontWeight: '900',
+    marginTop: 4,
+    letterSpacing: 2,
+  },
+  rosterAddSection: {
+    marginBottom: 20,
+  },
+  rosterInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 15,
+    paddingHorizontal: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    height: 50,
+  },
+  rosterInput: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 10,
+  },
+  rosterAddBtn: {
+    backgroundColor: colors.accent,
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  rosterAddBtnText: {
+    color: '#000',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  rosterCloseBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  rosterList: {
+    marginBottom: 24,
+  },
+  rosterItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    padding: 12,
+    borderRadius: 20,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+  },
+  rosterPlayerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  rosterAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  rosterAvatarImg: {
+    width: '100%',
+    height: '100%',
+  },
+  rosterAvatarPlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(249, 205, 5, 0.1)',
+  },
+  rosterAvatarLetter: {
+    color: colors.accent,
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  rosterPlayerName: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  rosterPlayerRole: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 10,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  captainBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(249, 205, 5, 0.1)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  captainBadgeText: {
+    color: colors.accent,
+    fontSize: 9,
+    fontWeight: '900',
+  },
+  rosterActionBtn: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    ...shadows.medium,
+  },
+  rosterActionGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 18,
+    gap: 12,
+  },
+  rosterActionText: {
+    color: '#000',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
 });
