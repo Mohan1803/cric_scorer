@@ -1,20 +1,16 @@
-import React, { useMemo, useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  ActivityIndicator
-} from 'react-native';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Animated, Easing, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft, Trophy, MapPin, Award, Activity, Star } from 'lucide-react-native';
-import { colors } from '../theme';
+import { ChevronLeft, Trophy, MapPin, Award, Activity, Star, MessageSquare, Zap } from 'lucide-react-native';
+import { colors, shadows } from '../theme';
 import { getMatchDetails, listenToMatchDetails } from '../../services/matchSyncService';
 import BatsmanStatsModal from '../../components/BatsmanStatsModal';
 import { useFollowStore } from '../../store/followStore';
+import ConfettiCannon from 'react-native-confetti-cannon';
+
+const { width } = Dimensions.get('window');
 
 
 export default function MatchViewer() {
@@ -26,20 +22,64 @@ export default function MatchViewer() {
   const { toggleFollow, followedPlayers } = useFollowStore();
 
 
+  const [lastProcessedBallCount, setLastProcessedBallCount] = useState(0);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [celebrationText, setCelebrationText] = useState('');
+  const [wicketAnimation, setWicketAnimation] = useState<any>(null);
+
+  const scaleAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(-200)).current;
+
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
 
     if (typeof id === 'string') {
       unsubscribe = listenToMatchDetails(id, (data) => {
-        setMatchData(data);
-        setLoading(false);
+        if (data) {
+          // Detect new balls for animations
+          const currentBalls = data.ballHistory || [];
+          if (currentBalls.length > lastProcessedBallCount && lastProcessedBallCount > 0) {
+            const lastBall = currentBalls[currentBalls.length - 1];
+
+            if (lastBall.runs === 4 || lastBall.runs === 6) {
+              setCelebrationText(lastBall.runs === 6 ? 'MASSIVE SIX!' : 'FANTASTIC FOUR!');
+              setShowConfetti(true);
+              Animated.sequence([
+                Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 50, friction: 3 }),
+                Animated.delay(2000),
+                Animated.timing(fadeAnim, { toValue: 0, duration: 500, useNativeDriver: true })
+              ]).start(() => {
+                setShowConfetti(false);
+                setCelebrationText('');
+                scaleAnim.setValue(0);
+                fadeAnim.setValue(1);
+              });
+            } else if (lastBall.isWicket) {
+              setWicketAnimation({
+                name: lastBall.batsmanName,
+                dismissalDetail: lastBall.dismissalDetail,
+                score: lastBall.runs
+              });
+              Animated.sequence([
+                Animated.timing(slideAnim, { toValue: width + 100, duration: 4000, easing: Easing.linear, useNativeDriver: true })
+              ]).start(() => {
+                setWicketAnimation(null);
+                slideAnim.setValue(-200);
+              });
+            }
+          }
+          setLastProcessedBallCount(currentBalls.length);
+          setMatchData(data);
+          setLoading(false);
+        }
       });
     }
 
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [id]);
+  }, [id, lastProcessedBallCount]);
 
   if (loading) {
     return (
@@ -130,10 +170,10 @@ export default function MatchViewer() {
                 <View style={[styles.playerNameContainer, { flex: 2 }]}>
                   <Text style={styles.playerName}>{p.name}</Text>
                   <TouchableOpacity onPress={() => toggleFollow(p.name)} style={styles.inlineFollowBtn}>
-                    <Star 
-                      size={14} 
-                      color={isFollowing ? colors.accentGold : colors.textSecondary} 
-                      fill={isFollowing ? colors.accentGold : 'transparent'} 
+                    <Star
+                      size={14}
+                      color={isFollowing ? colors.accentGold : colors.textSecondary}
+                      fill={isFollowing ? colors.accentGold : 'transparent'}
                     />
                   </TouchableOpacity>
                 </View>
@@ -165,10 +205,10 @@ export default function MatchViewer() {
                 <View style={[styles.playerNameContainer, { flex: 2 }]}>
                   <Text style={styles.playerName}>{p.name}</Text>
                   <TouchableOpacity onPress={() => toggleFollow(p.name)} style={styles.inlineFollowBtn}>
-                    <Star 
-                      size={14} 
-                      color={isFollowing ? colors.accentGold : colors.textSecondary} 
-                      fill={isFollowing ? colors.accentGold : 'transparent'} 
+                    <Star
+                      size={14}
+                      color={isFollowing ? colors.accentGold : colors.textSecondary}
+                      fill={isFollowing ? colors.accentGold : 'transparent'}
                     />
                   </TouchableOpacity>
                 </View>
@@ -181,6 +221,60 @@ export default function MatchViewer() {
           })}
 
         </View>
+      </View>
+    );
+  };
+
+  const renderCommentary = () => {
+    if (!ballHistory || ballHistory.length === 0) return null;
+
+    // Process ball history into reverse chronological order
+    const processedBalls = [...ballHistory].reverse().slice(0, 10); // Show last 10 balls
+
+    return (
+      <View style={styles.commentarySection}>
+        <View style={styles.sectionHeader}>
+          <MessageSquare size={18} color={colors.accent} />
+          <Text style={styles.sectionTitle}>Recent Commentary</Text>
+        </View>
+
+        {processedBalls.map((ball: any, index: number) => {
+          let desc = ball.commentary;
+          if (!desc) {
+            desc = `${ball.batsmanName} scores ${ball.runs} runs off ${ball.bowlerName}`;
+            if (ball.isWicket) desc = `${ball.batsmanName} is OUT! ${ball.dismissalDetail || ''}`;
+            if (ball.isExtra) {
+              desc = `${ball.bowlerName} bowls a ${ball.extraType}. ${ball.runs > 0 ? ball.runs + ' runs taken' : ''}`;
+            }
+          }
+
+          return (
+            <View key={index} style={styles.commentaryCard}>
+              <View style={styles.commentaryMeta}>
+                <View style={[
+                  styles.commentaryBadge,
+                  ball.isWicket && styles.wicketBadge,
+                  (ball.runs === 4 || ball.runs === 6) && styles.boundaryBadge,
+                  ball.isExtra && styles.extraBadge
+                ]}>
+                  <Text style={styles.commentaryBadgeText}>
+                    {ball.isWicket ? 'W' : ball.isExtra ? ball.extraType?.substring(0, 2).toUpperCase() : ball.runs}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.commentaryContent}>
+                <Text style={styles.commentaryText}>{desc}</Text>
+              </View>
+            </View>
+          );
+        })}
+
+        <TouchableOpacity
+          style={styles.viewFullCommentaryBtn}
+          onPress={() => router.push('/commentary')}
+        >
+          <Text style={styles.viewFullCommentaryText}>View Full Commentary</Text>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -241,7 +335,54 @@ export default function MatchViewer() {
 
         {renderInnings(firstInningsBallHistory, '1st Innings')}
         {renderInnings(ballHistory, '2nd Innings')}
+        {renderCommentary()}
       </ScrollView>
+
+      {/* Animations */}
+      {showConfetti && (
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <ConfettiCannon
+            count={200}
+            origin={{ x: width / 2, y: -20 }}
+            fadeOut={true}
+            fallSpeed={3000}
+          />
+          {celebrationText && (
+            <View style={styles.celebrationOverlay}>
+              <Animated.View style={[
+                { transform: [{ scale: scaleAnim }], opacity: fadeAnim }
+              ]}>
+                <LinearGradient
+                  colors={[colors.accent, colors.accentSecondary]}
+                  style={styles.celebrationBadge}
+                >
+                  <Zap color="#fff" size={32} />
+                  <Text style={styles.celebrationText}>{celebrationText}</Text>
+                </LinearGradient>
+              </Animated.View>
+            </View>
+          )}
+        </View>
+      )}
+
+      {wicketAnimation && (
+        <Animated.View style={[
+          styles.wicketAnimationContainer,
+          { transform: [{ translateX: slideAnim }] }
+        ]}>
+          <View style={styles.duckContainer}>
+            <Text style={styles.duckEmoji}>🚶</Text>
+            <View style={styles.wicketInfoCard}>
+              <Text style={styles.wicketInfoTitle}>OUT!</Text>
+              <Text style={styles.wicketInfoName}>{wicketAnimation.name}</Text>
+              {wicketAnimation.dismissalDetail && (
+                <Text style={styles.wicketInfoDismissal}>{wicketAnimation.dismissalDetail}</Text>
+              )}
+              <Text style={styles.wicketInfoScore}>{wicketAnimation.score} Runs</Text>
+            </View>
+          </View>
+        </Animated.View>
+      )}
 
       <BatsmanStatsModal
         visible={showStatsModal}
@@ -460,5 +601,145 @@ const styles = StyleSheet.create({
   backButtonText: {
     color: '#fff',
     fontWeight: '700',
+  },
+  commentarySection: {
+    marginTop: 20,
+    marginBottom: 40,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.textPrimary,
+  },
+  commentaryCard: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+  },
+  commentaryMeta: {
+    marginRight: 12,
+  },
+  commentaryBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  commentaryBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  boundaryBadge: {
+    backgroundColor: colors.accent,
+  },
+  wicketBadge: {
+    backgroundColor: colors.accentWarn,
+  },
+  extraBadge: {
+    backgroundColor: colors.accentGold,
+  },
+  commentaryContent: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  commentaryText: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  viewFullCommentaryBtn: {
+    marginTop: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  viewFullCommentaryText: {
+    color: colors.accent,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  celebrationOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  celebrationBadge: {
+    paddingHorizontal: 30,
+    paddingVertical: 20,
+    borderRadius: 24,
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+    ...shadows.large,
+  },
+  celebrationText: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+  },
+  wicketAnimationContainer: {
+    position: 'absolute',
+    top: 150,
+    left: -200,
+    zIndex: 1000,
+  },
+  duckContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.accentWarn,
+    ...shadows.large,
+  },
+  duckEmoji: {
+    fontSize: 40,
+    marginRight: 16,
+  },
+  wicketInfoCard: {
+    gap: 2,
+  },
+  wicketInfoTitle: {
+    color: colors.accentWarn,
+    fontSize: 12,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  wicketInfoName: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  wicketInfoDismissal: {
+    color: colors.textSecondary,
+    fontSize: 12,
+  },
+  wicketInfoScore: {
+    color: colors.accentGold,
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 4,
   }
 });

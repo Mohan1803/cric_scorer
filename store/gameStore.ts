@@ -103,6 +103,7 @@ export interface GameState {
   enableAnimations: boolean;
   enableSounds: boolean;
   enableFieldMap: boolean;
+  isScorer: boolean;
 
   // New Global Sync fields
   matchId: string | null;
@@ -167,6 +168,7 @@ export const useGameStore = create<GameState>()(
       enableAnimations: true,
       enableSounds: true,
       enableFieldMap: true,
+      isScorer: false,
       matchId: null,
       groundName: '',
       tournamentName: '',
@@ -293,8 +295,8 @@ export const useGameStore = create<GameState>()(
           firstInningsOversData: [],
           previousStriker: null,
           undoStack: [],
-          showNewBatsmanSelection: false,
           showNewBowlerSelection: false,
+          isScorer: true,
         });
       },
 

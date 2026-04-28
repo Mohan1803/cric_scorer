@@ -60,6 +60,7 @@ export default function Scorecard() {
     enableAnimations,
     enableSounds,
     addPlayerToTeam,
+    isScorer,
   } = useGameStore();
 
   const [addingPlayerFor, setAddingPlayerFor] = useState<'batting' | 'bowling' | null>(null);
@@ -529,6 +530,7 @@ export default function Scorecard() {
   };
 
   const renderAnimations = () => {
+    if (isScorer) return null;
     return (
       <>
         {showConfetti && (
@@ -657,17 +659,8 @@ export default function Scorecard() {
                 <View style={styles.playerNameCol}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <Text style={[styles.playerLabel, player?.id === striker?.id && styles.strikerText]}>
-                      {player?.name || 'Batsman'}{player?.isCaptain ? ' (C)' : ''}{player?.isWicketKeeper ? ' (WK)' : ''} {player?.id === striker?.id ? '*' : ''}
+                      {player?.name || 'Batsman'}{player?.id === striker?.id ? '*' : ''}
                     </Text>
-                    {player && (
-                      <TouchableOpacity onPress={(e) => { e.stopPropagation(); if (player) toggleFollow(player.name); }} style={styles.inlineFollowBtn}>
-                        <Star
-                          size={12}
-                          color={followedPlayers.includes(player.name) ? colors.accentGold : colors.textSecondary}
-                          fill={followedPlayers.includes(player.name) ? colors.accentGold : 'transparent'}
-                        />
-                      </TouchableOpacity>
-                    )}
                   </View>
                   {player?.isOut && player?.dismissalDetail && (
                     <Text style={styles.dismissalTextSmall}>{player.dismissalDetail}</Text>
@@ -689,16 +682,7 @@ export default function Scorecard() {
             <View style={styles.playerRow}>
               <View style={styles.playerNameCol}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.bowlerLabel}>{currentBowler?.name || 'Bowler'}{currentBowler?.isCaptain ? ' (C)' : ''}{currentBowler?.isWicketKeeper ? ' (WK)' : ''} *</Text>
-                  {currentBowler && (
-                    <TouchableOpacity onPress={(e) => { e.stopPropagation(); if (currentBowler) toggleFollow(currentBowler.name); }} style={styles.inlineFollowBtn}>
-                      <Star
-                        size={12}
-                        color={followedPlayers.includes(currentBowler.name) ? colors.accentGold : colors.textSecondary}
-                        fill={followedPlayers.includes(currentBowler.name) ? colors.accentGold : 'transparent'}
-                      />
-                    </TouchableOpacity>
-                  )}
+                  <Text style={styles.bowlerLabel}>{currentBowler?.name || 'Bowler'} *</Text>
                 </View>
               </View>
 
@@ -807,11 +791,13 @@ export default function Scorecard() {
             </View>
 
             <View style={styles.bottomLinks}>
-              <TouchableOpacity style={styles.fullScorecardLink} onPress={() => router.push('/commentary')}>
-                <MessageSquare size={18} color={colors.accent} style={{ marginRight: 8 }} />
-                <Text style={styles.fullScorecardLinkText}>View Commentary</Text>
-                <ChevronRight size={18} color={colors.accent} />
-              </TouchableOpacity>
+              {!isScorer && (
+                <TouchableOpacity style={styles.fullScorecardLink} onPress={() => router.push('/commentary')}>
+                  <MessageSquare size={18} color={colors.accent} style={{ marginRight: 8 }} />
+                  <Text style={styles.fullScorecardLinkText}>View Commentary</Text>
+                  <ChevronRight size={18} color={colors.accent} />
+                </TouchableOpacity>
+              )}
 
               <TouchableOpacity style={styles.fullScorecardLink} onPress={() => router.push('/full-scorecard')}>
                 <Text style={styles.fullScorecardLinkText}>View Full Scorecard</Text>

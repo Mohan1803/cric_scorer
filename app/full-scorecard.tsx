@@ -88,7 +88,7 @@ export default function FullScorecard() {
       players.map((p: any) =>
         `<tr>
         <td>
-          ${p.name}${p.isCaptain ? ' (C)' : ''}${p.isWicketKeeper ? ' (WK)' : ''}${isBatting && p.isOut === false ? ' (not out)' : ''}
+          ${p.name}${isBatting && p.isOut === false ? ' (not out)' : ''}
           ${isBatting && p.isOut && p.dismissalDetail ? `<br/><small style="color: #94A3B8; font-size: 11px;">${p.dismissalDetail}</small>` : ''}
         </td>
         ${isBatting
@@ -435,135 +435,131 @@ export default function FullScorecard() {
     return (
       <View style={styles.inningsContainer}>
         <LinearGradient
-          colors={[colors.accent, colors.accentSecondary]}
+          colors={['rgba(21, 42, 85, 0.95)', 'rgba(8, 17, 38, 0.98)']}
           start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
+          end={{ x: 1, y: 1 }}
           style={styles.headerSticky}
         >
-          <Text style={styles.inningsLabelText}>{inningsLabel}</Text>
-          <View style={styles.scoreRowLarge}>
-            <Text style={styles.headerText}>
-              {inningsBattingTeam} {totalScore}/{totalWickets}
-            </Text>
-            <Text style={styles.oversText}>({totalOvers}.{currentBalls})</Text>
+          <Text style={styles.inningsHeaderPhase}>{inningsLabel}</Text>
+          <View style={styles.inningsHeaderMain}>
+            <Text style={styles.inningsHeaderTeam} numberOfLines={1}>{inningsBattingTeam}</Text>
+            <View>
+              <Text style={styles.inningsHeaderScore}>{totalScore}/{totalWickets}</Text>
+              <Text style={styles.inningsHeaderOvers}>{totalOvers}.{currentBalls} Overs</Text>
+            </View>
           </View>
         </LinearGradient>
 
         {/* Batting Table */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Batting</Text>
-          <View style={styles.tableHeader}>
-            <Text style={[styles.cell, styles.playerCell]}>Batter</Text>
-            <Text style={styles.cell}>R</Text>
-            <Text style={styles.cell}>B</Text>
-            <Text style={styles.cell}>4s</Text>
-            <Text style={styles.cell}>6s</Text>
-            <Text style={styles.cell}>SR</Text>
+          <Text style={styles.sectionTitle}>Batting Performance</Text>
+          <View style={styles.tableHeaderRow}>
+            <Text style={[styles.tableHeaderLabel, styles.colPlayer]}>Batter</Text>
+            <Text style={[styles.tableHeaderLabel, styles.colStat]}>R</Text>
+            <Text style={[styles.tableHeaderLabel, styles.colStat]}>B</Text>
+            <Text style={[styles.tableHeaderLabel, styles.colStat]}>4s</Text>
+            <Text style={[styles.tableHeaderLabel, styles.colStat]}>6s</Text>
+            <Text style={[styles.tableHeaderLabel, styles.colStatLarge]}>SR</Text>
           </View>
-          {participatingBatters.map((player) => {
-              const strikeRate = player.balls > 0 ? ((player.runs / player.balls) * 100).toFixed(1) : '0.0';
-              return (
-                <TouchableOpacity
-                  key={player.id}
-                  style={styles.tableRow}
-                  onPress={() => {
-                    setSelectedStatsPlayer(player);
-                    setShowStatsModal(true);
-                  }}
-                >
-                  <View style={[styles.cell, styles.playerCell]}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={styles.playerCellName}>
-                        {player.name}{player.isCaptain ? ' (C)' : ''}{player.isWicketKeeper ? ' (WK)' : ''}
-                      </Text>
-                      <TouchableOpacity onPress={(e) => { e.stopPropagation(); toggleFollow(player.name); }} style={styles.inlineFollowBtn}>
-                        <Star 
-                          size={12} 
-                          color={followedPlayers.includes(player.name) ? colors.accentGold : colors.textSecondary}
-                          fill={followedPlayers.includes(player.name) ? colors.accentGold : 'transparent'}
-                        />
-                      </TouchableOpacity>
-                    </View>
-                    {player.isOut && player.dismissalDetail && (
-                      <Text style={styles.dismissalText}>{player.dismissalDetail}</Text>
-                    )}
+          {participatingBatters.map((player, idx) => {
+            const strikeRate = player.balls > 0 ? ((player.runs / player.balls) * 100).toFixed(1) : '0.0';
+            return (
+              <TouchableOpacity
+                key={player.id}
+                style={[styles.tableBodyRow, idx % 2 === 0 ? styles.rowEven : styles.rowOdd]}
+                onPress={() => {
+                  setSelectedStatsPlayer(player);
+                  setShowStatsModal(true);
+                }}
+              >
+                <View style={styles.colPlayer}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.playerCellName} numberOfLines={1}>
+                      {player.name}
+                    </Text>
                   </View>
+                  {player.isOut && player.dismissalDetail && (
+                    <Text style={styles.dismissalText}>{player.dismissalDetail}</Text>
+                  )}
+                  {!player.isOut && <Text style={[styles.dismissalText, { color: '#4ADE80' }]}>not out</Text>}
+                </View>
 
-                  <Text style={styles.cell}>{player.runs}</Text>
-                  <Text style={styles.cell}>{player.balls}</Text>
-                  <Text style={styles.cell}>{player.fours}</Text>
-                  <Text style={styles.cell}>{player.sixes}</Text>
-                  <Text style={styles.cell}>{strikeRate}</Text>
-                </TouchableOpacity>
-              );
-            })}
-            {participatingBatters.length === 0 && <Text style={styles.emptyText}>No batting data.</Text>}
+                <Text style={[styles.statValue, styles.colStat]}>{player.runs}</Text>
+                <Text style={[styles.statLabel, styles.colStat]}>{player.balls}</Text>
+                <Text style={[styles.statLabel, styles.colStat]}>{player.fours}</Text>
+                <Text style={[styles.statLabel, styles.colStat]}>{player.sixes}</Text>
+                <Text style={[styles.statValue, styles.colStatLarge, styles.srValue]}>{strikeRate}</Text>
+              </TouchableOpacity>
+            );
+          })}
+          {participatingBatters.length === 0 && <Text style={styles.emptyText}>No batting data.</Text>}
         </View>
 
         {/* Bowling Table */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Bowling</Text>
-          <View style={styles.tableHeader}>
-            <Text style={[styles.cell, styles.playerCell]}>Bowler</Text>
-            <Text style={styles.cell}>O</Text>
-            <Text style={styles.cell}>R</Text>
-            <Text style={styles.cell}>W</Text>
-            <Text style={styles.cell}>Econ</Text>
+          <Text style={styles.sectionTitle}>Bowling Performance</Text>
+          <View style={styles.tableHeaderRow}>
+            <Text style={[styles.tableHeaderLabel, styles.colPlayer]}>Bowler</Text>
+            <Text style={[styles.tableHeaderLabel, styles.colStat]}>O</Text>
+            <Text style={[styles.tableHeaderLabel, styles.colStat]}>R</Text>
+            <Text style={[styles.tableHeaderLabel, styles.colStat]}>W</Text>
+            <Text style={[styles.tableHeaderLabel, styles.colStatLarge]}>Econ</Text>
           </View>
-          {participatingBowlers.map((player) => {
-              const overs = Math.floor(player.ballsBowled / 6);
-              const balls = player.ballsBowled % 6;
-              const economy = player.ballsBowled > 0
-                ? (player.runsGiven / (player.ballsBowled / 6)).toFixed(1)
-                : '0.0';
-              return (
-                <View key={player.id} style={styles.tableRow}>
-                  <View style={[styles.cell, styles.playerCell]}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={styles.playerCellName}>
-                        {player.name}{player.isCaptain ? ' (C)' : ''}{player.isWicketKeeper ? ' (WK)' : ''}
-                      </Text>
-                      <TouchableOpacity onPress={(e) => { e.stopPropagation(); toggleFollow(player.name); }} style={styles.inlineFollowBtn}>
-                        <Star 
-                          size={12} 
-                          color={followedPlayers.includes(player.name) ? colors.accentGold : colors.textSecondary}
-                          fill={followedPlayers.includes(player.name) ? colors.accentGold : 'transparent'}
-                        />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  <Text style={styles.cell}>{overs}.{balls}</Text>
-                  <Text style={styles.cell}>{player.runsGiven}</Text>
-                  <Text style={styles.cell}>{player.wickets}</Text>
-                  <Text style={styles.cell}>{economy}</Text>
+          {participatingBowlers.map((player, idx) => {
+            const overs = Math.floor(player.ballsBowled / 6);
+            const balls = player.ballsBowled % 6;
+            const economy = player.ballsBowled > 0
+              ? (player.runsGiven / (player.ballsBowled / 6)).toFixed(1)
+              : '0.0';
+            return (
+              <View key={player.id} style={[styles.tableBodyRow, idx % 2 === 0 ? styles.rowEven : styles.rowOdd]}>
+                <View style={styles.colPlayer}>
+                  <Text style={styles.playerCellName}>
+                    {player.name}
+                  </Text>
                 </View>
-              );
-            })}
-            {participatingBowlers.length === 0 && <Text style={styles.emptyText}>No bowling data.</Text>}
+
+                <Text style={[styles.statLabel, styles.colStat]}>{overs}.{balls}</Text>
+                <Text style={[styles.statLabel, styles.colStat]}>{player.runsGiven}</Text>
+                <Text style={[styles.statValue, styles.colStat]}>{player.wickets}</Text>
+                <Text style={[styles.statValue, styles.colStatLarge, styles.econValue]}>{economy}</Text>
+              </View>
+            );
+          })}
+          {participatingBowlers.length === 0 && <Text style={styles.emptyText}>No bowling data.</Text>}
         </View>
 
         {/* Fall of Wickets (FOW) */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Fall of Wickets</Text>
-          <Text style={styles.fowText}>{(() => {
-            const balls = inningsBallHistory;
-            const wickets = balls
-              .map((ball, i) => ball.isWicket ? ({
-                runs: balls.slice(0, i + 1).reduce((sum, b) => sum + b.runs + (b.isExtra && (b.extraType === 'wide' || b.extraType === 'no-ball') ? 1 : 0), 0),
-                number: balls.filter((b, idx) => b.isWicket && idx <= i).length,
-                batter: ball.batsmanName || '',
-                detail: ball.dismissalDetail || '',
-                over: (() => {
-                  const legalBalls = balls.slice(0, i + 1).filter(b => !b.isExtra).length;
-                  return `${Math.floor((legalBalls - 1) / 6)}.${(legalBalls - 1) % 6}`;
-                })()
-              }) : null)
-              .filter((w) => w !== null);
-            return wickets.length > 0
-              ? wickets.map(w => w ? `${w.runs}/${w.number} (${w.batter}${w.detail ? ', ' + w.detail : ''}, ${w.over})` : '').filter(Boolean).join('; ')
-              : 'None';
-          })()}</Text>
+          <View style={styles.fowContainer}>
+            {(() => {
+              const balls = inningsBallHistory;
+              const wickets = balls
+                .map((ball, i) => ball.isWicket ? ({
+                  runs: balls.slice(0, i + 1).reduce((sum, b) => sum + b.runs + (b.isExtra && (b.extraType === 'wide' || b.extraType === 'no-ball') ? 1 : 0), 0),
+                  number: balls.filter((b, idx) => b.isWicket && idx <= i).length,
+                  batter: ball.batsmanName || '',
+                  detail: ball.dismissalDetail || '',
+                  over: (() => {
+                    const legalBalls = balls.slice(0, i + 1).filter(b => !b.isExtra).length;
+                    return `${Math.floor((legalBalls - 1) / 6)}.${(legalBalls - 1) % 6}`;
+                  })()
+                }) : null)
+                .filter((w): w is any => w !== null);
+
+              if (wickets.length === 0) return <Text style={styles.emptyText}>None</Text>;
+
+              return wickets.map((w, idx) => (
+                <View key={idx} style={styles.fowCard}>
+                  <Text style={styles.fowWktNum}>WICKET {w.number}</Text>
+                  <Text style={styles.fowScore}>{w.runs}/{w.number}</Text>
+                  <Text style={styles.fowDetails} numberOfLines={1}>{w.batter}</Text>
+                  <Text style={styles.fowDetails}>{w.over} ov</Text>
+                </View>
+              ));
+            })()}
+          </View>
         </View>
       </View>
     );
@@ -612,21 +608,23 @@ export default function FullScorecard() {
           secondInningsBowlingTeamName={secondInningsBowlingTeamName}
         />}
 
-        {matchCompleted && (
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity style={styles.exportButton} onPress={handleDownloadScorecard}>
-              <Download color={colors.textDark} size={20} />
-              <Text style={styles.buttonText}>Download Scorecard</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.exportButton, { backgroundColor: 'rgba(255,255,255,0.05)', marginTop: 12, borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 }]} 
-              onPress={handleNewMatch}
-            >
-              <Text style={[styles.buttonText, { color: colors.textPrimary }]}>🏁  Finish Match</Text>
-            </TouchableOpacity>
-          </View>
-        )}
       </ScrollView>
+
+      {/* Glassmorphic Export Bar */}
+      {matchCompleted && (
+        <View style={styles.exportBar}>
+          <TouchableOpacity style={styles.exportButton} onPress={handleDownloadScorecard}>
+            <Download color={colors.textDark} size={20} />
+            <Text style={styles.buttonText}>Download</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.exportButton, { backgroundColor: 'rgba(255,255,255,0.1)', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 }]}
+            onPress={handleNewMatch}
+          >
+            <Text style={[styles.buttonText, { color: colors.textPrimary }]}>🏁 Finish</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ====== VICTORY MODAL ====== */}
       <Modal
@@ -833,9 +831,11 @@ function MatchAwards({ teams, firstInningsBallHistory, secondInningsBallHistory,
       >
         <View style={awardStyles.iconContainer}>{icon}</View>
         <Text style={awardStyles.awardTitle}>{title}</Text>
-        <Text style={awardStyles.playerName}>{player?.name || 'N/A'}</Text>
-        <Text style={awardStyles.teamName}>{player?.teamName || ''}</Text>
-        <Text style={awardStyles.statLine}>{stat}</Text>
+        <Text style={awardStyles.playerName} numberOfLines={1}>{player?.name || 'N/A'}</Text>
+        <Text style={awardStyles.teamName} numberOfLines={1}>{player?.teamName || ''}</Text>
+        <View style={awardStyles.statBadge}>
+          <Text style={awardStyles.statLine}>{stat}</Text>
+        </View>
       </LinearGradient>
     </View>
   );
@@ -843,26 +843,7 @@ function MatchAwards({ teams, firstInningsBallHistory, secondInningsBallHistory,
   return (
     <View style={awardStyles.container}>
       <Text style={awardStyles.sectionHeader}>🏆  MATCH AWARDS</Text>
-      <View style={awardStyles.cardsRow}>
-        {bestBatsman && (
-          <AwardCard
-            icon={<Star size={24} color="#F9CD05" />}
-            title="BEST BATSMAN"
-            player={bestBatsman}
-            stat={`${bestBatsman.runs} (${bestBatsman.balls}) • ${bestBatsman.fours}×4 ${bestBatsman.sixes}×6`}
-            gradientColors={['#1A2E5A', '#233867']}
-          />
-        )}
-        {bestBowler && (
-          <AwardCard
-            icon={<Award size={24} color="#E11A22" />}
-            title="BEST BOWLER"
-            player={bestBowler}
-            stat={`${bestBowler.wickets}/${bestBowler.runsGiven} (${Math.floor(bestBowler.ballsBowled / 6)}.${bestBowler.ballsBowled % 6})`}
-            gradientColors={['#1A2E5A', '#233867']}
-          />
-        )}
-      </View>
+
       {playerOfMatch && (
         <View style={awardStyles.motmCard}>
           <LinearGradient
@@ -871,128 +852,200 @@ function MatchAwards({ teams, firstInningsBallHistory, secondInningsBallHistory,
             end={{ x: 1, y: 1 }}
             style={awardStyles.motmGradient}
           >
-            <Trophy size={32} color="#0B0E14" />
-            <Text style={awardStyles.motmTitle}>PLAYER OF THE MATCH</Text>
+            <View style={awardStyles.motmBadge}>
+              <Trophy size={20} color="#F9CD05" fill="#F9CD05" />
+              <Text style={awardStyles.motmBadgeText}>PLAYER OF THE MATCH</Text>
+            </View>
             <Text style={awardStyles.motmName}>{playerOfMatch.name}</Text>
             <Text style={awardStyles.motmTeam}>{playerOfMatch.teamName}</Text>
-            <View style={awardStyles.motmStats}>
+
+            <View style={awardStyles.motmStatsRow}>
               {playerOfMatch.runs > 0 && (
-                <Text style={awardStyles.motmStatText}>
-                  🏏 {playerOfMatch.runs}({playerOfMatch.balls})
-                </Text>
+                <View style={awardStyles.motmStatItem}>
+                  <Text style={awardStyles.motmStatVal}>{playerOfMatch.runs}</Text>
+                  <Text style={awardStyles.motmStatLab}>RUNS</Text>
+                </View>
               )}
               {playerOfMatch.wickets > 0 && (
-                <Text style={awardStyles.motmStatText}>
-                  ⚾ {playerOfMatch.wickets}/{playerOfMatch.runsGiven}
-                </Text>
+                <View style={awardStyles.motmStatItem}>
+                  <Text style={awardStyles.motmStatVal}>{playerOfMatch.wickets}</Text>
+                  <Text style={awardStyles.motmStatLab}>WKT</Text>
+                </View>
+              )}
+              {playerOfMatch.balls > 0 && (
+                <View style={awardStyles.motmStatItem}>
+                  <Text style={awardStyles.motmStatVal}>{((playerOfMatch.runs / playerOfMatch.balls) * 100).toFixed(0)}</Text>
+                  <Text style={awardStyles.motmStatLab}>SR</Text>
+                </View>
               )}
             </View>
           </LinearGradient>
         </View>
       )}
+
+      <View style={awardStyles.cardsRow}>
+        {bestBatsman && (
+          <AwardCard
+            icon={<Star size={20} color="#F9CD05" fill="#F9CD05" />}
+            title="TOP BATSMAN"
+            player={bestBatsman}
+            stat={`${bestBatsman.runs} Runs`}
+            gradientColors={['rgba(21, 42, 85, 0.8)', 'rgba(8, 17, 38, 0.9)']}
+          />
+        )}
+        {bestBowler && (
+          <AwardCard
+            icon={<Award size={20} color="#38BDF8" fill="#38BDF8" />}
+            title="TOP BOWLER"
+            player={bestBowler}
+            stat={`${bestBowler.wickets} Wkts`}
+            gradientColors={['rgba(21, 42, 85, 0.8)', 'rgba(8, 17, 38, 0.9)']}
+          />
+        )}
+      </View>
     </View>
   );
 }
 
 const awardStyles = StyleSheet.create({
   container: {
-    marginTop: 8,
-    marginBottom: 16,
+    marginTop: 12,
+    marginBottom: 24,
     paddingHorizontal: 0,
   },
   sectionHeader: {
     fontSize: 18,
-    fontWeight: '800',
+    fontWeight: '900',
     color: colors.accentGold,
     textAlign: 'center',
-    marginBottom: 16,
-    letterSpacing: 2,
+    marginBottom: 20,
+    letterSpacing: 3,
   },
   cardsRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 12,
+    gap: 16,
+    marginTop: 16,
   },
   card: {
     flex: 1,
-    borderRadius: 16,
+    borderRadius: 20,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(249, 205, 5, 0.2)',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   cardGradient: {
-    padding: 16,
+    padding: 20,
     alignItems: 'center',
-    minHeight: 140,
+    minHeight: 160,
     justifyContent: 'center',
   },
   iconContainer: {
-    marginBottom: 8,
+    marginBottom: 10,
   },
   awardTitle: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: colors.accentGold,
-    letterSpacing: 1.5,
-    marginBottom: 6,
+    fontSize: 9,
+    fontWeight: '900',
+    color: 'rgba(255,255,255,0.5)',
+    letterSpacing: 2,
+    marginBottom: 8,
+    textTransform: 'uppercase',
   },
   playerName: {
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 18,
+    fontWeight: '900',
     color: '#FFFFFF',
     textAlign: 'center',
   },
   teamName: {
     fontSize: 11,
-    color: colors.textSecondary,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.4)',
     marginTop: 2,
-    marginBottom: 6,
+    marginBottom: 12,
+    textTransform: 'uppercase',
+  },
+  statBadge: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   statLine: {
     fontSize: 12,
-    fontWeight: '600',
-    color: colors.textMuted,
+    fontWeight: '800',
+    color: '#fff',
     textAlign: 'center',
   },
   motmCard: {
-    borderRadius: 16,
+    borderRadius: 24,
     overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: 'rgba(249, 205, 5, 0.4)',
+    borderWidth: 1,
+    borderColor: 'rgba(249, 205, 5, 0.5)',
+    shadowColor: colors.accentGold,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
   },
   motmGradient: {
     padding: 24,
     alignItems: 'center',
   },
-  motmTitle: {
-    fontSize: 11,
+  motmBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: 16,
+  },
+  motmBadgeText: {
+    fontSize: 10,
     fontWeight: '900',
-    color: '#0B0E14',
-    letterSpacing: 2,
-    marginTop: 8,
-    marginBottom: 4,
+    color: colors.accentGold,
+    letterSpacing: 1,
   },
   motmName: {
-    fontSize: 24,
+    fontSize: 32,
     fontWeight: '900',
     color: '#0B0E14',
     textAlign: 'center',
+    textShadowColor: 'rgba(255,255,255,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   motmTeam: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: 'rgba(11, 14, 20, 0.6)',
-    marginTop: 2,
-    marginBottom: 8,
-  },
-  motmStats: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  motmStatText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
+    color: 'rgba(11, 14, 20, 0.6)',
+    marginTop: 4,
+    marginBottom: 20,
+    textTransform: 'uppercase',
+  },
+  motmStatsRow: {
+    flexDirection: 'row',
+    gap: 24,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(11, 14, 20, 0.1)',
+    paddingTop: 16,
+    width: '100%',
+    justifyContent: 'center',
+  },
+  motmStatItem: {
+    alignItems: 'center',
+  },
+  motmStatVal: {
+    fontSize: 20,
+    fontWeight: '900',
     color: '#0B0E14',
+  },
+  motmStatLab: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: 'rgba(11, 14, 20, 0.5)',
+    letterSpacing: 1,
   },
 });
 
@@ -1070,52 +1123,58 @@ const victoryStyles = StyleSheet.create({
   },
 });
 
-// === Styles ===
 const styles = StyleSheet.create({
   fowText: {
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.7)',
     fontSize: 14,
-    lineHeight: 20,
+    lineHeight: 22,
+    fontWeight: '500',
   },
   inningsLabelText: {
-    color: colors.textDark,
-    fontSize: 12,
-    fontWeight: '700',
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '800',
     textTransform: 'uppercase',
-    letterSpacing: 1,
-    opacity: 0.8,
+    letterSpacing: 2,
+    opacity: 0.9,
   },
   scoreRowLarge: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 8,
-    marginTop: 4,
+    gap: 12,
+    marginTop: 6,
   },
   container: {
     padding: 16,
+    paddingBottom: 100,
   },
   inningsContainer: {
-    marginBottom: 24,
-    borderRadius: 16,
-    backgroundColor: colors.surface,
+    marginBottom: 28,
+    borderRadius: 24,
+    backgroundColor: colors.surfaceDeeper,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(6, 182, 212, 0.1)',
+    borderColor: 'rgba(255,255,255,0.08)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
   },
   headerSticky: {
     padding: 20,
-    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
   },
   headerText: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: colors.textDark,
+    fontSize: 32,
+    fontWeight: '900',
+    color: '#fff',
   },
   oversText: {
-    fontSize: 16,
-    color: colors.textDark,
-    opacity: 0.9,
-    fontWeight: '600',
+    fontSize: 18,
+    color: 'rgba(255,255,255,0.8)',
+    fontWeight: '700',
   },
   section: {
     padding: 16,
@@ -1124,50 +1183,39 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 12,
-    color: colors.accent,
+    fontWeight: '800',
+    marginBottom: 16,
+    color: colors.accentGold,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  tableRow: {
-    flexDirection: 'row',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.03)',
-    alignItems: 'center',
+    letterSpacing: 1.5,
   },
   cell: {
     flex: 1,
     textAlign: 'center',
-    color: colors.textPrimary,
+    color: 'rgba(255,255,255,0.9)',
     fontSize: 14,
+    fontWeight: '600',
   },
   playerCell: {
     flex: 2,
     textAlign: 'left',
-    color: colors.textPrimary,
-    fontWeight: '600',
+    color: '#fff',
+    fontWeight: '700',
   },
   playerCellName: {
-    color: colors.textPrimary,
-    fontSize: 13,
+    color: '#fff',
+    fontSize: 14,
     fontWeight: '700',
   },
   inlineFollowBtn: {
-    padding: 2,
+    padding: 4,
   },
   dismissalText: {
-    color: colors.textSecondary,
+    color: colors.accentWarn,
     fontSize: 11,
-    marginTop: 2,
+    marginTop: 4,
     fontStyle: 'italic',
+    fontWeight: '600',
   },
   buttonContainer: {
     padding: 16,
@@ -1181,6 +1229,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
+    flex: 1,
   },
   buttonText: {
     color: colors.textDark,
@@ -1215,9 +1264,145 @@ const styles = StyleSheet.create({
   headerMainTitle: {
     flex: 1,
     textAlign: 'center',
-    marginRight: 40, // Offset for the back button to keep title centered
+    marginRight: 40,
     color: colors.textPrimary,
     fontSize: 18,
     fontWeight: '700',
   },
+  inningsHeaderPhase: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: colors.accentGold,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+    opacity: 0.8,
+  },
+  inningsHeaderMain: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+  },
+  inningsHeaderTeam: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#fff',
+    letterSpacing: 1,
+    flex: 1,
+  },
+  inningsHeaderScore: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#fff',
+    textAlign: 'right',
+  },
+  inningsHeaderOvers: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.6)',
+    textAlign: 'right',
+  },
+  tableHeaderRow: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  tableHeaderLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: 'rgba(255,255,255,0.5)',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  tableBodyRow: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.03)',
+    alignItems: 'center',
+  },
+  rowEven: {
+    backgroundColor: 'rgba(255,255,255,0.02)',
+  },
+  rowOdd: {
+    backgroundColor: 'transparent',
+  },
+  colPlayer: {
+    flex: 3,
+  },
+  colStat: {
+    width: 35,
+    textAlign: 'center',
+  },
+  colStatLarge: {
+    width: 50,
+    textAlign: 'right',
+  },
+  statValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  statLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: 'rgba(255,255,255,0.4)',
+    textAlign: 'center',
+  },
+  srValue: {
+    color: colors.accentGold,
+  },
+  econValue: {
+    color: '#38BDF8',
+  },
+  fowContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  fowCard: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    minWidth: 110,
+  },
+  fowWktNum: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: colors.accentGold,
+    marginBottom: 2,
+  },
+  fowScore: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  fowDetails: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.5)',
+    marginTop: 1,
+  },
+  exportBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(11, 14, 20, 0.95)',
+    padding: 16,
+    paddingBottom: 32,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    flexDirection: 'row',
+    gap: 12,
+  },
 });
+

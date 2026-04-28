@@ -1212,7 +1212,7 @@ export default function LbwTracking() {
         {/* ── Broadcast Watermarks ── */}
         <View style={styles.broadcastOverlay} pointerEvents="none">
           <View style={styles.replayBadge}>
-            <Text style={styles.replayText}>● REPLAY</Text>
+            <Text style={styles.broadcastReplayText}>● REPLAY</Text>
           </View>
           <View style={styles.drsBadge}>
             <Text style={styles.drsText}>DRS TECHNOLOGY</Text>
@@ -1853,7 +1853,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 4,
     borderRadius: 4,
   },
-  replayText: {
+  broadcastReplayText: {
     color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 2,
   },
   drsBadge: {
