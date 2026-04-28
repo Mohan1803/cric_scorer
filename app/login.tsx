@@ -82,22 +82,22 @@ export default function LoginScreen() {
             email: email,
             name: 'User',
             OTP: newOtp,
+            reply_to: 'mohanofficials18@gmail.com'
           },
         }),
       });
+
+      const responseText = await response.text();
 
       if (response.ok) {
         setStep('otp');
         setTimer(30);
       } else {
-        if (EMAILJS_PUBLIC_KEY === 'adJ1b4BI1rEtkPDlY') {
-          Alert.alert('Dev Mode', `OTP: ${newOtp}`, [{ text: 'Continue', onPress: () => { setStep('otp'); setTimer(30); } }]);
-        } else {
-          throw new Error('Failed to send code.');
-        }
+        console.error('EmailJS Error:', responseText);
+        throw new Error(`Email Delivery Failed: ${responseText || 'Service Unavailable'}`);
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'OTP Delivery Failed.');
+      Alert.alert('Delivery Error', error.message || 'OTP Delivery Failed. Check your EmailJS configuration.');
     } finally {
       setLoading(false);
     }
