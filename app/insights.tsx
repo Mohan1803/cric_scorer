@@ -142,6 +142,57 @@ export default function PlayerInsights() {
 
             <View style={styles.card}>
               <View style={styles.cardHeader}>
+                <History color={colors.accent} size={20} />
+                <Text style={styles.cardTitle}>LAST 5 MATCHES PERFORMANCE</Text>
+              </View>
+              
+              <View style={styles.recentGrid}>
+                <View style={styles.recentSection}>
+                  <Text style={styles.recentSubHeader}>BATTING</Text>
+                  <View style={styles.recentStatRow}>
+                    <Text style={styles.recentStatLabel}>Total Runs</Text>
+                    <Text style={styles.recentStatValue}>{insights.last5Matches.batting.runs}</Text>
+                  </View>
+                  <View style={styles.recentStatRow}>
+                    <Text style={styles.recentStatLabel}>Average</Text>
+                    <Text style={styles.recentStatValue}>{insights.last5Matches.batting.avg}</Text>
+                  </View>
+                  <View style={styles.recentStatRow}>
+                    <Text style={styles.recentStatLabel}>Strike Rate</Text>
+                    <Text style={styles.recentStatValue}>{insights.last5Matches.batting.sr}</Text>
+                  </View>
+                  <View style={styles.recentStatRow}>
+                    <Text style={styles.recentStatLabel}>4s / 6s</Text>
+                    <Text style={styles.recentStatValue}>{insights.last5Matches.batting.fours} / {insights.last5Matches.batting.sixes}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.recentDivider} />
+
+                <View style={styles.recentSection}>
+                  <Text style={styles.recentSubHeader}>BOWLING</Text>
+                  <View style={styles.recentStatRow}>
+                    <Text style={styles.recentStatLabel}>Wickets</Text>
+                    <Text style={styles.recentStatValue}>{insights.last5Matches.bowling.wickets}</Text>
+                  </View>
+                  <View style={styles.recentStatRow}>
+                    <Text style={styles.recentStatLabel}>Overs</Text>
+                    <Text style={styles.recentStatValue}>{insights.last5Matches.bowling.overs}</Text>
+                  </View>
+                  <View style={styles.recentStatRow}>
+                    <Text style={styles.recentStatLabel}>Economy</Text>
+                    <Text style={styles.recentStatValue}>{insights.last5Matches.bowling.econ}</Text>
+                  </View>
+                  <View style={styles.recentStatRow}>
+                    <Text style={styles.recentStatLabel}>Runs Given</Text>
+                    <Text style={styles.recentStatValue}>{insights.last5Matches.bowling.runs}</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
                 <Award color="#f472b6" size={20} />
                 <Text style={styles.cardTitle}>SQUAD METRICS</Text>
               </View>
@@ -195,5 +246,12 @@ const styles = StyleSheet.create({
   emptyTitle: { color: '#fff', fontSize: 20, fontWeight: '900', marginTop: 24 },
   emptyDesc: { color: 'rgba(255,255,255,0.4)', fontSize: 14, textAlign: 'center', marginTop: 12, lineHeight: 22 },
   emptyAction: { marginTop: 32, backgroundColor: colors.accent, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 100 },
-  emptyActionText: { color: '#fff', fontSize: 14, fontWeight: '900' }
+  emptyActionText: { color: '#fff', fontSize: 14, fontWeight: '900' },
+  recentGrid: { flexDirection: 'row', justifyContent: 'space-between' },
+  recentSection: { flex: 1 },
+  recentSubHeader: { color: 'rgba(255,255,255,0.3)', fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 15 },
+  recentStatRow: { marginBottom: 12 },
+  recentStatLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: '600', marginBottom: 2 },
+  recentStatValue: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  recentDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginHorizontal: 20 },
 });

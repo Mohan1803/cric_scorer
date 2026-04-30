@@ -1,11 +1,11 @@
 import { db } from './firebaseConfig';
-import { 
-  doc, 
-  setDoc, 
+import {
+  doc,
+  setDoc,
   getDoc,
-  collection, 
-  query, 
-  where, 
+  collection,
+  query,
+  where,
   getDocs,
   Timestamp
 } from 'firebase/firestore';
@@ -36,11 +36,11 @@ export const saveUserProfile = async (profile: UserProfile) => {
       ...profile,
       lastUpdated: Timestamp.now(),
     }, { merge: true });
-    
+
     // Also store a mapping of email to UID for easy lookup
     const emailMapDoc = doc(db, 'emailToUid', profile.email.toLowerCase());
     await setDoc(emailMapDoc, { uid: profile.id });
-    
+
     return true;
   } catch (error) {
     console.error('Error saving user profile:', error);
@@ -73,7 +73,7 @@ export const findUserProfileByEmail = async (email: string): Promise<UserProfile
     const emailLower = email.toLowerCase();
     const q = query(collection(db, 'users'), where('email', '==', emailLower));
     const snapshot = await getDocs(q);
-    
+
     if (!snapshot.empty) {
       return snapshot.docs[0].data() as UserProfile;
     }

@@ -16,6 +16,8 @@ export interface TeamPlayer {
   email: string;
   photoURL?: string;
   role: string;
+  battingHand?: 'right' | 'left';
+  bowlingHand?: 'right' | 'left';
 }
 
 export interface Team {
@@ -25,6 +27,7 @@ export interface Team {
   players: TeamPlayer[];
   playerIds?: string[];
   playerEmails?: string[]; // Added for 100% reliable indexing
+  name_lowercase?: string; // For case-insensitive search
   createdAt: Timestamp;
 }
 
@@ -36,7 +39,8 @@ export const createTeam = async (team: Omit<Team, 'createdAt'>) => {
     const teamData = {
       ...team,
       playerIds: team.players.map(p => p.id),
-      playerEmails: team.players.map(p => p.email.toLowerCase()), // Index by lowercase emails
+      playerEmails: team.players.map(p => p.email.toLowerCase()),
+      name_lowercase: team.name.toLowerCase(),
       createdAt: Timestamp.now(),
     };
     const docRef = await addDoc(collection(db, 'teams'), teamData);
@@ -60,7 +64,8 @@ export const repairTeamIndices = async (team: Team) => {
     
     await setDoc(docRef, { 
       playerEmails,
-      playerIds 
+      playerIds,
+      name_lowercase: team.name.toLowerCase()
     }, { merge: true });
     
     console.log(`[TeamRepair] Successfully updated indices for team: ${team.name}`);
@@ -97,7 +102,7 @@ export const getMyTeams = async (userId: string, email?: string) => {
     
     // Self-Healing: If user is owner, check if repair is needed
     finalTeams.forEach(team => {
-      if (team.ownerId === userId && (!team.playerEmails || team.playerEmails.length === 0)) {
+      if (team.ownerId === userId && (!team.playerEmails || team.playerEmails.length === 0 || !team.name_lowercase)) {
         repairTeamIndices(team);
       }
     });
@@ -106,6 +111,41 @@ export const getMyTeams = async (userId: string, email?: string) => {
     return finalTeams;
   } catch (error) {
     console.error('Error fetching teams:', error);
+    return [];
+  }
+};
+
+/**
+ * Searches all teams in the system by name prefix
+ */
+export const searchAllTeams = async (nameQuery: string) => {
+  if (!nameQuery || nameQuery.length < 2) return [];
+  const lower = nameQuery.toLowerCase();
+  try {
+    // Search using the lowercase field for true case-insensitivity
+    const qLowercase = query(
+      collection(db, 'teams'), 
+      where('name_lowercase', '>=', lower),
+      where('name_lowercase', '<=', lower + '\uf8ff')
+    );
+    
+    // Fallback search using original name (for legacy data)
+    const capitalized = nameQuery.charAt(0).toUpperCase() + nameQuery.slice(1);
+    const qOriginal = query(
+      collection(db, 'teams'),
+      where('name', '>=', capitalized),
+      where('name', '<=', capitalized + '\uf8ff')
+    );
+
+    const [snapLower, snapOriginal] = await Promise.all([getDocs(qLowercase), getDocs(qOriginal)]);
+    const teamsMap = new Map<string, Team>();
+    
+    snapLower.docs.forEach(doc => teamsMap.set(doc.id, { id: doc.id, ...doc.data() } as Team));
+    snapOriginal.docs.forEach(doc => teamsMap.set(doc.id, { id: doc.id, ...doc.data() } as Team));
+    
+    return Array.from(teamsMap.values()).slice(0, 5);
+  } catch (error) {
+    console.error('Error searching all teams:', error);
     return [];
   }
 };

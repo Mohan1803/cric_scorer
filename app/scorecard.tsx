@@ -269,7 +269,7 @@ export default function Scorecard() {
   const handleRun = (runs: number) => {
     if (!striker || !currentBowler) return;
 
-    if (runs > 0 && enableFieldMap) {
+    if (runs > 0) {
       setCurrentBallData({ runs });
       setShowFieldMap(true);
     } else {
@@ -662,6 +662,11 @@ export default function Scorecard() {
                     <Text style={[styles.playerLabel, player?.id === striker?.id && styles.strikerText]}>
                       {player?.name || 'Batsman'}{player?.id === striker?.id ? '*' : ''}
                     </Text>
+                    {player && (
+                      <View style={[styles.handBadge, player.battingHand === 'left' ? styles.lhbBadge : styles.rhbBadge]}>
+                        <Text style={styles.handBadgeText}>{player.battingHand === 'left' ? 'L' : 'R'}</Text>
+                      </View>
+                    )}
                   </View>
                   {player?.isOut && player?.dismissalDetail && (
                     <Text style={styles.dismissalTextSmall}>{player.dismissalDetail}</Text>
@@ -1146,13 +1151,13 @@ const styles = StyleSheet.create({
   playerRunsCol: {
     alignItems: 'flex-end',
   },
-  playerLabel: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
+  playerLabel: { color: colors.textPrimary, fontSize: 13, fontWeight: '700' },
+  handBadge: { paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, marginLeft: 2 },
+  lhbBadge: { backgroundColor: 'rgba(59, 130, 246, 0.15)', borderWidth: 0.5, borderColor: '#3b82f6' },
+  rhbBadge: { backgroundColor: 'rgba(249, 205, 5, 0.15)', borderWidth: 0.5, borderColor: colors.accent },
+  handBadgeText: { fontSize: 9, fontWeight: '900', color: '#fff' },
   strikerText: {
-    color: '#fff',
+    color: colors.accent,
     fontWeight: '800',
   },
   inlineFollowBtn: {

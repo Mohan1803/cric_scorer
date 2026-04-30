@@ -73,7 +73,7 @@ export default function GroundCard({ ground, onPress, isNearby, distance, onDele
             <View style={styles.locationRow}>
               <MapPin size={12} color={colors.textSecondary} />
               <Text style={styles.locationText} numberOfLines={1}>
-                {ground.city}, {ground.address.split(',')[0]}
+                {ground.city}{ground.address ? `, ${ground.address.split(',')[0]}` : ''}
               </Text>
             </View>
             {distance !== undefined && (

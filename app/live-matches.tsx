@@ -58,9 +58,17 @@ export default function LiveMatches() {
       // My Matches - Combine live and past that belong to this user
       // For simplicity, we filter all matches we can get
       unsubscribe = listenForLiveMatches((liveData) => {
-        const myLive = liveData.filter(m => m.creatorId === user?.id || m.creatorEmail === user?.email);
+        const myLive = liveData.filter(m => 
+          m.creatorId === user?.id || 
+          m.creatorEmail === user?.email || 
+          (m.playerEmails && m.playerEmails.includes(user?.email?.toLowerCase() || ''))
+        );
         listenForPastMatches(50, (pastData) => {
-          const myPast = pastData.filter(m => m.creatorId === user?.id || m.creatorEmail === user?.email);
+          const myPast = pastData.filter(m => 
+            m.creatorId === user?.id || 
+            m.creatorEmail === user?.email || 
+            (m.playerEmails && m.playerEmails.includes(user?.email?.toLowerCase() || ''))
+          );
           setMatches([...myLive, ...myPast]);
           setLoading(false);
           setRefreshing(false);
@@ -90,7 +98,7 @@ export default function LiveMatches() {
           />
           <View style={styles.pastMatchInfo}>
             <Text style={styles.pastMatchTitle}>
-              Match between <Text style={styles.pastMatchTeam}>{item.team1}</Text> and <Text style={styles.pastMatchTeam}>{item.team2}</Text>
+              Match between <Text style={styles.pastMatchTeam}>{typeof item.team1 === 'object' ? item.team1?.name : item.team1}</Text> and <Text style={styles.pastMatchTeam}>{typeof item.team2 === 'object' ? item.team2?.name : item.team2}</Text>
             </Text>
             {item.matchResult && (
               <Text style={styles.pastMatchResult}>{item.matchResult}</Text>
@@ -127,8 +135,8 @@ export default function LiveMatches() {
 
         <View style={styles.scoreSection}>
           <View style={styles.teamInfo}>
-            <Text style={[styles.teamName, item.battingTeam === item.team1 && styles.activeTeam]} numberOfLines={1}>
-              {item.team1}
+            <Text style={[styles.teamName, item.battingTeam === (typeof item.team1 === 'object' ? item.team1?.name : item.team1) && styles.activeTeam]} numberOfLines={1}>
+              {typeof item.team1 === 'object' ? item.team1?.name : item.team1}
             </Text>
             <Text style={styles.scoreText}>{item.score1}</Text>
           </View>
@@ -138,8 +146,8 @@ export default function LiveMatches() {
           </View>
 
           <View style={styles.teamInfo}>
-            <Text style={[styles.teamName, item.battingTeam === item.team2 && styles.activeTeam]} numberOfLines={1}>
-              {item.team2}
+            <Text style={[styles.teamName, item.battingTeam === (typeof item.team2 === 'object' ? item.team2?.name : item.team2) && styles.activeTeam]} numberOfLines={1}>
+              {typeof item.team2 === 'object' ? item.team2?.name : item.team2}
             </Text>
             <Text style={styles.scoreText}>{item.score2}</Text>
           </View>

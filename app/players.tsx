@@ -4,6 +4,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  Pressable,
   StyleSheet,
   ScrollView,
   Alert,
@@ -19,7 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useGameStore } from '../store/gameStore';
 import { colors, shadows } from './theme';
 import { LinearGradient } from 'expo-linear-gradient';
-import { User, Users, Trash2, Plus, CheckCircle2, ChevronRight, ChevronLeft, Save, Mail, Search } from 'lucide-react-native';
+import { User, Users, Trash2, Plus, CheckCircle2, ChevronRight, ChevronLeft, Save, Mail, Search, RefreshCw } from 'lucide-react-native';
 import { useTeamLibraryStore } from '../store/teamLibraryStore';
 import { findUserProfileByEmail } from '../services/userService';
 
@@ -27,43 +28,34 @@ export default function PlayersEntry() {
   const teams = useGameStore((state) => state.teams);
   const setTeams = useGameStore((state) => state.setTeams);
 
-  const defaultPlayers = Array.from({ length: 15 }, () => ({ name: '', email: '', role: 'both', isCaptain: false, isWicketKeeper: false, battingHand: 'right' as const }));
+  const defaultPlayers = Array.from({ length: 15 }, () => ({
+    name: '', email: '', role: 'both', isCaptain: false, isWicketKeeper: false,
+    battingHand: 'right' as const, bowlingHand: 'right' as const
+  }));
 
   const [activeTab, setActiveTab] = useState(0);
   const [searching, setSearching] = useState<{ [key: string]: boolean }>({});
 
-  const [team1Players, setTeam1Players] = useState(() => {
+  const [t1Roster, setT1Roster] = useState<any[]>(() => {
     const existing = teams[0]?.players || [];
-    if (existing.length > 0) {
-      const mapped = existing.map(p => ({
-        name: p.name,
-        email: (p as any).email || '',
-        role: p.role || 'both',
-        isCaptain: p.isCaptain || false,
-        isWicketKeeper: p.isWicketKeeper || false,
-        battingHand: (p as any).battingHand || 'right'
-      }));
-      while (mapped.length < 15) mapped.push({ name: '', email: '', role: 'both', isCaptain: false, isWicketKeeper: false, battingHand: 'right' });
-      return mapped;
-    }
-    return defaultPlayers;
+    return existing.map(p => ({
+      ...p,
+      email: (p as any).email || '',
+      battingHand: (p as any).battingHand || 'right',
+      bowlingHand: (p as any).bowlingHand || 'right',
+      isSelected: true // Default all existing players as selected
+    }));
   });
 
-  const [team2Players, setTeam2Players] = useState(() => {
+  const [t2Roster, setT2Roster] = useState<any[]>(() => {
     const existing = teams[1]?.players || [];
-    if (existing.length > 0) {
-      const mapped = existing.map(p => ({
-        name: p.name,
-        email: (p as any).email || '',
-        role: p.role || 'both',
-        isCaptain: p.isCaptain || false,
-        isWicketKeeper: p.isWicketKeeper || false,
-        battingHand: (p as any).battingHand || 'right'
-      }));
-      while (mapped.length < 15) mapped.push({ name: '', email: '', role: 'both', isCaptain: false, isWicketKeeper: false, battingHand: 'right' });
-      return mapped;
-    }
-    return [...defaultPlayers];
+    return existing.map(p => ({
+      ...p,
+      email: (p as any).email || '',
+      battingHand: (p as any).battingHand || 'right',
+      bowlingHand: (p as any).bowlingHand || 'right',
+      isSelected: true
+    }));
   });
 
   const inputRefs = useRef<{ [key: number]: RNTextInput[] }>({ 0: [], 1: [] });
@@ -76,19 +68,41 @@ export default function PlayersEntry() {
   const lookupPlayerByEmail = async (teamIndex: number, playerIndex: number, email: string) => {
     if (!email.includes('@') || email.length < 5) return;
 
+    // Check if player already exists in either team
+    const allPlayers = [...t1Roster, ...t2Roster];
+    const isAlreadyPresent = allPlayers.some((p, idx) => {
+      // Skip the current player we are editing
+      const isCurrentEditing = (teamIndex === 0 && idx === playerIndex) ||
+        (teamIndex === 1 && idx === (playerIndex + t1Roster.length));
+
+      return !isCurrentEditing && p.email.toLowerCase() === email.toLowerCase().trim();
+    });
+
+    if (isAlreadyPresent) {
+      Alert.alert('Duplicate Player', 'This player is already added to one of the teams.');
+      return;
+    }
+
     const key = `${teamIndex}-${playerIndex}`;
     setSearching(prev => ({ ...prev, [key]: true }));
 
     try {
       const profile = await findUserProfileByEmail(email);
       if (profile) {
-        const list = teamIndex === 0 ? [...team1Players] : [...team2Players];
-        list[playerIndex] = {
-          ...list[playerIndex],
-          name: profile.name ?? email.split('@')[0],
-          battingHand: profile.battingHand ?? 'right',
-        };
-        teamIndex === 0 ? setTeam1Players(list) : setTeam2Players(list);
+        const setRoster = teamIndex === 0 ? setT1Roster : setT2Roster;
+        setRoster(prev => {
+          const list = [...prev];
+          list[playerIndex] = {
+            ...list[playerIndex],
+            id: profile.id,
+            name: profile.name ?? email.split('@')[0],
+            role: profile.role || 'batsman',
+            battingHand: profile.battingHand ?? 'right',
+            bowlingHand: profile.bowlingHand ?? 'right',
+            isGuest: false // Once found, it's no longer just a manual guest
+          };
+          return list;
+        });
       }
     } catch (error) {
       console.error('Lookup failed:', error);
@@ -97,10 +111,22 @@ export default function PlayersEntry() {
     }
   };
 
+  const togglePlayerSelection = (teamIndex: number, playerIndex: number) => {
+    const setRoster = teamIndex === 0 ? setT1Roster : setT2Roster;
+    setRoster(prev => {
+      const list = [...prev];
+      list[playerIndex].isSelected = !list[playerIndex].isSelected;
+      return list;
+    });
+  };
+
   const updatePlayerEmail = (teamIndex: number, playerIndex: number, email: string) => {
-    const list = teamIndex === 0 ? [...team1Players] : [...team2Players];
-    list[playerIndex] = { ...list[playerIndex], email };
-    teamIndex === 0 ? setTeam1Players(list) : setTeam2Players(list);
+    const setRoster = teamIndex === 0 ? setT1Roster : setT2Roster;
+    setRoster(prev => {
+      const list = [...prev];
+      list[playerIndex] = { ...list[playerIndex], email };
+      return list;
+    });
 
     if (email.endsWith('.com')) {
       lookupPlayerByEmail(teamIndex, playerIndex, email);
@@ -108,110 +134,145 @@ export default function PlayersEntry() {
   };
 
   const updatePlayerName = (teamIndex: number, playerIndex: number, name: string) => {
-    const list = teamIndex === 0 ? team1Players : team2Players;
-    const updated = [...list];
-    updated[playerIndex].name = name;
-    teamIndex === 0 ? setTeam1Players(updated) : setTeam2Players(updated);
+    const setRoster = teamIndex === 0 ? setT1Roster : setT2Roster;
+    setRoster(prev => {
+      const list = [...prev];
+      list[playerIndex].name = name;
+      return list;
+    });
   };
 
   const updateBattingHand = (teamIndex: number, index: number, hand: 'right' | 'left') => {
-    const list = teamIndex === 0 ? team1Players : team2Players;
-    const updated = [...list];
-    updated[index] = { ...updated[index], battingHand: hand };
-    teamIndex === 0 ? setTeam1Players(updated) : setTeam2Players(updated);
+    const setRoster = teamIndex === 0 ? setT1Roster : setT2Roster;
+    setRoster(prev => {
+      const list = [...prev];
+      list[index] = { ...list[index], battingHand: hand };
+      return list;
+    });
   };
 
+  const updateBowlingHand = (teamIndex: number, index: number, hand: 'right' | 'left') => {
+    const setRoster = teamIndex === 0 ? setT1Roster : setT2Roster;
+    setRoster(prev => {
+      const list = [...prev];
+      list[index] = { ...list[index], bowlingHand: hand };
+      return list;
+    });
+  };
+
+  const hasSynced = useRef(false);
+  useEffect(() => {
+    if (hasSynced.current) return;
+    hasSynced.current = true;
+
+    // One-time sync of all players with their Firestore profiles
+    t1Roster.forEach((p, idx) => {
+      if (p.email && p.email.includes('@')) lookupPlayerByEmail(0, idx, p.email);
+    });
+    t2Roster.forEach((p, idx) => {
+      if (p.email && p.email.includes('@')) lookupPlayerByEmail(1, idx, p.email);
+    });
+  }, []);
+
   const handleContinue = () => {
-    const validTeam1 = team1Players.filter(p => p.name.trim());
-    const validTeam2 = team2Players.filter(p => p.name.trim());
+    try {
+      const selectedT1 = t1Roster.filter(p => p.isSelected);
+      const selectedT2 = t2Roster.filter(p => p.isSelected);
 
-    if (validTeam1.length < 11 || validTeam2.length < 11) {
-      Alert.alert('Invalid Players', 'Each team must have minimum 11 players.');
-      return;
+      const validTeam1 = selectedT1.filter(p => p.name && p.name.trim());
+      const validTeam2 = selectedT2.filter(p => p.name && p.name.trim());
+
+      if (validTeam1.length < 11 || validTeam2.length < 11) {
+        Alert.alert('Invalid Squad', `Select at least 11 named players per team. Team 1: ${validTeam1.length}, Team 2: ${validTeam2.length}`);
+        return;
+      }
+
+      const team1Base = teams[0] || { name: 'Team 1' };
+      const team2Base = teams[1] || { name: 'Team 2' };
+
+      const mapPlayer = (p: any, i: number, prefix: string) => ({
+        id: p.id || `${prefix}-p-${i}-${Date.now()}`,
+        name: p.name.trim(),
+        runs: 0,
+        balls: 0,
+        fours: 0,
+        sixes: 0,
+        ballsBowled: 0,
+        wickets: 0,
+        runsGiven: 0,
+        role: p.role || 'allrounder',
+        status: 'not_out' as const,
+        isOut: false,
+        isReserve: i >= 11,
+        isCaptain: p.isCaptain || false,
+        isWicketKeeper: p.isWicketKeeper || false,
+        battingHand: p.battingHand || 'right',
+        email: p.email || '',
+      });
+
+      const updatedTeams = [
+        {
+          ...team1Base,
+          players: validTeam1.map((p: any, i) => mapPlayer(p, i, 't1')),
+        },
+        {
+          ...team2Base,
+          players: validTeam2.map((p: any, i) => mapPlayer(p, i, 't2')),
+        },
+      ];
+
+      console.log('Setting teams:', updatedTeams[0].name, updatedTeams[0].players.length, updatedTeams[1].name, updatedTeams[1].players.length);
+      setTeams(updatedTeams);
+      router.push('/role-selection');
+    } catch (error: any) {
+      console.error('handleContinue error:', error);
+      Alert.alert('Error', error?.message || 'Something went wrong. Please try again.');
     }
-
-    const updatedTeams = [
-      {
-        ...teams[0],
-        players: validTeam1.map((p: any, i) => ({
-          id: `t1-p-${i}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-          name: p.name.trim(),
-          email: p.email,
-          runs: 0,
-          balls: 0,
-          fours: 0,
-          sixes: 0,
-          ballsBowled: 0,
-          wickets: 0,
-          runsGiven: 0,
-          role: p.role,
-          status: 'not_out' as const,
-          isOut: false,
-          isReserve: i >= 11,
-          isCaptain: p.isCaptain || false,
-          isWicketKeeper: p.isWicketKeeper || false,
-          battingHand: p.battingHand || 'right',
-        })),
-      },
-      {
-        ...teams[1],
-        players: validTeam2.map((p: any, i) => ({
-          id: `t2-p-${i}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-          name: p.name.trim(),
-          email: p.email,
-          runs: 0,
-          balls: 0,
-          fours: 0,
-          sixes: 0,
-          ballsBowled: 0,
-          wickets: 0,
-          runsGiven: 0,
-          role: p.role,
-          status: 'not_out' as const,
-          isOut: false,
-          isReserve: i >= 11,
-          isCaptain: p.isCaptain || false,
-          isWicketKeeper: p.isWicketKeeper || false,
-          battingHand: p.battingHand || 'right',
-        })),
-      },
-    ];
-
-    setTeams(updatedTeams);
-    const { saveTeam } = useTeamLibraryStore.getState();
-    saveTeam(updatedTeams[0]);
-    saveTeam(updatedTeams[1]);
-    router.push('/role-selection');
   };
 
   const handleDelete = (teamIndex: number, index: number) => {
-    const list = teamIndex === 0 ? [...team1Players] : [...team2Players];
-    list.splice(index, 1);
-    teamIndex === 0 ? setTeam1Players(list) : setTeam2Players(list);
+    const setRoster = teamIndex === 0 ? setT1Roster : setT2Roster;
+    setRoster(prev => {
+      const list = [...prev];
+      list.splice(index, 1);
+      return list;
+    });
   };
 
   const handleAddPlayer = (teamIndex: number) => {
-    const list = teamIndex === 0 ? team1Players : team2Players;
-    if (list.length < 15) {
-      const updated = [...list, { name: '', email: '', role: 'both', isCaptain: false, isWicketKeeper: false, battingHand: 'right' as const }];
-      teamIndex === 0 ? setTeam1Players(updated) : setTeam2Players(updated);
-      setTimeout(() => focusInput(teamIndex, list.length - 1), 100);
-    }
+    const setRoster = teamIndex === 0 ? setT1Roster : setT2Roster;
+    setRoster(prev => {
+      if (prev.length < 15) {
+        const updated = [...prev, { name: '', email: '', role: 'both', isCaptain: false, isWicketKeeper: false, battingHand: 'right' as const, bowlingHand: 'right' as const, isSelected: true }];
+        return updated;
+      }
+      return prev;
+    });
   };
 
   const renderProgressBar = (teamIndex: number) => {
-    const players = teamIndex === 0 ? team1Players : team2Players;
-    const filledCount = players.filter(p => p.name.trim()).length;
-    const percent = Math.min((filledCount / 11) * 100, 100);
-    const isReady = filledCount >= 11;
+    const roster = teamIndex === 0 ? t1Roster : t2Roster;
+    const selectedCount = roster.filter(p => p.isSelected).length;
+    const percent = Math.min((selectedCount / 11) * 100, 100);
+    const isReady = selectedCount >= 11;
 
     return (
       <View style={styles.progressContainer}>
         <View style={styles.progressHeader}>
-          <Text style={styles.progressTitle}>Team Composition</Text>
+          <Text style={styles.progressTitle}>SQUAD SELECTION</Text>
+          <TouchableOpacity
+            onPress={() => {
+              t1Roster.forEach((p, i) => p.email && lookupPlayerByEmail(0, i, p.email));
+              t2Roster.forEach((p, i) => p.email && lookupPlayerByEmail(1, i, p.email));
+            }}
+            style={styles.refreshBtn}
+          >
+            <RefreshCw size={12} color={colors.accent} />
+            <Text style={styles.refreshText}>SYNC PROFILES</Text>
+          </TouchableOpacity>
           <View style={styles.progressBadge}>
             <Text style={[styles.progressCount, isReady && { color: colors.success }]}>
-              {filledCount}<Text style={styles.progressTotal}>/11</Text>
+              {selectedCount}<Text style={styles.progressTotal}> SELECTED</Text>
             </Text>
           </View>
         </View>
@@ -227,107 +288,105 @@ export default function PlayersEntry() {
     );
   };
 
-  const renderPlayerRow = (p: any, i: number, teamIndex: number, isSub: boolean) => {
-    const actualIndex = i + (isSub ? 11 : 0);
-    const isLeft = p.battingHand === 'left';
-    const searchKey = `${teamIndex}-${actualIndex}`;
+  const renderRosterPlayer = (p: any, i: number, teamIndex: number) => {
+    const isSelected = p.isSelected;
+    const searchKey = `${teamIndex}-${i}`;
     const isSearching = searching[searchKey];
 
+    const formatRole = (role: string) => {
+      const r = role?.toLowerCase().replace(/[^a-z]/g, ''); // Remove spaces/dashes
+      if (r === 'both' || r === 'allrounder' || r === 'all-rounder' || r === 'ar') return 'All Rounder';
+      if (r === 'batsman' || r === 'bat') return 'Batsman';
+      if (r === 'bowler' || r === 'bowl') return 'Bowler';
+      if (r === 'wicketkeeper' || r === 'wk' || r === 'keeper') return 'Wicket Keeper';
+      return 'Not Specified';
+    };
+
     return (
-      <View key={i} style={[styles.playerCard, isSub ? styles.subCard : styles.activeCard]}>
+      <View key={p.id || i} style={[styles.playerCard, isSelected ? styles.activeCard : { opacity: 0.5 }]}>
         <View style={styles.cardHeader}>
-          <Text style={styles.rankText}>{isSub ? `SUB ${i + 1}` : `PLAYER ${i + 1}`}</Text>
-          {p.name.trim().length > 0 && <CheckCircle2 size={12} color={colors.success} />}
+          <Text style={styles.rankText}>PLAYER {i + 1}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            {isSearching && <ActivityIndicator size="small" color={colors.accent} />}
+            {!p.id && (
+              <TouchableOpacity onPress={() => {
+                const setRoster = teamIndex === 0 ? setT1Roster : setT2Roster;
+                setRoster(prev => prev.filter((_, idx) => idx !== i));
+              }}>
+                <Trash2 size={14} color="#ef4444" />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity onPress={() => togglePlayerSelection(teamIndex, i)}>
+              <CheckCircle2 size={16} color={isSelected ? colors.accent : colors.textMuted} />
+            </TouchableOpacity>
+          </View>
         </View>
+
         <View style={styles.cardMain}>
-          <View style={{ flex: 1, gap: 8 }}>
-            <View style={styles.inputWithIcon}>
-              <User size={14} color="rgba(255,255,255,0.3)" />
-              <TextInput
-                ref={(ref) => {
-                  if (!inputRefs.current[teamIndex]) inputRefs.current[teamIndex] = [];
-                  inputRefs.current[teamIndex][actualIndex] = ref!;
-                }}
-                placeholder="Name"
-                style={styles.playerInputCompact}
-                value={p.name}
-                onChangeText={(text) => updatePlayerName(teamIndex, actualIndex, text)}
-                returnKeyType="next"
-                placeholderTextColor="rgba(148, 163, 184, 0.4)"
-              />
+          <View style={styles.rosterAvatar}>
+            <User size={20} color={isSelected ? colors.accent : colors.textMuted} />
+          </View>
+          <View style={{ flex: 1 }}>
+            {p.id ? (
+              <>
+                <Text style={[styles.rosterPlayerName, isSelected && { color: '#fff' }]}>{p.name || 'Unknown Player'}</Text>
+                <Text style={styles.rosterPlayerRole}>{formatRole(p.role)}</Text>
+              </>
+            ) : (
+              <View style={styles.guestInputArea}>
+                <TextInput
+                  style={styles.playerInputCompact}
+                  value={p.email}
+                  onChangeText={(val) => updatePlayerEmail(teamIndex, i, val)}
+                  placeholder="Enter Email to find player..."
+                  placeholderTextColor="rgba(255,255,255,0.2)"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+                <Text style={styles.guestHint}>Type email to link official profile</Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.profileIndicator}>
+            <View style={[styles.miniHandBadge, p.battingHand === 'left' ? styles.lhbBadge : styles.rhbBadge]}>
+              <Text style={styles.miniHandBadgeText}>{p.battingHand === 'left' ? 'LHB' : 'RHB'}</Text>
             </View>
-            <View style={styles.inputWithIcon}>
-              <Mail size={14} color={p.email ? colors.accent : "rgba(255,255,255,0.3)"} />
-              <TextInput
-                placeholder="Email (Auto-lookup)"
-                style={styles.playerInputCompact}
-                value={p.email}
-                onChangeText={(text) => updatePlayerEmail(teamIndex, actualIndex, text)}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                placeholderTextColor="rgba(148, 163, 184, 0.4)"
-              />
-              {isSearching && <ActivityIndicator size="small" color={colors.accent} />}
+            <View style={[styles.miniHandBadge, styles.bowlBadge]}>
+              <Text style={styles.miniHandBadgeText}>{p.bowlingHand === 'left' ? 'LA' : 'RA'}</Text>
             </View>
           </View>
-          <View style={styles.handToggle}>
-            <TouchableOpacity
-              style={[styles.handBtn, !isLeft && styles.handBtnActive]}
-              onPress={() => updateBattingHand(teamIndex, actualIndex, 'right')}
-            >
-              <Text style={[styles.handBtnText, !isLeft && styles.handBtnTextActive]}>RHB</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.handBtn, isLeft && styles.handBtnActiveLH]}
-              onPress={() => updateBattingHand(teamIndex, actualIndex, 'left')}
-            >
-              <Text style={[styles.handBtnText, isLeft && styles.handBtnTextActive]}>LHB</Text>
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity
-            onPress={() => handleDelete(teamIndex, actualIndex)}
-            style={styles.deleteBtn}
-          >
-            <Trash2 size={16} color="rgba(239, 68, 68, 0.6)" />
-          </TouchableOpacity>
         </View>
       </View>
     );
   };
 
-  const renderTeamForm = (teamIndex: number, players: any[]) => {
-    const starters = players.slice(0, 11);
-    const subs = players.slice(11);
+  const renderTeamForm = (teamIndex: number) => {
+    const roster = teamIndex === 0 ? t1Roster : t2Roster;
 
     return (
       <View style={styles.formContent}>
         {renderProgressBar(teamIndex)}
 
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Starting Eleven</Text>
+          <Text style={styles.sectionTitle}>SQUAD ROSTER</Text>
           <View style={styles.sectionLine} />
         </View>
+
         <View style={styles.playersList}>
-          {starters.map((p, i) => renderPlayerRow(p, i, teamIndex, false))}
+          {roster.map((p, i) => renderRosterPlayer(p, i, teamIndex))}
         </View>
 
-        <View style={[styles.sectionHeader, { marginTop: 24 }]}>
-          <Text style={styles.sectionTitle}>Bench / Reserves</Text>
-          <View style={styles.sectionLine} />
-        </View>
-        <View style={styles.playersList}>
-          {subs.map((p, i) => renderPlayerRow(p, i, teamIndex, true))}
-        </View>
-
-        {players.length < 15 && (
-          <TouchableOpacity
-            onPress={() => handleAddPlayer(teamIndex)}
-            style={styles.addPlayerBtn}
-          >
-            <Plus size={18} color={colors.accentSecondary} />
-            <Text style={styles.addPlayerText}>Add Reserve</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          onPress={() => {
+            const setRoster = teamIndex === 0 ? setT1Roster : setT2Roster;
+            setRoster(prev => [...prev, { name: 'New Player', email: '', isSelected: true, battingHand: 'right', bowlingHand: 'right' }]);
+          }}
+          style={styles.addPlayerBtn}
+        >
+          <Plus size={18} color={colors.accentSecondary} />
+          <Text style={styles.addPlayerText}>Add Guest Player</Text>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -392,11 +451,11 @@ export default function PlayersEntry() {
         </View>
 
         <ScrollView contentContainerStyle={styles.container}>
-          {activeTab === 0 ? renderTeamForm(0, team1Players) : renderTeamForm(1, team2Players)}
+          {activeTab === 0 ? renderTeamForm(0) : renderTeamForm(1)}
 
-          {team1Players.filter(p => p.name.trim()).length >= 11 &&
-            team2Players.filter(p => p.name.trim()).length >= 11 && (
-              <TouchableOpacity activeOpacity={0.8} style={styles.continueBtn} onPress={handleContinue}>
+          {t1Roster.filter(p => p.isSelected && p.name && p.name.trim()).length >= 11 &&
+            t2Roster.filter(p => p.isSelected && p.name && p.name.trim()).length >= 11 && (
+              <Pressable style={styles.continueBtn} onPress={handleContinue}>
                 <LinearGradient
                   colors={[colors.accent, colors.accentAlt]}
                   start={{ x: 0, y: 0 }}
@@ -405,7 +464,7 @@ export default function PlayersEntry() {
                 >
                   <Text style={styles.continueText}>Continue to Toss</Text>
                 </LinearGradient>
-              </TouchableOpacity>
+              </Pressable>
             )}
         </ScrollView>
       </KeyboardAvoidingView>
@@ -599,6 +658,52 @@ const styles = StyleSheet.create({
     padding: 6,
     marginLeft: 4,
   },
+  rosterAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  rosterPlayerName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  rosterPlayerRole: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  guestInputArea: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  guestHint: {
+    fontSize: 9,
+    color: colors.accentSecondary,
+    opacity: 0.6,
+    marginTop: 2,
+  },
+  refreshBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(249, 205, 5, 0.05)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(249, 205, 5, 0.2)',
+  },
+  refreshText: {
+    fontSize: 9,
+    color: colors.accent,
+    fontWeight: '700',
+  },
   handToggle: {
     flexDirection: 'row',
     borderRadius: 6,
@@ -606,25 +711,36 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
   },
-  handBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(0,0,0,0.2)',
+  profileIndicator: {
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    minWidth: 80,
   },
-  handBtnActive: {
-    backgroundColor: colors.accent,
+  miniHandBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
   },
-  handBtnActiveLH: {
-    backgroundColor: '#3b82f6',
+  lhbBadge: {
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    borderColor: 'rgba(59, 130, 246, 0.4)',
   },
-  handBtnText: {
-    fontSize: 8,
+  rhbBadge: {
+    backgroundColor: 'rgba(249, 205, 5, 0.1)',
+    borderColor: 'rgba(249, 205, 5, 0.4)',
+  },
+  bowlBadge: {
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    borderColor: 'rgba(139, 92, 246, 0.4)',
+  },
+  miniHandBadgeText: {
+    fontSize: 9,
     fontWeight: '900',
-    color: 'rgba(255,255,255,0.3)',
-    letterSpacing: 0.5,
-  },
-  handBtnTextActive: {
     color: '#fff',
+    letterSpacing: 0.5,
   },
   addPlayerBtn: {
     marginTop: 20,

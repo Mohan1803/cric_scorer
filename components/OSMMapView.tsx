@@ -82,8 +82,6 @@ function getMapHTML(latitude: number, longitude: number, zoom: number, markerCol
 <body>
   <div id="loading" class="loading">Loading map...</div>
   <div id="map"></div>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    onload="loadLeaflet()" />
   <script>
     function loadLeaflet() {
       var s = document.createElement('script');
@@ -149,6 +147,8 @@ function getMapHTML(latitude: number, longitude: number, zoom: number, markerCol
       }
     }
   </script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    onload="loadLeaflet()" />
 </body>
 </html>`;
 }

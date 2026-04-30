@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,8 @@ import {
   Image,
   Dimensions,
   Modal,
-  Pressable
+  Pressable,
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -27,11 +28,14 @@ import {
   Settings,
   QrCode,
   X,
-  Share2
+  Share2,
+  LogOut,
+  ChevronRight
 } from 'lucide-react-native';
 import { colors, shadows } from './theme';
 import { router } from 'expo-router';
 import { useAuthStore } from '../store/authStore';
+import { matchService } from '../services/matchService';
 import QRCode from 'react-native-qrcode-svg';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -39,6 +43,25 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 export default function ProfileView() {
   const { user } = useAuthStore();
   const [showQR, setShowQR] = useState(false);
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      fetchStats();
+    }
+  }, [user]);
+
+  const fetchStats = async () => {
+    try {
+      const data = await matchService.getUserStats(user!.id, user!.email);
+      setStats(data);
+    } catch (e) {
+      console.error('Failed to fetch stats:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleEdit = (section?: string) => {
     if (section) {
@@ -48,22 +71,6 @@ export default function ProfileView() {
     }
   };
 
-  const renderSkillBadge = (label: string, IconComp: any, value: string, section: string, color: string = colors.accent) => (
-    <TouchableOpacity
-      activeOpacity={0.8}
-      onPress={() => handleEdit(section)}
-      style={styles.skillCard}
-    >
-      <View style={[styles.skillIconBox, { backgroundColor: `${color}15` }]}>
-        <IconComp size={20} color={color} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.skillLabel}>{label}</Text>
-        <Text style={styles.skillValue}>{value.toUpperCase().replace('_', ' ')}</Text>
-      </View>
-    </TouchableOpacity>
-  );
-
   return (
     <SafeAreaView style={styles.container}>
       <LinearGradient
@@ -71,132 +78,202 @@ export default function ProfileView() {
         style={StyleSheet.absoluteFill}
       />
 
-      <View style={styles.topHeader}>
+      {/* Modern Floating Header */}
+      <View style={styles.navBar}>
         <TouchableOpacity
-          style={styles.headerCircleBtn}
+          style={styles.navAction}
           onPress={() => router.back()}
         >
           <ChevronLeft color="#fff" size={24} />
         </TouchableOpacity>
 
-        <View style={styles.headerTitleGroup}>
-          <Text style={styles.headerTitle}>PRO PLAYER CARD</Text>
-          <View style={styles.activeIndicator}>
-            <View style={styles.activeDot} />
-            <Text style={styles.activeText}>VERIFIED</Text>
-          </View>
+        <View style={styles.navCenter}>
+          <Text style={styles.navTitle}>PLAYER PROFILE</Text>
+          {/* <View style={styles.navBadge}>
+            <Text style={styles.navBadgeText}>PRO ID: #{user?.id?.slice(-6).toUpperCase() || 'OFFICIAL'}</Text>
+          </View> */}
         </View>
 
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={[styles.headerCircleBtn, { backgroundColor: 'rgba(249, 205, 5, 0.1)', marginRight: 10 }]}
-            onPress={() => setShowQR(true)}
-          >
-            <QrCode color={colors.accent} size={20} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.headerCircleBtn, { backgroundColor: 'rgba(255, 255, 255, 0.05)' }]}
-            onPress={() => handleEdit()}
-          >
-            <Edit3 color="#fff" size={20} />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.navAction}
+          onPress={() => handleEdit()}
+        >
+          <Edit3 color={colors.accent} size={20} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={styles.mainScroll}
         showsVerticalScrollIndicator={false}
       >
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={() => handleEdit('name')}
-          style={styles.identitySection}
-        >
-          <View style={styles.profileHero}>
-            <LinearGradient
-              colors={[colors.accent, colors.accentAlt]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.heroGradient}
-            >
-              <View style={styles.avatarWrapper}>
-                <View style={styles.avatarMain}>
+        {/* Elite Player Card */}
+        <View style={styles.playerCardContainer}>
+          <LinearGradient
+            colors={['rgba(249, 205, 5, 0.15)', 'rgba(249, 205, 5, 0.05)', 'transparent']}
+            style={styles.cardGlow}
+          />
+          <View style={styles.eliteCard}>
+            <View style={styles.cardHeaderArea}>
+              <View style={styles.cardBrand}>
+                <Trophy size={14} color={colors.accent} />
+                <Text style={styles.cardBrandText}>ELITE SERIES</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowQR(true)}>
+                <QrCode color="rgba(255,255,255,0.4)" size={20} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.cardProfileArea}>
+              <View style={styles.eliteAvatarFrame}>
+                <View style={styles.eliteAvatarInner}>
                   {user?.photoURL ? (
-                    <Image source={{ uri: user.photoURL }} style={styles.avatarImg} />
+                    <Image source={{ uri: user.photoURL }} style={styles.eliteAvatarImg} />
                   ) : (
-                    <User size={64} color="#fff" />
+                    <User size={48} color="rgba(255,255,255,0.2)" />
                   )}
                 </View>
-                <View style={styles.verifiedBadge}>
-                  <ShieldCheck size={14} color={colors.accent} />
+                <View style={styles.eliteVerified}>
+                  <ShieldCheck size={14} color="#000" />
                 </View>
               </View>
 
-              <Text style={styles.userName}>{user?.name || 'Pro Player'}</Text>
-              <View style={styles.roleContainer}>
-                <Zap size={12} color="#fff" style={{ marginRight: 6 }} />
-                <Text style={styles.roleText}>{(user?.role || 'ALL-ROUNDER').toUpperCase()}</Text>
+              <View style={styles.eliteInfo}>
+                <Text style={styles.eliteName}>{user?.name || 'Pro Athlete'}</Text>
+                <View style={styles.eliteRoleTag}>
+                  <Zap size={10} color="#000" fill="#000" />
+                  <Text style={styles.eliteRoleText}>{(user?.role || 'All-Rounder').toUpperCase()}</Text>
+                </View>
+                <View style={styles.eliteEmailRow}>
+                  <Mail size={10} color="rgba(255,255,255,0.4)" />
+                  <Text style={styles.eliteEmail} numberOfLines={1} ellipsizeMode="tail">{user?.email}</Text>
+                </View>
               </View>
-              <View style={styles.editIndicator}>
-                <Edit3 size={10} color="rgba(255,255,255,0.6)" />
-                <Text style={styles.editIndicatorText}>TAP TO EDIT IDENTITY</Text>
-              </View>
-            </LinearGradient>
+            </View>
 
-            <View style={styles.heroFooter}>
-              <View style={styles.contactItem}>
-                <Mail size={14} color="rgba(255,255,255,0.4)" />
-                <Text style={styles.contactText}>{user?.email}</Text>
+            <View style={styles.cardStatsOverview}>
+              <View style={styles.miniStat}>
+                <Text style={styles.miniStatVal}>{user?.battingHand === 'left' ? 'LHB' : 'RHB'}</Text>
+                <Text style={styles.miniStatLab}>BATTING</Text>
               </View>
-              <View style={styles.divider} />
-              <View style={styles.contactItem}>
-                <Star size={14} color={colors.accent} />
-                <Text style={styles.contactText}>PRO MEMBER</Text>
+              <View style={styles.miniStatDivider} />
+              <View style={styles.miniStat}>
+                <Text style={styles.miniStatVal}>{user?.bowlingHand === 'left' ? 'LA' : 'RA'}</Text>
+                <Text style={styles.miniStatLab}>BOWLING</Text>
+              </View>
+              <View style={styles.miniStatDivider} />
+              <View style={styles.miniStat}>
+                {loading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.miniStatVal}>{stats?.totalMatches || 0}</Text>
+                )}
+                <Text style={styles.miniStatLab}>MATCHES</Text>
               </View>
             </View>
           </View>
-        </TouchableOpacity>
+        </View>
 
-        <View style={styles.detailsSection}>
+        {/* Professional Technical Specifications */}
+        <View style={styles.specsContainer}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>TECHNICAL ATTRIBUTES</Text>
-            <View style={styles.sectionLine} />
+            <View style={styles.sectionDot} />
+            <Text style={styles.sectionTitle}>TECHNICAL PROFILE</Text>
           </View>
 
-          <View style={styles.skillsGrid}>
-            {renderSkillBadge('Batting Hand', Target, (user?.battingHand || 'right') + ' Hand', 'batting')}
-            {renderSkillBadge('Bowling Arm', Activity, (user?.bowlingHand || 'right') + ' Arm', 'bowling', '#38bdf8')}
-            {renderSkillBadge('Specialization', Trophy, user?.bowlingType || 'Medium', 'spec', '#f472b6')}
-            {renderSkillBadge('Primary Role', Zap, user?.role || 'Allrounder', 'role', '#fb923c')}
+          <View style={styles.specList}>
+            <TouchableOpacity style={styles.proSpecRow} onPress={() => handleEdit('batting')}>
+              <View style={styles.proSpecLeft}>
+                <View style={[styles.proSpecIcon, { backgroundColor: 'rgba(249, 205, 5, 0.1)' }]}>
+                  <Target size={18} color={colors.accent} />
+                </View>
+                <Text style={styles.proSpecLabel}>BATTING STYLE</Text>
+              </View>
+              <View style={styles.proSpecRight}>
+                <Text style={styles.proSpecValue}>{user?.battingHand === 'left' ? 'Left Handed' : 'Right Handed'}</Text>
+                <ChevronRight size={14} color="rgba(255,255,255,0.2)" />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.proSpecRow} onPress={() => handleEdit('bowling')}>
+              <View style={styles.proSpecLeft}>
+                <View style={[styles.proSpecIcon, { backgroundColor: 'rgba(56, 189, 248, 0.1)' }]}>
+                  <Activity size={18} color="#38bdf8" />
+                </View>
+                <Text style={styles.proSpecLabel}>BOWLING ARM</Text>
+              </View>
+              <View style={styles.proSpecRight}>
+                <Text style={styles.proSpecValue}>{user?.bowlingHand === 'left' ? 'Left Arm' : 'Right Arm'}</Text>
+                <ChevronRight size={14} color="rgba(255,255,255,0.2)" />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.proSpecRow} onPress={() => handleEdit('spec')}>
+              <View style={styles.proSpecLeft}>
+                <View style={[styles.proSpecIcon, { backgroundColor: 'rgba(244, 114, 182, 0.1)' }]}>
+                  <Trophy size={18} color="#f472b6" />
+                </View>
+                <Text style={styles.proSpecLabel}>SPECIALIZATION</Text>
+              </View>
+              <View style={styles.proSpecRight}>
+                <Text style={styles.proSpecValue}>{user?.bowlingType || 'Not Specified'}</Text>
+                <ChevronRight size={14} color="rgba(255,255,255,0.2)" />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.proSpecRow} onPress={() => handleEdit('role')}>
+              <View style={styles.proSpecLeft}>
+                <View style={[styles.proSpecIcon, { backgroundColor: 'rgba(251, 146, 60, 0.1)' }]}>
+                  <Zap size={18} color="#fb923c" />
+                </View>
+                <Text style={styles.proSpecLabel}>PRIMARY ROLE</Text>
+              </View>
+              <View style={styles.proSpecRight}>
+                <Text style={styles.proSpecValue}>{user?.role || 'Not Set'}</Text>
+                <ChevronRight size={14} color="rgba(255,255,255,0.2)" />
+              </View>
+            </TouchableOpacity>
           </View>
 
+          {/* Settings / Edit Action */}
           <TouchableOpacity
-            activeOpacity={0.9}
-            style={styles.fullEditBtn}
+            style={styles.fullSettingsBtn}
             onPress={() => handleEdit()}
           >
-            <LinearGradient
-              colors={[colors.accent, colors.accentAlt]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.fullEditGradient}
-            >
-              <View style={styles.fullEditContent}>
-                <View>
-                  <Text style={styles.fullEditTitle}>EDIT ALL FIELDS</Text>
-                  <Text style={styles.fullEditSubtitle}>Modify your technical specs and info</Text>
+            <View style={styles.settingsContent}>
+              <View style={styles.settingsLeft}>
+                <View style={styles.settingsIcon}>
+                  <Settings size={18} color="#fff" />
                 </View>
-                <View style={styles.fullEditIconBox}>
-                  <Settings size={20} color={colors.accent} />
+                <View>
+                  <Text style={styles.settingsTitle}>Account Settings</Text>
+                  <Text style={styles.settingsSubtitle}>Manage your pro player profile</Text>
                 </View>
               </View>
-            </LinearGradient>
+              <ChevronRight size={20} color="rgba(255,255,255,0.2)" />
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.fullSettingsBtn, { marginTop: 12, backgroundColor: 'rgba(239, 68, 68, 0.05)', borderColor: 'rgba(239, 68, 68, 0.1)' }]}
+            onPress={() => useAuthStore.getState().logout()}
+          >
+            <View style={styles.settingsContent}>
+              <View style={styles.settingsLeft}>
+                <View style={[styles.settingsIcon, { backgroundColor: 'rgba(239, 68, 68, 0.2)' }]}>
+                  <LogOut size={18} color="#ef4444" />
+                </View>
+                <View>
+                  <Text style={[styles.settingsTitle, { color: '#ef4444' }]}>Logout</Text>
+                  <Text style={styles.settingsSubtitle}>Sign out of your account</Text>
+                </View>
+              </View>
+            </View>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.footerInfo}>
-          <Award size={16} color="rgba(255,255,255,0.1)" />
-          <Text style={styles.infoText}>GLOBAL PLAYER NETWORK CERTIFIED</Text>
+        <View style={styles.certification}>
+          <Award size={14} color="rgba(255,255,255,0.2)" />
+          <Text style={styles.certText}>BROADCAST-GRADE ANALYTICS COMPLIANT</Text>
         </View>
       </ScrollView>
 
@@ -247,48 +324,305 @@ export default function ProfileView() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#040508' },
-  topHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 20 },
-  headerCircleBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.06)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
-  headerActions: { flexDirection: 'row' },
-  headerTitleGroup: { alignItems: 'center' },
-  headerTitle: { color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 3 },
-  activeIndicator: { flexDirection: 'row', alignItems: 'center', marginTop: 4, backgroundColor: 'rgba(34, 197, 94, 0.1)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
-  activeDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#22c55e', marginRight: 6 },
-  activeText: { color: '#22c55e', fontSize: 8, fontWeight: '900', letterSpacing: 1 },
-  scrollContent: { padding: 20, paddingBottom: 40 },
-  identitySection: { marginBottom: 32 },
-  profileHero: { borderRadius: 32, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.03)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', ...shadows.large },
-  heroGradient: { paddingVertical: 40, alignItems: 'center' },
-  avatarWrapper: { position: 'relative', marginBottom: 20 },
-  avatarMain: { width: 128, height: 128, borderRadius: 64, backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 4, borderColor: 'rgba(255,255,255,0.8)', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', ...shadows.medium },
-  avatarImg: { width: '100%', height: '100%' },
-  verifiedBadge: { position: 'absolute', bottom: 4, right: 4, width: 32, height: 32, borderRadius: 16, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: colors.accent, ...shadows.small },
-  userName: { fontSize: 28, fontWeight: '900', color: '#fff', marginBottom: 10, letterSpacing: -0.5 },
-  roleContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 100, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', marginBottom: 12 },
-  roleText: { color: '#fff', fontSize: 11, fontWeight: '900', letterSpacing: 1.5 },
-  editIndicator: { flexDirection: 'row', alignItems: 'center', gap: 6, opacity: 0.8 },
-  editIndicatorText: { color: 'rgba(255,255,255,0.6)', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
-  heroFooter: { padding: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 15 },
-  divider: { width: 1, height: 14, backgroundColor: 'rgba(255,255,255,0.1)' },
-  contactItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  contactText: { color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '700' },
-  detailsSection: { flex: 1 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 15, marginBottom: 24 },
-  sectionTitle: { fontSize: 11, fontWeight: '900', color: 'rgba(255,255,255,0.3)', letterSpacing: 2 },
-  sectionLine: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.06)' },
-  skillsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 32 },
-  skillCard: { width: (SCREEN_WIDTH - 52) / 2, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 24, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
-  skillIconBox: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-  skillLabel: { fontSize: 8, fontWeight: '900', color: 'rgba(255,255,255,0.25)', letterSpacing: 1, marginBottom: 4 },
-  skillValue: { fontSize: 12, fontWeight: '800', color: '#fff' },
-  fullEditBtn: { borderRadius: 28, overflow: 'hidden', ...shadows.large, shadowColor: colors.accent },
-  fullEditGradient: { paddingVertical: 20, paddingHorizontal: 24 },
-  fullEditContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  fullEditTitle: { color: '#fff', fontSize: 16, fontWeight: '900', letterSpacing: 1 },
-  fullEditSubtitle: { color: 'rgba(255,255,255,0.7)', fontSize: 11, marginTop: 2 },
-  fullEditIconBox: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
-  footerInfo: { marginTop: 40, alignItems: 'center', gap: 10 },
-  infoText: { fontSize: 9, color: 'rgba(255,255,255,0.2)', fontWeight: '900', letterSpacing: 1.5 },
+  navBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+  },
+  navAction: {
+    width: 44,
+    height: 44,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  navCenter: {
+    alignItems: 'center',
+  },
+  navTitle: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 2,
+  },
+  navBadge: {
+    backgroundColor: 'rgba(249, 205, 5, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginTop: 4,
+  },
+  navBadgeText: {
+    color: colors.accent,
+    fontSize: 8,
+    fontWeight: '900',
+  },
+  mainScroll: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  playerCardContainer: {
+    marginBottom: 40,
+    position: 'relative',
+  },
+  cardGlow: {
+    position: 'absolute',
+    top: -20,
+    left: -20,
+    right: -20,
+    bottom: -20,
+    borderRadius: 50,
+    opacity: 0.5,
+  },
+  eliteCard: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 32,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    ...shadows.large,
+  },
+  cardHeaderArea: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  cardBrand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(249, 205, 5, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 100,
+  },
+  cardBrandText: {
+    color: colors.accent,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  cardProfileArea: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 20,
+    marginBottom: 32,
+  },
+  eliteAvatarFrame: {
+    width: 90,
+    height: 90,
+    position: 'relative',
+  },
+  eliteAvatarInner: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  eliteAvatarImg: {
+    width: '100%',
+    height: '100%',
+  },
+  eliteVerified: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    backgroundColor: colors.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#1E293B',
+  },
+  eliteInfo: {
+    flex: 1,
+  },
+  eliteName: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: '900',
+    marginBottom: 8,
+  },
+  eliteRoleTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.accent,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  eliteRoleText: {
+    color: '#000',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  eliteEmailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  eliteEmail: {
+    color: 'rgba(255,255,255,0.3)',
+    fontSize: 11,
+    fontWeight: '600',
+    flex: 1,
+  },
+  cardStatsOverview: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+  },
+  miniStat: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  miniStatVal: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  miniStatLab: {
+    color: 'rgba(255,255,255,0.3)',
+    fontSize: 8,
+    fontWeight: '800',
+    marginTop: 4,
+    letterSpacing: 1,
+  },
+  miniStatDivider: {
+    width: 1,
+    height: '100%',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  specsContainer: {
+    marginBottom: 40,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 20,
+  },
+  sectionDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.accent,
+  },
+  sectionTitle: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 2,
+  },
+  specList: {
+    gap: 10,
+    marginBottom: 24,
+  },
+  proSpecRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  proSpecLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  proSpecIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  proSpecLabel: {
+    color: 'rgba(255,255,255,0.3)',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  proSpecRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  proSpecValue: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  fullSettingsBtn: {
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 24,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  settingsContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  settingsLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  settingsIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  settingsTitle: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  settingsSubtitle: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  certification: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 20,
+  },
+  certText: {
+    color: 'rgba(255,255,255,0.2)',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+  },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   qrModal: { width: '100%', backgroundColor: '#1E293B', borderRadius: 32, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', ...shadows.large },
   qrHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 30 },

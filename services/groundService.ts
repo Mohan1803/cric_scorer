@@ -1,11 +1,12 @@
-import { 
-  collection, 
-  addDoc, 
-  getDocs, 
-  updateDoc, 
-  deleteDoc, 
-  doc, 
-  query, 
+import {
+  collection,
+  addDoc,
+  getDocs,
+  updateDoc,
+  deleteDoc,
+  doc,
+  query,
+  where,
   orderBy,
   serverTimestamp,
   Timestamp
@@ -30,7 +31,7 @@ export const groundService = {
     try {
       const q = query(collection(db, GROUNDS_COLLECTION), orderBy("createdAt", "desc"));
       const querySnapshot = await getDocs(q);
-      
+
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -42,13 +43,14 @@ export const groundService = {
   },
 
   /**
-   * Saves a new ground to Firestore
+   * Saves a new ground to Firestore with search indices
    */
   async saveGround(ground: Omit<Ground, 'id'>): Promise<string> {
     try {
       const creatorId = await getDeviceId();
       const docRef = await addDoc(collection(db, GROUNDS_COLLECTION), {
         ...ground,
+        name_lowercase: ground.name.toLowerCase(),
         creatorId,
         createdAt: serverTimestamp()
       });
@@ -60,6 +62,26 @@ export const groundService = {
   },
 
   /**
+   * Global case-insensitive search for grounds
+   */
+  async searchAllGrounds(nameQuery: string): Promise<FirebaseGround[]> {
+    if (!nameQuery || nameQuery.length < 2) return [];
+    const lower = nameQuery.toLowerCase();
+    try {
+      const q = query(
+        collection(db, GROUNDS_COLLECTION),
+        where('name_lowercase', '>=', lower),
+        where('name_lowercase', '<=', lower + '\uf8ff')
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FirebaseGround)).slice(0, 5);
+    } catch (error) {
+      console.error("Error searching grounds globally:", error);
+      return [];
+    }
+  },
+
+  /**
    * Deletes a ground from Firestore
    * Verifies creatorId before deletion
    */
@@ -67,7 +89,7 @@ export const groundService = {
     try {
       const creatorId = await getDeviceId();
       const groundRef = doc(db, GROUNDS_COLLECTION, groundId);
-      
+
       // In a real production app, you would use Firestore Security Rules 
       // to enforce that only the creator can delete their document.
       // For now, we perform a basic check.

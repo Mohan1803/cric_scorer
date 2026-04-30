@@ -26,6 +26,7 @@ export interface GlobalMatch {
   creatorId?: string;
   creatorEmail?: string;
   playerNames?: string[];
+  playerEmails?: string[];
   team1?: {
     name: string;
     score: number;
@@ -119,8 +120,12 @@ export const listenForLiveMatches = (callback: (matches: GlobalMatch[]) => void)
     snapshot.forEach((doc) => {
       matches.push({ id: doc.id, ...doc.data() } as GlobalMatch);
     });
-    // Sort by last updated (newest first)
-    matches.sort((a, b) => b.lastUpdated.toMillis() - a.lastUpdated.toMillis());
+    // Sort by last updated (newest first) with safety checks
+    matches.sort((a, b) => {
+      const timeA = a.lastUpdated?.toMillis?.() || 0;
+      const timeB = b.lastUpdated?.toMillis?.() || 0;
+      return timeB - timeA;
+    });
     callback(matches);
   });
 };
@@ -139,8 +144,12 @@ export const listenForPastMatches = (limitCount: number = 20, callback: (matches
     snapshot.forEach((doc) => {
       matches.push({ id: doc.id, ...doc.data() } as GlobalMatch);
     });
-    // Sort by last updated (newest first)
-    matches.sort((a, b) => b.lastUpdated.toMillis() - a.lastUpdated.toMillis());
+    // Sort by last updated (newest first) with safety checks
+    matches.sort((a, b) => {
+      const timeA = a.lastUpdated?.toMillis?.() || 0;
+      const timeB = b.lastUpdated?.toMillis?.() || 0;
+      return timeB - timeA;
+    });
     callback(matches.slice(0, limitCount));
   });
 };

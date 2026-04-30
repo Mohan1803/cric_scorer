@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { colors, shadows } from './theme';
@@ -25,7 +25,6 @@ export default function AddGround() {
     name: '',
     ownerName: '',
     ownerPhone: '',
-    address: '',
     city: '',
     latitude: 12.9716, // Default (e.g. Bengaluru)
     longitude: 77.5946,
@@ -87,7 +86,6 @@ export default function AddGround() {
         setForm(prev => ({
           ...prev,
           city: addr.city || addr.district || '',
-          address: `${addr.name || ''} ${addr.street || ''} ${addr.subregion || ''}`.trim()
         }));
       }
     } catch (error) {
@@ -98,45 +96,49 @@ export default function AddGround() {
     }
   };
 
+  const [saving, setSaving] = useState(false);
+
   const handleSave = async () => {
-    if (!form.name || !form.ownerPhone || !form.city || !form.address) {
+    if (!form.name || !form.ownerPhone || !form.city) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
     }
 
+    setSaving(true);
     try {
-      const firebaseId = await groundService.saveGround({
+      const groundData = {
         name: form.name,
         ownerName: form.ownerName || 'Owner',
         ownerPhone: form.ownerPhone,
-        address: form.address,
         city: form.city,
         latitude: form.latitude,
         longitude: form.longitude,
         amenities: form.amenities,
         pricePerMatch: form.pricePerMatch ? `${form.pricePerMatch}` : undefined,
         rating: 5.0
-      });
+      };
 
-      // Also add to local store for immediate UI update (though we'll fetch from Firebase in dash)
+      console.log('Saving ground data:', groundData);
+
+      const firebaseId = await groundService.saveGround(groundData);
+      console.log('Successfully saved to Firebase with ID:', firebaseId);
+
+      // Also add to local store for immediate UI update
       addGround({
-        name: form.name,
-        ownerName: form.ownerName || 'Owner',
-        ownerPhone: form.ownerPhone,
-        address: form.address,
-        city: form.city,
-        latitude: form.latitude,
-        longitude: form.longitude,
-        amenities: form.amenities,
-        pricePerMatch: form.pricePerMatch ? `${form.pricePerMatch}` : undefined,
-        rating: 5.0
+        ...groundData
       });
 
       Alert.alert('Success', 'Ground registered globally!', [
-        { text: 'OK', onPress: () => router.back() }
+        { text: 'OK', onPress: () => router.replace('/entryPage') }
       ]);
-    } catch (e) {
-      Alert.alert('Firebase Error', 'Failed to save to global database. Check your internet.');
+    } catch (e: any) {
+      console.error('Error saving ground:', e);
+      Alert.alert(
+        'Registration Failed',
+        `Error: ${e.message || 'Could not connect to database.'}\n\nCheck your internet or Firebase console rules.`
+      );
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -225,7 +227,7 @@ export default function AddGround() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.mapContainer}
               onPress={() => router.push({
                 pathname: '/full-map',
@@ -244,8 +246,8 @@ export default function AddGround() {
                 }}
               />
               <View style={styles.mapOverlay}>
-                  <Maximize2 size={16} color="#fff" />
-                  <Text style={styles.mapOverlayText}>Tap for Full Screen Satellite View</Text>
+                <Maximize2 size={16} color="#fff" />
+                <Text style={styles.mapOverlayText}>Tap for Full Screen Satellite View</Text>
               </View>
             </TouchableOpacity>
 
@@ -274,18 +276,7 @@ export default function AddGround() {
               </View>
             </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Full Address *</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder="Complete address of the ground"
-                placeholderTextColor="rgba(255,255,255,0.2)"
-                multiline
-                numberOfLines={3}
-                value={form.address}
-                onChangeText={(val) => setForm({ ...form, address: val })}
-              />
-            </View>
+
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Price per Match (Optional)</Text>
@@ -329,15 +320,23 @@ export default function AddGround() {
             </View>
           </View>
 
-          <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+          <TouchableOpacity
+            style={[styles.saveBtn, saving && { opacity: 0.7 }]}
+            onPress={handleSave}
+            disabled={saving}
+          >
             <LinearGradient
               colors={[colors.accent, colors.accentAlt]}
               style={styles.saveGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
-              <Save size={20} color="#fff" />
-              <Text style={styles.saveText}>Save Ground Details</Text>
+              {saving ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Save size={20} color="#fff" />
+              )}
+              <Text style={styles.saveText}>{saving ? 'REGISTERING...' : 'Save Ground Details'}</Text>
             </LinearGradient>
           </TouchableOpacity>
         </ScrollView>
@@ -434,22 +433,22 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   mapOverlay: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      backgroundColor: 'rgba(15, 23, 42, 0.7)',
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingVertical: 8,
-      gap: 8,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    gap: 8,
   },
   mapOverlayText: {
-      color: '#fff',
-      fontSize: 10,
-      fontWeight: '700',
-      letterSpacing: 0.5,
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   coordRow: {
     flexDirection: 'row',

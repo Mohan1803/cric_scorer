@@ -3,22 +3,24 @@ import {
   View,
   Text,
   TouchableOpacity,
+  Pressable,
   StyleSheet,
   ScrollView,
   Dimensions,
-  Alert,
+  Modal,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useGameStore } from '../store/gameStore';
 import { colors, shadows } from './theme';
 import { LinearGradient } from 'expo-linear-gradient';
-import { User, Shield, ChevronLeft, CheckCircle2 } from 'lucide-react-native';
+import { User, Shield, ChevronLeft, CheckCircle2, Zap, QrCode } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
 
 export default function RoleSelection() {
   const { teams, setTeams } = useGameStore();
+  const [showSyncModal, setShowSyncModal] = useState(false);
   const [team1Roles, setTeam1Roles] = useState({
     captainId: teams[0]?.players.find(p => p.isCaptain)?.id || '',
     wicketKeeperId: teams[0]?.players.find(p => p.isWicketKeeper)?.id || '',
@@ -43,11 +45,6 @@ export default function RoleSelection() {
   };
 
   const handleContinue = () => {
-    if (!team1Roles.captainId || !team1Roles.wicketKeeperId || !team2Roles.captainId || !team2Roles.wicketKeeperId) {
-      // Allow moving forward even if not selected if user wants, but better to alert
-      // Actually, let's just update and move.
-    }
-
     const updatedTeams = teams.map((team, idx) => {
       const roles = idx === 0 ? team1Roles : team2Roles;
       return {
@@ -61,22 +58,7 @@ export default function RoleSelection() {
     });
 
     setTeams(updatedTeams);
-
-    Alert.alert(
-      'Ready to Sync?',
-      'Do you want to sync this match with the opposing captain before starting?',
-      [
-        {
-          text: 'Direct Start',
-          onPress: () => router.push('/toss')
-        },
-        {
-          text: 'Sync & Start (QR/Tap)',
-          style: 'default',
-          onPress: () => router.push('/match-pairing')
-        }
-      ]
-    );
+    setShowSyncModal(true);
   };
 
   const renderTeamSection = (teamIndex: number, roles: any) => {
@@ -166,7 +148,7 @@ export default function RoleSelection() {
         {renderTeamSection(0, team1Roles)}
         {renderTeamSection(1, team2Roles)}
 
-        <TouchableOpacity style={styles.continueBtn} onPress={handleContinue}>
+        <Pressable style={styles.continueBtn} onPress={handleContinue}>
           <LinearGradient
             colors={[colors.accent, colors.accentAlt]}
             style={styles.continueGradient}
@@ -176,8 +158,54 @@ export default function RoleSelection() {
             <Text style={styles.continueText}>Continue to Toss</Text>
             <CheckCircle2 size={20} color={colors.textDark} />
           </LinearGradient>
-        </TouchableOpacity>
+        </Pressable>
       </ScrollView>
+
+      {/* Sync Choice Modal - cross-platform replacement for Alert.alert */}
+      <Modal
+        visible={showSyncModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSyncModal(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setShowSyncModal(false)}>
+          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+            <Text style={styles.modalTitle}>READY TO START?</Text>
+            <Text style={styles.modalSubtitle}>
+              Do you want to sync this match with the opposing captain before starting?
+            </Text>
+
+            <Pressable
+              style={styles.modalOptionPrimary}
+              onPress={() => {
+                setShowSyncModal(false);
+                router.push('/toss');
+              }}
+            >
+              <LinearGradient
+                colors={[colors.accent, colors.accentAlt]}
+                style={styles.modalOptionGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                <Zap size={18} color={colors.textDark} />
+                <Text style={styles.modalOptionPrimaryText}>Direct Start</Text>
+              </LinearGradient>
+            </Pressable>
+
+            <Pressable
+              style={styles.modalOptionSecondary}
+              onPress={() => {
+                setShowSyncModal(false);
+                router.push('/match-pairing');
+              }}
+            >
+              <QrCode size={18} color={colors.accent} />
+              <Text style={styles.modalOptionSecondaryText}>Sync & Start (QR/Tap)</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -314,5 +342,76 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textTransform: 'uppercase',
     letterSpacing: 1,
+  },
+  // Sync Choice Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: colors.surface,
+    borderRadius: 20,
+    padding: 28,
+    width: '100%',
+    maxWidth: 380,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    gap: 16,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  modalOptionPrimary: {
+    width: '100%',
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginTop: 8,
+  },
+  modalOptionGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 16,
+  },
+  modalOptionPrimaryText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textDark,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  modalOptionSecondary: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(249, 205, 5, 0.3)',
+    backgroundColor: 'rgba(249, 205, 5, 0.05)',
+  },
+  modalOptionSecondaryText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.accent,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
 });

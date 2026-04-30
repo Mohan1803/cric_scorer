@@ -47,6 +47,8 @@ export interface FirebaseMatch {
   date: Timestamp;
   winner: string;
   status: 'live' | 'completed';
+  playerNames?: string[];
+  playerEmails?: string[];
 }
 
 export const matchService = {
@@ -64,22 +66,52 @@ export const matchService = {
     }
   },
 
-  // Get recent matches for a user
-  getRecentMatches: async (userId: string, limitCount: number = 5) => {
+  // Get recent matches for a user (as creator or participant)
+  getRecentMatches: async (userId: string, userEmail?: string, limitCount: number = 5) => {
     try {
-      const q = query(
-        collection(db, 'matches'),
+      const matchesRef = collection(db, 'matches');
+      
+      // Query 1: Where user is the creator
+      const q1 = query(
+        matchesRef,
         where('creatorId', '==', userId),
         limit(limitCount)
       );
-      const snapshot = await getDocs(q);
-      const matches = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as FirebaseMatch[];
+      
+      const queries = [getDocs(q1)];
+      
+      // Query 2: Where user is a participant (if email provided)
+      if (userEmail) {
+        const q2 = query(
+          matchesRef,
+          where('playerEmails', 'array-contains', userEmail.toLowerCase()),
+          limit(limitCount)
+        );
+        queries.push(getDocs(q2));
+      }
+      
+      const snapshots = await Promise.all(queries);
+      const matchMap = new Map<string, FirebaseMatch>();
+      
+      snapshots.forEach(snapshot => {
+        snapshot.docs.forEach(doc => {
+          matchMap.set(doc.id, {
+            id: doc.id,
+            ...doc.data()
+          } as FirebaseMatch);
+        });
+      });
 
-      // Sort client-side to avoid index requirement
-      return matches.sort((a, b) => b.date.toMillis() - a.date.toMillis());
+      const allMatches = Array.from(matchMap.values());
+
+      // Sort client-side by date descending with safety checks
+      return allMatches
+        .sort((a, b) => {
+          const timeA = a.date?.toMillis?.() || 0;
+          const timeB = b.date?.toMillis?.() || 0;
+          return timeB - timeA;
+        })
+        .slice(0, limitCount);
     } catch (e) {
       console.error('Error fetching recent matches:', e);
       return [];
@@ -87,20 +119,39 @@ export const matchService = {
   },
 
   // Get user stats (Wins, etc)
-  getUserStats: async (userId: string) => {
+  getUserStats: async (userId: string, userEmail?: string) => {
     try {
-      const q = query(
-        collection(db, 'matches'),
+      const matchesRef = collection(db, 'matches');
+      
+      const q1 = query(
+        matchesRef,
         where('creatorId', '==', userId),
         where('status', '==', 'completed')
       );
-      const snapshot = await getDocs(q);
-      const matches = snapshot.docs.map(doc => doc.data() as FirebaseMatch);
       
+      const queries = [getDocs(q1)];
+      
+      if (userEmail) {
+        const q2 = query(
+          matchesRef,
+          where('playerEmails', 'array-contains', userEmail.toLowerCase()),
+          where('status', '==', 'completed')
+        );
+        queries.push(getDocs(q2));
+      }
+      
+      const snapshots = await Promise.all(queries);
+      const matchMap = new Map<string, any>();
+      
+      snapshots.forEach(snapshot => {
+        snapshot.docs.forEach(doc => {
+          matchMap.set(doc.id, doc.data());
+        });
+      });
+
+      const matches = Array.from(matchMap.values());
       const totalMatches = matches.length;
-      // This is a simplified win check - usually you'd check if the creator's team won
-      // For now we count all completed matches as part of their history
-      const wins = matches.length; // Placeholder logic: for now, total completed
+      const wins = matches.length; // Placeholder logic
       
       return {
         totalMatches,
@@ -123,12 +174,66 @@ export const matchService = {
       const snapshot = await getDocs(q);
       const allMatches = snapshot.docs.map(doc => doc.data() as FirebaseMatch);
 
-      // We need to look through EVERY match for this player's data
       const playerBalls: BallData[] = [];
       allMatches.forEach(match => {
         [...match.team1.ballData, ...match.team2.ballData].forEach(ball => {
           if (ball.batsmanId === userId) playerBalls.push(ball);
         });
+      });
+
+      // Sort all matches by date with safety checks to identify the last 5
+      const sortedMatches = allMatches.sort((a, b) => {
+        const timeA = a.date?.toMillis?.() || 0;
+        const timeB = b.date?.toMillis?.() || 0;
+        return timeB - timeA;
+      });
+      const playerParticipationMatches = sortedMatches.filter(match => {
+        const involvedInTeam1 = match.team1.ballData.some(b => b.batsmanId === userId || b.bowlerId === userId);
+        const involvedInTeam2 = match.team2.ballData.some(b => b.batsmanId === userId || b.bowlerId === userId);
+        return involvedInTeam1 || involvedInTeam2;
+      });
+
+      const last5MatchesData = playerParticipationMatches.slice(0, 5);
+
+      // Batting Last 5 Aggregation
+      const last5Batting = {
+        runs: 0,
+        balls: 0,
+        fours: 0,
+        sixes: 0,
+        innings: 0
+      };
+
+      // Bowling Last 5 Aggregation
+      const last5Bowling = {
+        runs: 0,
+        balls: 0,
+        wickets: 0
+      };
+
+      last5MatchesData.forEach(match => {
+        const ballsAsBatsman = [...match.team1.ballData, ...match.team2.ballData].filter(b => b.batsmanId === userId);
+        if (ballsAsBatsman.length > 0) {
+          last5Batting.innings += 1;
+          ballsAsBatsman.forEach(b => {
+            last5Batting.runs += b.runs;
+            last5Batting.balls += 1;
+            if (b.runs === 4) last5Batting.fours += 1;
+            if (b.runs === 6) last5Batting.sixes += 1;
+          });
+        }
+
+        const ballsAsBowler = [...match.team1.ballData, ...match.team2.ballData].filter(b => b.bowlerId === userId);
+        if (ballsAsBowler.length > 0) {
+          ballsAsBowler.forEach(b => {
+            last5Bowling.balls += 1;
+            if (b.isWicket) last5Bowling.wickets += 1;
+            // Simplified runs conceded: count all runs on balls where they were bowler
+            if (!b.isExtra || b.extraType === 'no_ball' || b.extraType === 'wide') {
+              last5Bowling.runs += b.runs;
+            }
+          });
+        }
       });
 
       // 1. Wagon Wheel Data (Flat list of scoring balls)
@@ -169,7 +274,19 @@ export const matchService = {
             runs: data.runs, 
             avg: (data.runs / data.balls).toFixed(1) 
           })),
-        totalBalls: playerBalls.length
+        totalBalls: playerBalls.length,
+        last5Matches: {
+          batting: {
+            ...last5Batting,
+            avg: last5Batting.innings > 0 ? (last5Batting.runs / last5Batting.innings).toFixed(1) : '0.0',
+            sr: last5Batting.balls > 0 ? ((last5Batting.runs / last5Batting.balls) * 100).toFixed(1) : '0.0'
+          },
+          bowling: {
+            ...last5Bowling,
+            overs: (Math.floor(last5Bowling.balls / 6) + (last5Bowling.balls % 6) / 10).toFixed(1),
+            econ: last5Bowling.balls > 0 ? ((last5Bowling.runs / last5Bowling.balls) * 6).toFixed(2) : '0.00'
+          }
+        }
       };
     } catch (e) {
       console.error('Error calculating insights:', e);

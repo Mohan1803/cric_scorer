@@ -571,6 +571,7 @@ export const useGameStore = create<GameState>()(
             creatorId: authState.user?.id || await getDeviceId(),
             creatorEmail: authState.user?.email || '',
             playerNames: state.teams.flatMap(t => t.players.map(p => p.name)),
+            playerEmails: state.teams.flatMap(t => t.players.filter((p: any) => p.email).map((p: any) => p.email.toLowerCase())),
             team1: {
               name: state.teams[0]?.name || 'Team 1',
               score: state.currentInningsNumber === 1

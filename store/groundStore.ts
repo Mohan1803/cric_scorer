@@ -7,7 +7,7 @@ export interface Ground {
   name: string;
   ownerName: string;
   ownerPhone: string;
-  address: string;
+  address?: string;
   city: string;
   latitude: number;
   longitude: number;
